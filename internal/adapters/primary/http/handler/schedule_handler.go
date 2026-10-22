@@ -29,6 +29,10 @@ type (
 		UpdateClassSession(c *fiber.Ctx) error
 		DeleteClassSession(c *fiber.Ctx) error
 		RepeatClassSessions(c *fiber.Ctx) error
+		ListTimetables(c *fiber.Ctx) error
+		CreateTimetable(c *fiber.Ctx) error
+		UpdateTimetable(c *fiber.Ctx) error
+		DeleteTimetable(c *fiber.Ctx) error
 	}
 	scheduleHandler struct {
 		svc input.ScheduleService
@@ -122,4 +126,25 @@ func (h *scheduleHandler) DeleteClassSession(c *fiber.Ctx) error {
 // RepeatClassSessions creates a class on every chosen weekday between two dates
 func (h *scheduleHandler) RepeatClassSessions(c *fiber.Ctx) error {
 	return scopedCreate(c, h.svc.RepeatClassSessions)
+}
+
+// ---------- weekly class timetables ----------
+
+func (h *scheduleHandler) ListTimetables(c *fiber.Ctx) error {
+	res, err := h.svc.ListTimetables(c.UserContext(), middleware.BranchID(c))
+	return ok(c, res, err)
+}
+
+// CreateTimetable saves a weekly class and makes its classes for the next weeks
+func (h *scheduleHandler) CreateTimetable(c *fiber.Ctx) error {
+	return scopedCreate(c, h.svc.CreateTimetable)
+}
+
+func (h *scheduleHandler) UpdateTimetable(c *fiber.Ctx) error {
+	return scopedUpdate(c, h.svc.UpdateTimetable)
+}
+
+// DeleteTimetable stops a timetable and answers how many upcoming classes were removed or kept
+func (h *scheduleHandler) DeleteTimetable(c *fiber.Ctx) error {
+	return scopedGet(c, h.svc.DeleteTimetable)
 }

@@ -39,6 +39,10 @@ var resourceKinds = map[string]bool{
 	domain.ResourceKindCourt: true,
 	domain.ResourceKindPitch: true,
 	domain.ResourceKindRing:  true,
+	domain.ResourceKindLane:  true,
+	domain.ResourceKindBay:   true,
+	domain.ResourceKindTable: true,
+	domain.ResourceKindRoom:  true,
 	domain.ResourceKindOther: true,
 }
 

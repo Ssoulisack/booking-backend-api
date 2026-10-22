@@ -40,6 +40,7 @@ type AppRepositories struct {
 	closures       output.ClosureRepository
 	prices         output.PriceRepository
 	classSessions  output.ClassSessionRepository
+	timetables     output.ClassTimetableRepository
 	rules          output.RuleRepository
 	bookings       output.BookingRepository
 }
@@ -97,6 +98,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		closures:       postgres.NewClosureRepository(db),
 		prices:         postgres.NewPriceRepository(db),
 		classSessions:  postgres.NewClassSessionRepository(db),
+		timetables:     postgres.NewClassTimetableRepository(db),
 		rules:          postgres.NewRuleRepository(db),
 		bookings:       postgres.NewBookingRepository(db),
 	}

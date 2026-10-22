@@ -12,7 +12,7 @@ const court = 1 // resource 1 belongs to branch 7
 
 func newScheduleService(hours *fakeHours) input.ScheduleService {
 	resources := fakeResources{owner: map[uint]uint{court: branch}, sportOf: map[uint]uint{court: 1}}
-	return services.NewScheduleService(hours, nil, nil, nil, nil, resources, nil, nil, nil)
+	return services.NewScheduleService(hours, nil, nil, nil, nil, resources, nil, nil, nil, nil)
 }
 
 func hours(weekday int, open, close string) dto.OpeningHourDTO {

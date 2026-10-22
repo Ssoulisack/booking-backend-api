@@ -53,6 +53,13 @@ type ScheduleService interface {
 	DeleteClassSession(ctx context.Context, branchID, id uint) error
 	// RepeatClassSessions creates a session on every chosen weekday in a date range, all or nothing
 	RepeatClassSessions(ctx context.Context, branchID uint, req dto.RepeatClassRequest) (*dto.RepeatClassResultDTO, error)
+	// weekly timetables: classes are made automatically ClassWindowDays ahead
+	ListTimetables(ctx context.Context, branchID uint) ([]dto.TimetableDTO, error)
+	CreateTimetable(ctx context.Context, branchID uint, req dto.TimetableRequest) (*dto.TimetableResultDTO, error)
+	UpdateTimetable(ctx context.Context, branchID, id uint, req dto.TimetableRequest) (*dto.TimetableResultDTO, error)
+	DeleteTimetable(ctx context.Context, branchID, id uint) (*dto.TimetableStopDTO, error)
+	// RollTimetables keeps every running timetable's classes made ahead (start and every hour)
+	RollTimetables(ctx context.Context) error
 }
 
 // RuleService manages booking rules and resolves the rule that applies to a sport or resource

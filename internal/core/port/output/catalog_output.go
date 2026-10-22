@@ -32,6 +32,15 @@ type ClassSessionRepository interface {
 	CreateMany(ctx context.Context, sessions []domain.ClassSession) error
 	// ListBetween lists sessions (active or not) overlapping [from, to)
 	ListBetween(ctx context.Context, branchID uint, from, to time.Time) ([]domain.ClassSession, error)
+	// ListOfTimetable lists a timetable's sessions starting at or after from, soonest first
+	ListOfTimetable(ctx context.Context, branchID, timetableID uint, from time.Time) ([]domain.ClassSession, error)
+}
+
+// ClassTimetableRepository stores weekly class timetables
+type ClassTimetableRepository interface {
+	ScopedRepository[domain.ClassTimetable]
+	// ListRunning lists every timetable of an open (not closed) branch, for the daily roll forward
+	ListRunning(ctx context.Context) ([]domain.ClassTimetable, error)
 }
 
 // ClassFilter narrows a class list; zero values do not filter

@@ -74,6 +74,12 @@ func SetupManageRoutes(
 	b.Put("/class-sessions/:id", manager, schedule.UpdateClassSession)
 	b.Delete("/class-sessions/:id", manager, schedule.DeleteClassSession)
 
+	// weekly timetables: classes are made automatically for the next 60 days
+	b.Get("/class-timetables", staff, schedule.ListTimetables)
+	b.Post("/class-timetables", manager, schedule.CreateTimetable)
+	b.Put("/class-timetables/:id", manager, schedule.UpdateTimetable)
+	b.Delete("/class-timetables/:id", manager, schedule.DeleteTimetable)
+
 	// scopeType is "branch" (id 0: this branch's changes to the company rule), "sport" or "resource"
 	b.Get("/rules", staff, rules.ListRules)
 	b.Get("/rules/effective", staff, rules.Effective)

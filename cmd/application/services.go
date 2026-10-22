@@ -4,6 +4,8 @@ import (
 	"backend/internal/core/port/input"
 	"backend/internal/core/services"
 	"context"
+	"log"
+	"time"
 )
 
 // AppServices holds all application services
@@ -52,6 +54,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		catalog: services.NewCatalogService(r.sports, r.resources, r.coaches, r.classSessions, r.bookings, r.storage, r.media),
 		schedule: services.NewScheduleService(
 			r.openingHours, r.closures, r.prices, r.classSessions, r.sports, r.resources, r.coaches, r.bookings, r.branches,
+			r.timetables,
 		),
 		rules:   rules,
 		media:   services.NewMediaService(r.storage, r.media),
@@ -64,4 +67,25 @@ func SetupServices(repos *AppRepositories) *AppServices {
 // Install prepares a fresh install (company, its booking rule, the first owner); safe on every start
 func Install(svc *AppServices) error {
 	return svc.install.EnsureInstalled(context.Background())
+}
+
+// RollTimetables makes the missing timetable classes once (KeepTimetablesRolling runs it hourly)
+func RollTimetables(svc *AppServices) error {
+	return svc.schedule.RollTimetables(context.Background())
+}
+
+// KeepTimetablesRolling makes the classes of every weekly timetable ClassWindowDays ahead: once now
+// and then every hour, so "Mon–Sat 08:00" never runs out. Closed branches are skipped.
+func KeepTimetablesRolling(svc *AppServices) {
+	roll := func() {
+		if err := RollTimetables(svc); err != nil {
+			log.Printf("⚠️  class timetables: %v", err)
+		}
+	}
+	roll()
+	go func() {
+		for range time.Tick(time.Hour) {
+			roll()
+		}
+	}()
 }

@@ -26,6 +26,7 @@ func DatabaseMigrations(db *gorm.DB) error {
 		&domain.Closure{},
 		&domain.Price{},
 		&domain.ClassSession{},
+		&domain.ClassTimetable{},
 		&domain.BookingRule{},
 		&domain.Booking{},
 		&domain.BookingItem{},

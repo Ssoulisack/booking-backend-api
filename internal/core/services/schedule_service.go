@@ -14,16 +14,20 @@ import (
 )
 
 type ScheduleServiceImpl struct {
-	hours     output.OpeningHourRepository
-	closures  output.ClosureRepository
-	prices    output.PriceRepository
-	classes   output.ClassSessionRepository
-	sports    output.SportRepository
-	resources output.ResourceRepository
-	coaches   output.CoachRepository
-	bookings  output.BookingRepository
-	branches  output.BranchRepository
+	hours      output.OpeningHourRepository
+	closures   output.ClosureRepository
+	prices     output.PriceRepository
+	classes    output.ClassSessionRepository
+	sports     output.SportRepository
+	resources  output.ResourceRepository
+	coaches    output.CoachRepository
+	bookings   output.BookingRepository
+	branches   output.BranchRepository
+	timetables output.ClassTimetableRepository
+	now        func() time.Time
 }
+
+func (s *ScheduleServiceImpl) clock() time.Time { return s.now() }
 
 func NewScheduleService(
 	hours output.OpeningHourRepository,
@@ -35,10 +39,12 @@ func NewScheduleService(
 	coaches output.CoachRepository,
 	bookings output.BookingRepository,
 	branches output.BranchRepository,
+	timetables output.ClassTimetableRepository,
 ) input.ScheduleService {
 	return &ScheduleServiceImpl{
 		hours: hours, closures: closures, prices: prices, classes: classes,
 		sports: sports, resources: resources, coaches: coaches, bookings: bookings, branches: branches,
+		timetables: timetables, now: time.Now,
 	}
 }
 
@@ -192,6 +198,12 @@ func (s *ScheduleServiceImpl) CreateClosure(ctx context.Context, branchID uint, 
 		return nil, err
 	}
 	d := toClosureDTO(m)
+	// timetable classes in the closed time: free ones go, booked ones are listed for staff
+	removed, kept, err := s.clearClosedClasses(ctx, m)
+	if err != nil {
+		return nil, err
+	}
+	d.ClassesRemoved, d.ClassesKept = removed, kept
 	return &d, nil
 }
 
@@ -290,7 +302,7 @@ func toClassSessionDTO(m domain.ClassSession) dto.ClassSessionDTO {
 	return dto.ClassSessionDTO{
 		ID: m.ID, SportID: m.SportID, CoachID: m.CoachID, ResourceID: m.ResourceID,
 		Title: m.Title, StartsAt: m.StartsAt, EndsAt: m.EndsAt, Capacity: m.Capacity,
-		Price: m.Price, Currency: m.Currency, Active: m.Active,
+		Price: m.Price, Currency: m.Currency, Active: m.Active, TimetableID: m.TimetableID,
 	}
 }
 

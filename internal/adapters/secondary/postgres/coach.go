@@ -173,6 +173,32 @@ func (r *classSessionRepository) ListBetween(ctx context.Context, branchID uint,
 	return items, exception.HandleGormError(err)
 }
 
+func (r *classSessionRepository) ListOfTimetable(ctx context.Context, branchID, timetableID uint, from time.Time) ([]domain.ClassSession, error) {
+	tx, err := r.scope(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	var items []domain.ClassSession
+	err = tx.Where("timetable_id = ? AND starts_at >= ?", timetableID, from).Order("starts_at ASC").Find(&items).Error
+	return items, exception.HandleGormError(err)
+}
+
+type classTimetableRepository struct {
+	*scopedRepository[domain.ClassTimetable]
+}
+
+func NewClassTimetableRepository(db *gorm.DB) output.ClassTimetableRepository {
+	return &classTimetableRepository{newScoped[domain.ClassTimetable](db, "title")}
+}
+
+func (r *classTimetableRepository) ListRunning(ctx context.Context) ([]domain.ClassTimetable, error) {
+	var items []domain.ClassTimetable
+	err := r.db.WithContext(ctx).
+		Joins("JOIN branches b ON b.id = class_timetables.branch_id AND b.deleted_at IS NULL AND NOT b.closed").
+		Order("class_timetables.id ASC").Find(&items).Error
+	return items, exception.HandleGormError(err)
+}
+
 func (r *classSessionRepository) CreateMany(ctx context.Context, sessions []domain.ClassSession) error {
 	return keepAppError(r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i := range sessions {

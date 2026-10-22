@@ -128,7 +128,9 @@ func (s *ReportServiceImpl) Bookings(ctx context.Context, branchID uint, q dto.R
 		sportName[sp.ID] = sp.Name
 	}
 
-	out := &dto.BookingsReportDTO{From: q.From, To: q.To, Total: len(bookings), ByStatus: map[string]int{}}
+	// empty lists, never null: the page draws a quiet month without special cases
+	out := &dto.BookingsReportDTO{From: q.From, To: q.To, Total: len(bookings), ByStatus: map[string]int{},
+		PerDay: []dto.DayCount{}, PerSport: []dto.SportCount{}}
 	perDay := map[string]*dto.DayCount{}
 	for _, d := range days(from, to) {
 		perDay[d] = &dto.DayCount{Date: d, ByStatus: map[string]int{}}

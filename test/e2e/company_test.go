@@ -76,7 +76,9 @@ func TestCompanyWorkflow(t *testing.T) {
 	staff := teamMember(a, owner, "staff@co.test", "staff", idA, idB)
 	admin := teamMember(a, owner, "admin@co.test", "admin")
 
-	switcher := func(token string) string { return fmt.Sprint(a.expect(200, "", "GET", "/me/branches", token, nil).body["data"]) }
+	switcher := func(token string) string {
+		return fmt.Sprint(a.expect(200, "", "GET", "/me/branches", token, nil).body["data"])
+	}
 	if s := switcher(manager); strings.Contains(s, "Xaythany") || !strings.Contains(s, "Sisattanak") || !strings.Contains(s, "manager") {
 		t.Fatalf("manager switcher: %s", s)
 	}

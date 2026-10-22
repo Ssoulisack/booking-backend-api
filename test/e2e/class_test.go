@@ -32,6 +32,13 @@ func TestRepeatingClasses(t *testing.T) {
 	boxing := num(a.expect(201, "", "POST", m+"/sports", owner, map[string]any{"name": "Boxing"}).str("data.id"))
 	tennis := num(a.expect(201, "", "POST", m+"/sports", owner, map[string]any{"name": "Tennis"}).str("data.id"))
 	ring := num(a.expect(201, "", "POST", m+"/resources", owner, map[string]any{"sport_id": boxing, "name": "Ring", "kind": "ring"}).str("data.id"))
+	// every kind of space can be added; anything else is refused
+	for _, kind := range []string{"lane", "bay", "table", "room"} {
+		if r := a.expect(201, "", "POST", m+"/resources", owner, map[string]any{"sport_id": boxing, "name": "Space " + kind, "kind": kind}); r.str("data.kind") != kind {
+			t.Fatalf("kind %s: %v", kind, r.body)
+		}
+	}
+	a.expect(400, "INVALID_RESOURCE_KIND", "POST", m+"/resources", owner, map[string]any{"sport_id": boxing, "name": "Stage", "kind": "stage"})
 	coach := num(a.expect(201, "", "POST", m+"/coaches", owner, map[string]any{"name": "Kru Lek", "sport_ids": []int{boxing}}).str("data.id"))
 	week := []map[string]any{}
 	for d := range 7 {

@@ -116,6 +116,11 @@ type ClosureDTO struct {
 	StartsAt  time.Time `json:"starts_at"`
 	EndsAt    time.Time `json:"ends_at"`
 	Reason    string    `json:"reason"`
+	// on create: timetable classes in the closed time that already have bookings, so they were
+	// kept (classes without bookings are removed); staff contact those customers
+	ClassesKept []ClassSessionDTO `json:"classes_kept,omitempty"`
+	// on create: how many timetable classes without bookings were removed
+	ClassesRemoved int `json:"classes_removed,omitempty"`
 }
 
 type PriceRequest struct {
@@ -156,6 +161,8 @@ type ClassSessionDTO struct {
 	Currency   string    `json:"currency"`
 	Active     bool      `json:"active"`
 	SeatsLeft  *int      `json:"seats_left,omitempty"` // public listing only
+	// the weekly timetable that made it; null for a class added on its own
+	TimetableID *uint `json:"timetable_id"`
 }
 
 // RuleRequest sets a booking rule; a null field inherits from the next wider scope
@@ -208,4 +215,56 @@ type RepeatClassResultDTO struct {
 	Created  int               `json:"created"`
 	Sessions []ClassSessionDTO `json:"sessions"`
 	Skipped  []SkippedDate     `json:"skipped"` // days closed for the venue, court or coach
+}
+
+// TimetableRequest is a weekly class that keeps running: weekdays 0 (Sunday) to 6, times HH:MM in
+// the branch time zone, starts_on YYYY-MM-DD, ends_on empty for no end
+type TimetableRequest struct {
+	SportID    uint   `json:"sport_id"`
+	CoachID    *uint  `json:"coach_id"`
+	ResourceID *uint  `json:"resource_id"`
+	Title      string `json:"title"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
+	Weekdays   []int  `json:"weekdays"`
+	StartsOn   string `json:"starts_on"`
+	EndsOn     string `json:"ends_on"`
+	Capacity   int    `json:"capacity"`
+	Price      int64  `json:"price"`
+	Currency   string `json:"currency"`
+	Active     *bool  `json:"active"`
+}
+
+type TimetableDTO struct {
+	ID         uint   `json:"id"`
+	SportID    uint   `json:"sport_id"`
+	CoachID    *uint  `json:"coach_id"`
+	ResourceID *uint  `json:"resource_id"`
+	Title      string `json:"title"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
+	Weekdays   []int  `json:"weekdays"`
+	StartsOn   string `json:"starts_on"`
+	EndsOn     string `json:"ends_on"` // "" = no end
+	Capacity   int    `json:"capacity"`
+	Price      int64  `json:"price"`
+	Currency   string `json:"currency"`
+	Active     bool   `json:"active"`
+	// classes are made up to this day (today + 60 days, or the end); "" before the start
+	FilledUntil string `json:"filled_until"`
+}
+
+// TimetableResultDTO answers a create or an edit: what was made now and which days were skipped
+type TimetableResultDTO struct {
+	Timetable TimetableDTO  `json:"timetable"`
+	Created   int           `json:"created"`
+	Skipped   []SkippedDate `json:"skipped"` // "closed" or "taken" (the space or coach is booked)
+	// classes that already had bookings keep their old details (time, space, seats)
+	KeptBooked int `json:"kept_booked"`
+}
+
+// TimetableStopDTO answers a stop: upcoming classes without bookings are removed, booked ones stay
+type TimetableStopDTO struct {
+	Removed    int `json:"removed"`
+	KeptBooked int `json:"kept_booked"`
 }

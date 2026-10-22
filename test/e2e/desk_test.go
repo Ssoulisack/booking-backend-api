@@ -235,6 +235,20 @@ func TestDeskAndReports(t *testing.T) {
 	a.expect(403, "ROLE_NOT_ALLOWED", "GET", m+"/reports/finance"+period, staff, nil)
 	a.expect(403, "ROLE_NOT_ALLOWED", "GET", m+"/reports/bookings"+period, staff, nil)
 	otherID, otherSlug, otherOwner := setupClub(t, a, admin, "Other Desk", "owner@otherdesk.test")
+
+	// --- a branch with no bookings: every report list is empty ([]), never null (the page maps them)
+	quiet := "/branches/" + otherID
+	for _, report := range []string{"bookings", "finance", "utilisation"} {
+		data := a.expect(200, "", "GET", quiet+"/reports/"+report+period, otherOwner, nil).body["data"].(map[string]any)
+		for key, value := range data {
+			if value == nil {
+				t.Fatalf("%s report: %s is null: %v", report, key, data)
+			}
+		}
+	}
+	if data := a.expect(200, "", "GET", quiet+"/reports/unpaid"+period, otherOwner, nil).body["data"]; data == nil {
+		t.Fatalf("unpaid report is null")
+	}
 	otherManager := teamMember(a, owner, "manager@otherdesk.test", "manager", otherID)
 	a.expect(404, "BRANCH_NOT_FOUND", "GET", m+"/bookings", otherManager, nil)
 	a.expect(404, "BRANCH_NOT_FOUND", "GET", m+"/reports/cash-up?date="+today.ymd(), otherManager, nil)

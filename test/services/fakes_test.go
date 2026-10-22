@@ -57,6 +57,7 @@ func (f *fakeMedia) Delete(_ context.Context, _ uint, key string) error {
 	delete(f.items, key)
 	return nil
 }
+
 // ---------- branches (GetByID only) ----------
 
 type fakeBranches struct {

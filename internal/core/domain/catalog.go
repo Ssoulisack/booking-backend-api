@@ -2,11 +2,16 @@ package domain
 
 import "gorm.io/gorm"
 
-// Resource kinds
+// Resource kinds: what a bookable space is, shown to customers ("Choose a ring"). The team calls
+// them all "spaces".
 const (
-	ResourceKindCourt = "court"
-	ResourceKindPitch = "pitch"
-	ResourceKindRing  = "ring"
+	ResourceKindCourt = "court" // tennis, badminton, basketball…
+	ResourceKindPitch = "pitch" // football, futsal
+	ResourceKindRing  = "ring"  // boxing, Muay Thai
+	ResourceKindLane  = "lane"  // swimming, bowling
+	ResourceKindBay   = "bay"   // golf range
+	ResourceKindTable = "table" // table tennis, billiards
+	ResourceKindRoom  = "room"  // yoga, dance, studio
 	ResourceKindOther = "other"
 )
 

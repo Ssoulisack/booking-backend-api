@@ -88,9 +88,38 @@ func newAppWith(t *testing.T, password string) *fiber.App {
 	if err := application.Install(services); err != nil {
 		t.Fatalf("install: %v", err)
 	}
+	current = struct {
+		services *application.AppServices
+		pg       postgres.Config
+	}{services, pg}
 	app := fiber.New()
 	application.SetupRoutes(app, application.SetupHandlers(services))
 	return app
+}
+
+// current is the running test install: its services (for jobs with no HTTP route) and database
+var current struct {
+	services *application.AppServices
+	pg       postgres.Config
+}
+
+// dbExec changes the test database directly, e.g. to make it look as if days had passed
+func dbExec(t *testing.T, query string, args ...any) {
+	t.Helper()
+	pg := current.pg
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		pg.Host, pg.Port, pg.User, pg.Password, pg.DBName)
+	db, err := gorm.Open(gormpg.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("connect test database: %v", err)
+	}
+	defer func() {
+		sqlDB, _ := db.DB()
+		_ = sqlDB.Close()
+	}()
+	if err := db.Exec(query, args...).Error; err != nil {
+		t.Fatalf("db: %v", err)
+	}
 }
 
 // the company owner the test install creates (config.yaml company block)
@@ -269,7 +298,6 @@ func getJSON(t *testing.T, url string, out any) {
 var pngBytes = append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)
 
 // ---------- the scenario ----------
-
 
 // num turns an id read from a reply back into a JSON number for request bodies
 func num(s string) int {

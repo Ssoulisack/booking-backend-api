@@ -36,6 +36,7 @@ func main() {
 	if err := application.Install(services); err != nil {
 		log.Fatalf("❌ Failed to prepare the install: %v", err)
 	}
+	application.KeepTimetablesRolling(services)
 	handlers := application.SetupHandlers(services)
 	application.SetupRoutes(server.App(), handlers)
 
