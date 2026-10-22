@@ -19,8 +19,13 @@ type UserRepository interface {
 	EmailTaken(ctx context.Context, email string, exceptID uint) (bool, error)
 	// UpdateProfile saves name, email (and username), phone, nationality and the stand-in flag
 	UpdateProfile(ctx context.Context, u *domain.User) error
+	// FindByMemberNo looks up a stored member number (CNO000042 / ENO000007)
+	FindByMemberNo(ctx context.Context, no string) (*domain.User, error)
+	// SyncMemberNo gives the account the member number for its current role and returns it: CNO for
+	// a customer, ENO for the team. Call it after creating an account or changing its role.
+	SyncMemberNo(ctx context.Context, id uint) (string, error)
 	// List supports the filter "company_role" and a keyword matched against name and email, or exactly
-	// against the phone (any spelling) or the customer number (C0042); newest accounts first
+	// against the phone (any spelling) or the member number (CNO000042, ENO7); newest accounts first
 	List(ctx context.Context, q ListQuery) ([]domain.User, int64, error)
 	SetStatus(ctx context.Context, id uint, status bool) error
 	// SetCompanyRole sets "admin" or "" (the owner changes only through TransferOwnership)

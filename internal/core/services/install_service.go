@@ -120,6 +120,9 @@ func (s *InstallServiceImpl) ensureOwner(ctx context.Context, c *domain.Company)
 		if err := s.users.SetCompanyRole(ctx, user.ID, domain.CompanyOwner); err != nil {
 			return err
 		}
+		if err := syncMemberNo(ctx, s.users, user); err != nil {
+			return err
+		}
 		log.Printf("👑 owner: existing account %s", email)
 		return nil
 	case !isNotFound(err):
@@ -145,6 +148,9 @@ func (s *InstallServiceImpl) ensureOwner(ctx context.Context, c *domain.Company)
 		Verified: true, Status: true, LastActive: s.now(),
 	}
 	if err := s.users.Create(ctx, user); err != nil {
+		return err
+	}
+	if err := syncMemberNo(ctx, s.users, user); err != nil {
 		return err
 	}
 	if s.cfg.OwnerPassword != "" {

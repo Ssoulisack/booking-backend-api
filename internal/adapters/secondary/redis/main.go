@@ -38,7 +38,6 @@ type CacheRepository interface {
 
 	// Close closes the Redis client
 	Close() error
-	
 }
 
 // RedisRepository implements the CacheRepository interface

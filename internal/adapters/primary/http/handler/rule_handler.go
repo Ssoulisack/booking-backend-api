@@ -2,6 +2,7 @@ package handler
 
 import (
 	"backend/internal/adapters/primary/http/middleware"
+	"backend/internal/core/domain"
 	"backend/internal/core/dto"
 	"backend/internal/core/port/input"
 	"backend/pkg/response"
@@ -13,6 +14,7 @@ type (
 	RuleHandler interface {
 		ListRules(c *fiber.Ctx) error
 		GetRule(c *fiber.Ctx) error
+		CompanyRule(c *fiber.Ctx) error
 		SetRule(c *fiber.Ctx) error
 		DeleteRule(c *fiber.Ctx) error
 		Effective(c *fiber.Ctx) error
@@ -46,6 +48,12 @@ func (h *ruleHandler) GetRule(c *fiber.Ctx) error {
 		return fail(c, err)
 	}
 	res, err := h.svc.GetRule(c.UserContext(), middleware.BranchID(c), scopeType, scopeID)
+	return ok(c, res, err)
+}
+
+// CompanyRule shows a branch's team the company rule its own rules start from (read only)
+func (h *ruleHandler) CompanyRule(c *fiber.Ctx) error {
+	res, err := h.svc.GetRule(c.UserContext(), 0, domain.ScopeCompany, 0)
 	return ok(c, res, err)
 }
 

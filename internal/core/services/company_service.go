@@ -210,7 +210,7 @@ func (s *CompanyServiceImpl) ListTeam(ctx context.Context) ([]dto.TeamMemberDTO,
 		}
 		for _, u := range users {
 			team = append(team, dto.TeamMemberDTO{
-				UserID: u.ID, Name: u.Name, Email: u.ContactEmail(), Phone: u.Phone, Role: role,
+				UserID: u.ID, MemberNo: domain.MemberNoOf(u.MemberNo), Name: u.Name, Email: u.ContactEmail(), Phone: u.Phone, Role: role,
 				Branches: []dto.BranchRef{}, Active: true,
 			})
 		}
@@ -224,7 +224,7 @@ func (s *CompanyServiceImpl) ListTeam(ctx context.Context) ([]dto.TeamMemberDTO,
 		i, seen := byUser[m.UserID]
 		if !seen {
 			team = append(team, dto.TeamMemberDTO{
-				UserID: m.UserID, Name: m.User.Name, Email: m.User.ContactEmail(), Phone: m.User.Phone,
+				UserID: m.UserID, MemberNo: domain.MemberNoOf(m.User.MemberNo), Name: m.User.Name, Email: m.User.ContactEmail(), Phone: m.User.Phone,
 				Role: m.Role, Branches: []dto.BranchRef{}, Active: m.Active,
 			})
 			i = len(team) - 1
@@ -327,6 +327,10 @@ func (s *CompanyServiceImpl) UpdateTeamMember(ctx context.Context, actor *domain
 	default:
 		return nil, badRequest("INVALID_ROLE")
 	}
+	// still on the team (admin <-> manager / staff): the ENO number stays
+	if _, err := s.users.SyncMemberNo(ctx, userID); err != nil {
+		return nil, err
+	}
 	return s.teamMember(ctx, userID)
 }
 
@@ -344,7 +348,12 @@ func (s *CompanyServiceImpl) RemoveTeamMember(ctx context.Context, actor *domain
 	if err := s.users.SetCompanyRole(ctx, userID, ""); err != nil {
 		return err
 	}
-	return s.memberships.Replace(ctx, userID, "", nil, true)
+	if err := s.memberships.Replace(ctx, userID, "", nil, true); err != nil {
+		return err
+	}
+	// back to being a customer: the next CNO number
+	_, err = s.users.SyncMemberNo(ctx, userID)
+	return err
 }
 
 func (s *CompanyServiceImpl) TransferOwnership(ctx context.Context, actor *domain.User, toUserID uint) error {

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Phase 6d.2: nationality, phone login, stand-in emails, profile, desk lookup by phone or customer number
+// Phase 6d.2: nationality, phone login, stand-in emails, profile, desk lookup by phone or customer number (CNO)
 func TestCustomerIdentity(t *testing.T) {
 	a := api{t: t, app: newApp(t)}
 	day := tomorrow()
@@ -29,7 +29,7 @@ func TestCustomerIdentity(t *testing.T) {
 	}
 	noy := reg(map[string]any{"name": "Noy Phone", "phone": "020 5555 7001", "password": "password123", "nationality": "la"})
 	if noy.status != 201 || noy.str("data.user.phone") != "2055557001" || noy.str("data.user.nationality") != "LA" ||
-		noy.str("data.user.email_generated") != "true" || !strings.HasPrefix(noy.str("data.user.customer_no"), "C") {
+		noy.str("data.user.email_generated") != "true" || !strings.HasPrefix(noy.str("data.user.member_no"), "CNO") {
 		t.Fatalf("Lao register: %d %v", noy.status, noy.body)
 	}
 	if r := reg(map[string]any{"name": "Copy", "phone": "+856 20 5555 7001", "password": "password123", "nationality": "LA"}); r.msg() != "PHONE_ALREADY_REGISTERED" {
@@ -70,10 +70,10 @@ func TestCustomerIdentity(t *testing.T) {
 	a.expect(200, "", "PUT", m+"/opening-hours/resource/"+strconv.Itoa(court), owner, map[string]any{"hours": []map[string]any{{"weekday": int(day.date.Weekday()), "open": "08:00", "close": "22:00"}}})
 	a.expect(200, "", "PUT", m+"/prices/resource/"+strconv.Itoa(court), owner, map[string]any{"price_per_hour": 100, "currency": "LAK"})
 	found := a.expect(200, "", "GET", m+"/customers/find?q=020%205555%207001", owner, nil)
-	if found.str("data.name") != "Noy Phone" || found.str("data.customer_no") != noy.str("data.user.customer_no") {
+	if found.str("data.name") != "Noy Phone" || found.str("data.member_no") != noy.str("data.user.member_no") {
 		t.Fatalf("find by phone: %v", found.body)
 	}
-	a.expect(200, "", "GET", m+"/customers/find?q="+noy.str("data.user.customer_no"), owner, nil)
+	a.expect(200, "", "GET", m+"/customers/find?q="+noy.str("data.user.member_no"), owner, nil)
 	a.expect(400, "CUSTOMER_NOT_FOUND", "GET", m+"/customers/find?q=020%209999%209999", owner, nil)
 	bk := a.expect(201, "", "POST", m+"/bookings", owner, map[string]any{"resource_id": court, "starts_at": day.at(9, 0), "duration_min": 60, "customer": "2055557001"})
 	if bk.str("data.customer_name") != "Noy Phone" || bk.str("data.customer_phone") != "2055557001" {
@@ -82,13 +82,13 @@ func TestCustomerIdentity(t *testing.T) {
 
 	// --- a Lao customer without email: staff never see the stand-in address ---
 	keo := reg(map[string]any{"name": "Keo NoMail", "phone": "20 5512 7002", "password": "password123", "nationality": "LA"})
-	bk2 := a.expect(201, "", "POST", m+"/bookings", owner, map[string]any{"resource_id": court, "starts_at": day.at(11, 0), "duration_min": 60, "customer": keo.str("data.user.customer_no")})
+	bk2 := a.expect(201, "", "POST", m+"/bookings", owner, map[string]any{"resource_id": court, "starts_at": day.at(11, 0), "duration_min": 60, "customer": keo.str("data.user.member_no")})
 	if bk2.str("data.customer_email") != "" || strings.Contains(a.raw("GET", m+"/customers", owner), "no-email.invalid") {
 		t.Fatalf("stand-in email shown to staff: %v", bk2.body)
 	}
 
 	// --- the owner finds them by phone (any spelling) or customer number, newest first ---
-	for _, q := range []string{"020 5512 7002", keo.str("data.user.customer_no")} {
+	for _, q := range []string{"020 5512 7002", keo.str("data.user.member_no")} {
 		found := a.expect(200, "", "GET", "/company/users?keyword="+url.QueryEscape(q), admin, nil)
 		if found.str("data.0.id") != keo.str("data.user.id") {
 			t.Fatalf("user search %q: %v", q, found.body)

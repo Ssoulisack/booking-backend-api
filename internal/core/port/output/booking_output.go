@@ -63,6 +63,7 @@ type BookingFilter struct {
 // CustomerRow is one customer of a branch
 type CustomerRow struct {
 	UserID        uint
+	MemberNo      *string
 	Name          string
 	Email         string
 	Phone         string

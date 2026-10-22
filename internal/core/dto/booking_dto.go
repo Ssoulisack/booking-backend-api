@@ -90,7 +90,7 @@ type BookingDTO struct {
 	CustomerName     string           `json:"customer_name,omitempty"`
 	CustomerEmail    string           `json:"customer_email,omitempty"`
 	CustomerPhone    string           `json:"customer_phone,omitempty"`
-	CustomerNo       string           `json:"customer_no,omitempty"`
+	MemberNo         string           `json:"member_no,omitempty"` // the booker's number (CNO / ENO); none for a guest
 	GuestName        string           `json:"guest_name,omitempty"`
 	GuestPhone       string           `json:"guest_phone,omitempty"`
 	PaymentMethod    string           `json:"payment_method,omitempty"`
@@ -138,11 +138,11 @@ type StaffBookingRequest struct {
 
 // CustomerMatchDTO is the account staff found, shown before they book for it
 type CustomerMatchDTO struct {
-	UserID     uint   `json:"user_id"`
-	CustomerNo string `json:"customer_no"`
-	Name       string `json:"name"`
-	Phone      string `json:"phone"`
-	Email      string `json:"email,omitempty"`
+	UserID   uint   `json:"user_id"`
+	MemberNo string `json:"member_no"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email,omitempty"`
 }
 
 type StatusChangeRequest struct {
@@ -189,7 +189,7 @@ type CalendarDTO struct {
 
 type CustomerDTO struct {
 	UserID        uint      `json:"user_id"`
-	CustomerNo    string    `json:"customer_no"`
+	MemberNo      string    `json:"member_no"`
 	Name          string    `json:"name"`
 	Email         string    `json:"email"`
 	Phone         string    `json:"phone"`

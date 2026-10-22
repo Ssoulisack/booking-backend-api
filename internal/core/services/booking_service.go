@@ -683,7 +683,7 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 	}
 	if b.Customer != nil {
 		d.CustomerName, d.CustomerEmail = b.Customer.Name, b.Customer.ContactEmail()
-		d.CustomerPhone, d.CustomerNo = b.Customer.Phone, domain.FormatCustomerNo(b.Customer.ID)
+		d.CustomerPhone, d.MemberNo = b.Customer.Phone, domain.MemberNoOf(b.Customer.MemberNo)
 	}
 	return d
 }

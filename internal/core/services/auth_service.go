@@ -61,7 +61,21 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterDTO) (*d
 	if err != nil {
 		return nil, err
 	}
+	if err := syncMemberNo(ctx, s.userRepo, user); err != nil {
+		return nil, err
+	}
 	return issueTokens(user)
+}
+
+// syncMemberNo gives the account the member number for its role (CNO customer, ENO team) and
+// keeps it on u for the response. Call it once an account is created or its role has changed.
+func syncMemberNo(ctx context.Context, users output.UserRepository, u *domain.User) error {
+	no, err := users.SyncMemberNo(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	u.MemberNo = &no
+	return nil
 }
 
 func validPassword(password string) error {
@@ -347,7 +361,7 @@ func toUserDTO(u *domain.User) dto.UserDTO {
 		CompanyRole:    u.CompanyRole,
 		Nationality:    u.Nationality,
 		EmailGenerated: u.EmailGenerated,
-		CustomerNo:     domain.FormatCustomerNo(u.ID),
+		MemberNo:       domain.MemberNoOf(u.MemberNo),
 		Status:         u.Status,
 		CreatedAt:      u.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      u.UpdatedAt.Format(time.RFC3339),

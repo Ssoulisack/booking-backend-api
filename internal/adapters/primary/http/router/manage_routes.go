@@ -77,6 +77,7 @@ func SetupManageRoutes(
 	// scopeType is "branch" (id 0: this branch's changes to the company rule), "sport" or "resource"
 	b.Get("/rules", staff, rules.ListRules)
 	b.Get("/rules/effective", staff, rules.Effective)
+	b.Get("/rules/company", staff, rules.CompanyRule) // what an empty branch field means
 	b.Get("/rules/:scopeType/:scopeId", staff, rules.GetRule)
 	b.Put("/rules/:scopeType/:scopeId", manager, rules.SetRule)
 	b.Delete("/rules/:scopeType/:scopeId", manager, rules.DeleteRule)

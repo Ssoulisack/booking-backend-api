@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"backend/internal/adapters/secondary/postgres/exception"
+	"backend/internal/adapters/secondary/postgres/numbering"
 	"backend/internal/core/domain"
 	"backend/internal/core/port/output"
 	"context"
@@ -50,8 +51,8 @@ func (r *userRepository) List(ctx context.Context, q output.ListQuery) ([]domain
 		if phone, ok := domain.NormalizePhone(q.Keyword); ok {
 			match = match.Or("phone = ?", phone)
 		}
-		if id, ok := domain.ParseCustomerNo(q.Keyword); ok {
-			match = match.Or("id = ?", id)
+		if no, ok := domain.ParseMemberNo(q.Keyword); ok {
+			match = match.Or("member_no = ?", no)
 		}
 		tx = tx.Where(match)
 	}
@@ -101,6 +102,21 @@ func (r *userRepository) FindByPhone(ctx context.Context, phone string) (*domain
 		return nil, exception.HandleGormError(err)
 	}
 	return &user, nil
+}
+
+// FindByMemberNo looks up a stored member number (CNO000042 / ENO000007)
+func (r *userRepository) FindByMemberNo(ctx context.Context, no string) (*domain.User, error) {
+	var user domain.User
+	if err := r.db.WithContext(ctx).Where("member_no = ?", no).First(&user).Error; err != nil {
+		return nil, exception.HandleGormError(err)
+	}
+	return &user, nil
+}
+
+// SyncMemberNo gives the account the number for its current role (see numbering.Sync)
+func (r *userRepository) SyncMemberNo(ctx context.Context, id uint) (string, error) {
+	no, err := numbering.Sync(r.db.WithContext(ctx), id)
+	return no, exception.HandleGormError(err)
 }
 
 func (r *userRepository) PhoneTaken(ctx context.Context, phone string, exceptID uint) (bool, error) {

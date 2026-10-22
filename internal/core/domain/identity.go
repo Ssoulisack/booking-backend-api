@@ -50,18 +50,37 @@ func IsGeneratedEmail(email string) bool {
 	return strings.HasSuffix(strings.ToLower(email), "@"+GeneratedEmailDomain)
 }
 
-// FormatCustomerNo is the short number a customer can tell staff, e.g. 42 -> "C0042"
-func FormatCustomerNo(id uint) string { return fmt.Sprintf("C%04d", id) }
+// Every account has one number people can tell staff, stored in users.member_no. The prefix
+// follows the role: customers CNO, the team (owner, admins, managers, staff) ENO. Each prefix has
+// its own counter; when the role changes the account gets the next number of the other kind.
+const (
+	CustomerNoPrefix = "CNO"
+	EmployeeNoPrefix = "ENO"
+)
 
-// ParseCustomerNo reads "C0042", "c42", "C-42" or "42" back to the account id
-func ParseCustomerNo(s string) (uint, bool) {
-	s = strings.TrimPrefix(strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(s)), "C"), "-")
-	if s == "" || len(s) > 9 {
-		return 0, false
+// FormatMemberNo gives the stored form: ("CNO", 42) -> "CNO000042"; past 999999 it simply grows
+func FormatMemberNo(prefix string, n int64) string { return fmt.Sprintf("%s%06d", prefix, n) }
+
+var memberNoPattern = regexp.MustCompile(`^(CNO|ENO)[\s-]*0*([1-9]\d{0,8})$`)
+
+// ParseMemberNo reads what people type ("CNO000042", "cno42", "ENO-7", "eno 000007") into the
+// stored form; false for anything else
+func ParseMemberNo(s string) (string, bool) {
+	m := memberNoPattern.FindStringSubmatch(strings.ToUpper(strings.TrimSpace(s)))
+	if m == nil {
+		return "", false
 	}
-	n, err := strconv.ParseUint(s, 10, 32)
-	if err != nil || n == 0 {
-		return 0, false
+	n, err := strconv.ParseInt(m[2], 10, 64)
+	if err != nil {
+		return "", false
 	}
-	return uint(n), true
+	return FormatMemberNo(m[1], n), true
+}
+
+// MemberNoOf is the stored number, or "" before one is given
+func MemberNoOf(no *string) string {
+	if no == nil {
+		return ""
+	}
+	return *no
 }

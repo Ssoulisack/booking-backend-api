@@ -32,18 +32,24 @@ func TestNormalizePhone(t *testing.T) {
 	}
 }
 
-func TestCustomerNumbers(t *testing.T) {
-	if got := domain.FormatCustomerNo(42); got != "C0042" {
-		t.Errorf("FormatCustomerNo(42) = %s", got)
+func TestMemberNumbers(t *testing.T) {
+	if got := domain.FormatMemberNo(domain.CustomerNoPrefix, 42); got != "CNO000042" {
+		t.Errorf("FormatMemberNo(CNO, 42) = %s", got)
 	}
-	for in, want := range map[string]uint{"C0042": 42, "c42": 42, "C-42": 42, "42": 42, " C12345 ": 12345} {
-		if got, ok := domain.ParseCustomerNo(in); !ok || got != want {
-			t.Errorf("ParseCustomerNo(%q) = %d, %v", in, got, ok)
+	if got := domain.FormatMemberNo(domain.EmployeeNoPrefix, 1234567); got != "ENO1234567" {
+		t.Errorf("past six digits the number grows: %s", got)
+	}
+	for in, want := range map[string]string{
+		"CNO000042": "CNO000042", "cno42": "CNO000042", "CNO-42": "CNO000042", " eno 000007 ": "ENO000007",
+	} {
+		if got, ok := domain.ParseMemberNo(in); !ok || got != want {
+			t.Errorf("ParseMemberNo(%q) = %q, %v", in, got, ok)
 		}
 	}
-	for _, bad := range []string{"", "C", "C0", "Cabc", "C-"} {
-		if _, ok := domain.ParseCustomerNo(bad); ok {
-			t.Errorf("ParseCustomerNo(%q) should fail", bad)
+	// the old customer number (C0042), a bare number and zero are not member numbers
+	for _, bad := range []string{"", "CNO", "CNO0", "C0042", "42", "XNO42", "CNOabc"} {
+		if _, ok := domain.ParseMemberNo(bad); ok {
+			t.Errorf("ParseMemberNo(%q) should fail", bad)
 		}
 	}
 }

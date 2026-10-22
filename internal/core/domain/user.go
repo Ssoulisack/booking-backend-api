@@ -21,9 +21,12 @@ type User struct {
 	EmailGenerated bool `gorm:"not null;default:false"`
 	// CompanyRole is "owner" or "admin" for the people who run every branch; empty for everyone else
 	CompanyRole string `gorm:"type:varchar(10);not null;default:''"`
-	Verified    bool   `gorm:"type:boolean;not null;default:false"`
-	Status      bool   `gorm:"type:boolean;not null;default:true"`
-	LastActive  time.Time
+	// MemberNo is the number people tell staff: CNO000042 for a customer, ENO000007 for the team.
+	// Set by the database counters (see SyncMemberNo); empty only for a moment after sign-up.
+	MemberNo   *string `gorm:"type:varchar(16);uniqueIndex"`
+	Verified   bool    `gorm:"type:boolean;not null;default:false"`
+	Status     bool    `gorm:"type:boolean;not null;default:true"`
+	LastActive time.Time
 	// tokens issued before this moment are rejected (set on password reset)
 	PasswordChangedAt *time.Time
 }

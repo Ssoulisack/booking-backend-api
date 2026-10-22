@@ -133,6 +133,9 @@ func TestCompanyWorkflow(t *testing.T) {
 
 	// --- company defaults and branch overrides ---
 	effective := func(m, token string) reply { return a.expect(200, "", "GET", m+"/rules/effective", token, nil) }
+	if c := a.expect(200, "", "GET", mA+"/rules/company", manager, nil); c.str("data.max_duration_min") != "180" {
+		t.Fatalf("company rule for the branch team: %v", c.body)
+	}
 	a.expect(200, "", "PUT", mA+"/rules/branch/0", manager, map[string]any{"max_duration_min": 120})
 	if e := effective(mA, manager); e.str("data.max_duration_min") != "120" || e.str("data.cancel_before_hours") != "24" {
 		t.Fatalf("A with its change: %v", e.body)

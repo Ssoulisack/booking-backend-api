@@ -96,6 +96,7 @@ type SettingsDTO struct {
 // with the branches they work at
 type TeamMemberDTO struct {
 	UserID   uint        `json:"user_id"`
+	MemberNo string      `json:"member_no"` // ENO000007
 	Name     string      `json:"name"`
 	Email    string      `json:"email"`
 	Phone    string      `json:"phone"`

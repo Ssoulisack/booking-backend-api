@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"backend/internal/adapters/secondary/postgres/numbering"
 	"backend/internal/core/domain"
 	"log"
 
@@ -35,6 +36,13 @@ func DatabaseMigrations(db *gorm.DB) error {
 		return err
 	}
 	if err := onePhonePerAccount(db); err != nil {
+		return err
+	}
+	// member numbers (CNO / ENO): the counters, then a number for every account that lacks one
+	if err := numbering.EnsureSequences(db); err != nil {
+		return err
+	}
+	if err := numbering.SyncAll(db); err != nil {
 		return err
 	}
 	log.Println("🌟 GORM database migrations completed successfully 🚀")

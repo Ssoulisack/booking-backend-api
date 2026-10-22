@@ -4,7 +4,6 @@ import (
 	"github.com/jinzhu/copier"
 )
 
-
 type ClassicMapper[T, U any] struct {
 }
 

@@ -324,7 +324,7 @@ func (s *BookingServiceImpl) Customers(ctx context.Context, branchID uint, q dto
 	}
 	return pageOf(rows, total, page, limit, func(r output.CustomerRow) dto.CustomerDTO {
 		return dto.CustomerDTO{
-			UserID: r.UserID, CustomerNo: domain.FormatCustomerNo(r.UserID), Name: r.Name, Phone: r.Phone,
+			UserID: r.UserID, MemberNo: domain.MemberNoOf(r.MemberNo), Name: r.Name, Phone: r.Phone,
 			Email:    contactEmail(r.Email),
 			Bookings: r.Bookings, LastBookingAt: r.LastBookingAt,
 		}
@@ -347,8 +347,8 @@ func (s *BookingServiceImpl) notifyStatusChange(bk *domain.Booking, status, reas
 	}
 }
 
-// findAccount finds a customer's account by what they can tell staff: phone number, customer number
-// (C0042) or email
+// findAccount finds a customer's account by what they can tell staff: phone number, member number
+// (CNO000042, or ENO for a team member who books) or email
 func (s *BookingServiceImpl) findAccount(ctx context.Context, q string) (*domain.User, error) {
 	q = strings.TrimSpace(q)
 	var u *domain.User
@@ -356,12 +356,12 @@ func (s *BookingServiceImpl) findAccount(ctx context.Context, q string) (*domain
 	switch {
 	case strings.Contains(q, "@"):
 		u, err = s.users.FindByEmail(ctx, normalizeEmail(q))
-	case strings.HasPrefix(strings.ToUpper(q), "C"):
-		id, ok := domain.ParseCustomerNo(q)
+	case strings.HasPrefix(strings.ToUpper(q), domain.CustomerNoPrefix), strings.HasPrefix(strings.ToUpper(q), domain.EmployeeNoPrefix):
+		no, ok := domain.ParseMemberNo(q)
 		if !ok {
 			return nil, badRequest("CUSTOMER_NOT_FOUND")
 		}
-		u, err = s.users.FindByID(ctx, id)
+		u, err = s.users.FindByMemberNo(ctx, no)
 	default:
 		phone, ok := domain.NormalizePhone(q)
 		if !ok {
@@ -388,7 +388,7 @@ func (s *BookingServiceImpl) FindCustomer(ctx context.Context, branchID uint, q 
 		return nil, err
 	}
 	return &dto.CustomerMatchDTO{
-		UserID: u.ID, CustomerNo: domain.FormatCustomerNo(u.ID), Name: u.Name, Phone: u.Phone, Email: u.ContactEmail(),
+		UserID: u.ID, MemberNo: domain.MemberNoOf(u.MemberNo), Name: u.Name, Phone: u.Phone, Email: u.ContactEmail(),
 	}, nil
 }
 

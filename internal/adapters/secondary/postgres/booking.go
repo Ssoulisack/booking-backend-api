@@ -325,16 +325,17 @@ func (r *bookingRepository) Customers(ctx context.Context, branchID uint, keywor
 	}
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		tx = tx.Where("(users.name ILIKE ? OR users.email ILIKE ? OR users.phone LIKE ?)", like, like, like)
+		no, _ := domain.ParseMemberNo(keyword) // "" never matches a stored number
+		tx = tx.Where("(users.name ILIKE ? OR users.email ILIKE ? OR users.phone LIKE ? OR users.member_no = ?)", like, like, like, no)
 	}
 	var total int64
 	if err := tx.Distinct("users.id").Count(&total).Error; err != nil {
 		return nil, 0, exception.HandleGormError(err)
 	}
 	var rows []output.CustomerRow
-	err := paginate(tx.Select(`users.id AS user_id, users.name, users.email, users.phone,
+	err := paginate(tx.Select(`users.id AS user_id, users.member_no, users.name, users.email, users.phone,
 			COUNT(bookings.id) AS bookings, MAX(bookings.starts_at) AS last_booking_at`).
-		Group("users.id, users.name, users.email, users.phone").Order("MAX(bookings.starts_at) DESC"), q).
+		Group("users.id, users.member_no, users.name, users.email, users.phone").Order("MAX(bookings.starts_at) DESC"), q).
 		Scan(&rows).Error
 	return rows, total, exception.HandleGormError(err)
 }

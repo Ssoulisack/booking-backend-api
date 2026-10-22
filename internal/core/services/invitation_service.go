@@ -260,6 +260,10 @@ func (s *InvitationServiceImpl) Accept(ctx context.Context, token string, actor 
 	} else if err := s.memberships.Replace(ctx, user.ID, inv.Role, branchIDs, true); err != nil {
 		return nil, err
 	}
+	// a customer who joins the team now gets an ENO number
+	if err := syncMemberNo(ctx, s.users, user); err != nil {
+		return nil, err
+	}
 	now := s.now()
 	inv.AcceptedAt = &now
 	if err := s.invitations.Update(ctx, inv); err != nil {
