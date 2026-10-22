@@ -1,0 +1,12 @@
+# secrets and local state never go into the image
+.env
+.env.*
+data
+var/logs
+
+# not needed to build
+.git
+timeline
+postman
+test
+*.md

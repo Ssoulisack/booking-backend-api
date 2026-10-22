@@ -1,0 +1,41 @@
+#ignore data
+data
+#ignore logs
+/var/logs
+*.log
+
+#ignore env
+.env
+.env.*
+#ignore local config (copy config.example.yaml to config.yaml)
+config.yaml
+
+#ignore OS files
+.DS_Store
+
+#ignore editor/IDE files
+.idea/
+.vscode/
+*.swp
+
+#ignore build output and test artifacts
+/main
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+#ignore vendor (re-download with go mod download)
+vendor/
+
+# postman
+postman/
+
+timeline/
+
+# agent
+.agents/
+
+# skills-lock.json
+skills-lock.json

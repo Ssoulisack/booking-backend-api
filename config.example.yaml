@@ -1,0 +1,68 @@
+# Copy to config.yaml and fill in real values (config.yaml is git-ignored)
+app:
+  name: Sport Booking
+  # base of the links in invite and password-reset emails, e.g. https://booking.example.com
+  frontendUrl: http://localhost:5173
+
+server:
+  port: 3000
+  readTimeout: 10
+  writeTimeout: 10
+  # Behind a load balancer / reverse proxy: trust its client-IP header so rate limits see real users.
+  # List only your proxy addresses (IP or CIDR). Leave both empty when clients connect directly.
+  proxyHeader: ""            # e.g. X-Forwarded-For
+  trustedProxies: []         # e.g. ["10.0.0.0/8"]
+
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    user: booking
+    password: change-me
+    dbname: booking
+    sslmode: disable
+    timezone: Asia/Vientiane
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+# secret and refreshSecret must each be exactly 32 characters (AES-256 key)
+jwt:
+  secret: change-me-access-secret-32-chars
+  refreshSecret: change-me-refresh-secret-32-char
+
+minio:
+  endpoint: localhost:9000
+  accessKey: change-me
+  secretKey: change-me
+  bucketName: booking
+  baseUrl: http://localhost:9000
+
+# File storage (Supabase Storage). serviceKey is the server-side service_role key: never put it in the frontend.
+# publicBaseUrl is optional (CDN / custom domain); leave empty to use the Supabase public URL.
+storage:
+  projectUrl: https://<project-ref>.supabase.co
+  bucket: booking-media
+  serviceKey: change-me
+  publicBaseUrl: ""
+
+# Development: Mailpit (docker compose up -d mailpit) on localhost:1025, inbox at http://localhost:8025
+# with empty username / password. Release: your SMTP provider's host, port (587 or 465) and credentials.
+mailer:
+  host: localhost
+  username: ""
+  password: ""
+  port: 1025
+  from: no-reply@example.com
+
+# The client this install belongs to. Read on the first start only (empty database): the company
+# and its owner are created from it; afterwards the owner changes everything in the app.
+company:
+  name: Riverside Sports
+  ownerName: Owner Name
+  ownerEmail: owner@example.com
+  # leave empty in production: the owner gets an email with a link to choose a password
+  ownerPassword: ""
