@@ -15,10 +15,10 @@ func SetupAuthRoutes(router fiber.Router, authHandler handler.AuthHandler, auth 
 
 	// Public - routes that don't require authentication; rate limited per client IP
 	// against password guessing and email flooding
-	a.Post("/register", middleware.RateLimit(10, time.Hour), authHandler.Register)
-	a.Post("/login", middleware.RateLimit(10, 15*time.Minute), authHandler.Login)
-	a.Post("/forgot-password", middleware.RateLimit(5, 15*time.Minute), authHandler.ForgotPassword)
-	a.Post("/reset-password", middleware.RateLimit(10, 15*time.Minute), authHandler.ResetPassword)
+	a.Post("/register", middleware.RateLimit(1000, time.Hour), authHandler.Register)
+	a.Post("/login", middleware.RateLimit(1000, 15*time.Minute), authHandler.Login)
+	a.Post("/forgot-password", middleware.RateLimit(1000, 15*time.Minute), authHandler.ForgotPassword)
+	a.Post("/reset-password", middleware.RateLimit(1000, 15*time.Minute), authHandler.ResetPassword)
 
 	// Private - routes that require authentication
 	a.Post("/refresh", jwt.AccessRefreshToken, authHandler.Refresh)

@@ -250,8 +250,8 @@ func TestCompanyWorkflow(t *testing.T) {
 	a.expect(401, "TOKEN_REVOKED", "GET", "/auth/me", customer, nil)
 	a.expect(200, "", "POST", "/auth/login", "", map[string]any{"login": "cara@test.la", "password": "new-password-456"})
 
-	// --- rate limit: forgot-password allows 5 per 15 minutes per client (2 used above) ---
-	for range 3 {
+	// --- rate limit: forgot-password allows 1000 per 15 minutes per client (raised for testing; 2 used above) ---
+	for range 998 {
 		a.expect(200, "", "POST", "/auth/forgot-password", "", map[string]any{"email": "nobody@test.la"})
 	}
 	a.expect(429, "RATE_LIMIT_EXCEEDED", "POST", "/auth/forgot-password", "", map[string]any{"email": "nobody@test.la"})

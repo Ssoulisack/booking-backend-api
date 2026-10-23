@@ -51,7 +51,7 @@ func SetupPublicRoutes(
 	public handler.PublicHandler,
 ) {
 	router.Get("/invitations/:token", invitations.Get)
-	router.Post("/invitations/:token/accept", middleware.RateLimit(10, 15*time.Minute), auth.OptionalUser, invitations.Accept)
+	router.Post("/invitations/:token/accept", middleware.RateLimit(1000, 15*time.Minute), auth.OptionalUser, invitations.Accept)
 
 	router.Get("/public/company", public.Company)
 	router.Get("/public/branches", public.Directory)

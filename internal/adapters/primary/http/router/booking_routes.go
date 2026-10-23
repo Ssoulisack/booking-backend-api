@@ -13,9 +13,9 @@ import (
 func SetupBookingRoutes(router fiber.Router, auth *middleware.Auth, booking handler.BookingHandler) {
 	pub := router.Group("/public/branches/:slug")
 	pub.Get("/availability", booking.Availability)
-	pub.Post("/bookings", middleware.RateLimit(60, time.Hour), auth.OptionalUser, booking.Create)
+	pub.Post("/bookings", middleware.RateLimit(1000, time.Hour), auth.OptionalUser, booking.Create)
 	pub.Get("/bookings/:token", booking.GuestView)
-	pub.Post("/bookings/:token/cancel", middleware.RateLimit(10, 15*time.Minute), booking.GuestCancel)
+	pub.Post("/bookings/:token/cancel", middleware.RateLimit(1000, 15*time.Minute), booking.GuestCancel)
 
 	me := router.Group("/me/bookings", auth.RequireUser)
 	me.Get("/", booking.MyBookings)
