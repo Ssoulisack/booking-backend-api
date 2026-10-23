@@ -50,10 +50,14 @@ const (
 // starts from. There is exactly one row, created at the first start (see migration seed).
 type Company struct {
 	gorm.Model
-	Name          string            `gorm:"type:varchar(120);not null"`
-	LogoKey       string            `gorm:"type:varchar(255)"`
-	CoverKey      string            `gorm:"type:varchar(255)"`
-	BrandColor    string            `gorm:"type:varchar(7)"`
+	Name       string `gorm:"type:varchar(120);not null"`
+	LogoKey    string `gorm:"type:varchar(255)"`
+	CoverKey   string `gorm:"type:varchar(255)"`
+	BrandColor string `gorm:"type:varchar(7)"`
+	// RingColors (up to MaxRingColors, #rrggbb) colour the rings behind the page's top; empty = made from the brand colour
+	RingColors    []string          `gorm:"type:jsonb;serializer:json"`
+	HeadingFont   string            `gorm:"type:varchar(20)"` // a key of Fonts; "" = the default
+	BodyFont      string            `gorm:"type:varchar(20)"`
 	Description   string            `gorm:"type:text"`
 	Phone         string            `gorm:"type:varchar(30)"`
 	Email         string            `gorm:"type:varchar(255)"`
@@ -93,17 +97,24 @@ type Branch struct {
 	OwnBookingMode     *string `gorm:"column:booking_mode;type:varchar(10)"`
 	OwnBookingPolicy   *string `gorm:"column:booking_policy;type:text"`
 	OwnRequireApproval *bool   `gorm:"column:require_approval"`
+	// the look: nil = the company's
+	OwnRingColors  *[]string `gorm:"column:ring_colors;type:jsonb;serializer:json"`
+	OwnHeadingFont *string   `gorm:"column:heading_font;type:varchar(20)"`
+	OwnBodyFont    *string   `gorm:"column:body_font;type:varchar(20)"`
 
 	// in force: filled from the company by WithCompany (repositories do it on every load)
-	CompanyName     string `gorm:"-"`
-	Timezone        string `gorm:"-"`
-	Currency        string `gorm:"-"`
-	Language        string `gorm:"-"`
-	LogoKey         string `gorm:"-"`
-	BrandColor      string `gorm:"-"`
-	BookingMode     string `gorm:"-"`
-	BookingPolicy   string `gorm:"-"`
-	RequireApproval bool   `gorm:"-"`
+	CompanyName     string   `gorm:"-"`
+	Timezone        string   `gorm:"-"`
+	Currency        string   `gorm:"-"`
+	Language        string   `gorm:"-"`
+	LogoKey         string   `gorm:"-"`
+	BrandColor      string   `gorm:"-"`
+	BookingMode     string   `gorm:"-"`
+	BookingPolicy   string   `gorm:"-"`
+	RequireApproval bool     `gorm:"-"`
+	RingColors      []string `gorm:"-"`
+	HeadingFont     string   `gorm:"-"`
+	BodyFont        string   `gorm:"-"`
 	// the picture shown for the branch: its own cover, else the company's
 	ShownCoverKey string `gorm:"-"`
 }
@@ -124,6 +135,16 @@ func (b *Branch) WithCompany(c Company) {
 	}
 	if b.OwnRequireApproval != nil {
 		b.RequireApproval = *b.OwnRequireApproval
+	}
+	b.RingColors, b.HeadingFont, b.BodyFont = c.RingColors, c.HeadingFont, c.BodyFont
+	if b.OwnRingColors != nil {
+		b.RingColors = *b.OwnRingColors
+	}
+	if b.OwnHeadingFont != nil {
+		b.HeadingFont = *b.OwnHeadingFont
+	}
+	if b.OwnBodyFont != nil {
+		b.BodyFont = *b.OwnBodyFont
 	}
 	b.ShownCoverKey = b.CoverKey
 	if b.ShownCoverKey == "" {
@@ -189,4 +210,13 @@ type Media struct {
 	BranchID  uint   `gorm:"not null;index"`
 	Key       string `gorm:"type:varchar(255);not null;uniqueIndex"`
 	SizeBytes int64  `gorm:"not null"`
+}
+
+// MaxRingColors is how many colours the rings can blend
+const MaxRingColors = 4
+
+// Fonts the booking pages can use (bundled with the frontend); "" means the default
+var Fonts = map[string]bool{
+	"noto-sans": true, "noto-condensed": true, "inter": true, "poppins": true,
+	"kanit": true, "prompt": true, "sarabun": true,
 }

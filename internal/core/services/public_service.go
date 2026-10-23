@@ -73,6 +73,7 @@ func (s *PublicServiceImpl) Branch(ctx context.Context, slug string) (*dto.Publi
 	return &dto.PublicBranchDTO{
 		Name: b.Name, Slug: b.Slug, CompanyName: b.CompanyName, Timezone: b.Timezone, Currency: b.Currency, Language: b.Language,
 		LogoURL: s.files.url(b.LogoKey), CoverURL: s.files.url(b.ShownCoverKey), BrandColor: b.BrandColor,
+		RingColors: ringColorsOrEmpty(b.RingColors), HeadingFont: b.HeadingFont, BodyFont: b.BodyFont,
 		Description: b.Description, Address: b.Address, Province: b.Province, Phone: b.Phone, MapURL: b.MapURL,
 		SocialLinks: b.SocialLinks, BookingPolicy: b.BookingPolicy, BookingMode: b.BookingMode,
 		RequireApproval: b.RequireApproval,
@@ -212,6 +213,7 @@ func (s *PublicServiceImpl) Company(ctx context.Context) (*dto.PublicCompanyDTO,
 	}
 	return &dto.PublicCompanyDTO{
 		Name: c.Name, LogoURL: s.files.url(c.LogoKey), CoverURL: s.files.url(c.CoverKey), BrandColor: c.BrandColor,
+		RingColors: ringColorsOrEmpty(c.RingColors), HeadingFont: c.HeadingFont, BodyFont: c.BodyFont,
 		Description: c.Description, Phone: c.Phone, Email: c.Email, SocialLinks: c.SocialLinks,
 		Language: c.Language, Currency: c.Currency,
 	}, nil

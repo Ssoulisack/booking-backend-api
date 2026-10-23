@@ -15,6 +15,10 @@ type CompanyRepository interface {
 
 type BranchRepository interface {
 	Create(ctx context.Context, b *domain.Branch) error
+	// Clone creates b and copies the setup of branch sourceID into it in one transaction: sports,
+	// spaces, coaches, opening hours, prices, booking rules, weekly class timetables and closed
+	// days still to come. Bookings, customers, team, made classes and uploaded pictures stay behind.
+	Clone(ctx context.Context, sourceID uint, b *domain.Branch) error
 	// GetByID, GetBySlug and List fill the settings in force from the company (Branch.WithCompany)
 	GetByID(ctx context.Context, id uint) (*domain.Branch, error)
 	GetBySlug(ctx context.Context, slug string) (*domain.Branch, error)

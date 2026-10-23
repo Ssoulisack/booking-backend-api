@@ -6,6 +6,7 @@ import (
 	"backend/internal/core/port/output"
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -69,6 +70,182 @@ func (r *branchRepository) Create(ctx context.Context, b *domain.Branch) error {
 		return exception.HandleGormError(err)
 	}
 	return r.withCompany(ctx, b)
+}
+
+// keptImage keeps only outside demo pictures: an uploaded file belongs to its branch
+func keptImage(key string) string {
+	if strings.HasPrefix(key, "https://placehold.co/") {
+		return key
+	}
+	return ""
+}
+
+func (r *branchRepository) Clone(ctx context.Context, sourceID uint, b *domain.Branch) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(b).Error; err != nil {
+			return err
+		}
+		return copySetup(tx, sourceID, b.ID)
+	})
+	if err != nil {
+		return exception.HandleGormError(err)
+	}
+	return r.withCompany(ctx, b)
+}
+
+// copySetup copies what a branch offers (not what happened there) from one branch to another,
+// pointing the copies at each other through old id -> new id maps
+func copySetup(tx *gorm.DB, from, to uint) error {
+	sports := map[uint]uint{}
+	var oldSports []domain.Sport
+	if err := tx.Where("branch_id = ?", from).Order("id").Find(&oldSports).Error; err != nil {
+		return err
+	}
+	for _, o := range oldSports {
+		n := domain.Sport{BranchID: to, Name: o.Name, Slug: o.Slug, Description: o.Description,
+			ImageKey: keptImage(o.ImageKey), Active: o.Active, Type: o.Type}
+		if err := tx.Create(&n).Error; err != nil {
+			return err
+		}
+		sports[o.ID] = n.ID
+	}
+
+	resources := map[uint]uint{}
+	var oldResources []domain.Resource
+	if err := tx.Where("branch_id = ?", from).Order("id").Find(&oldResources).Error; err != nil {
+		return err
+	}
+	for _, o := range oldResources {
+		n := domain.Resource{BranchID: to, SportID: sports[o.SportID], Name: o.Name, Kind: o.Kind, Active: o.Active}
+		if err := tx.Create(&n).Error; err != nil {
+			return err
+		}
+		resources[o.ID] = n.ID
+	}
+
+	coaches := map[uint]uint{}
+	var oldCoaches []domain.Coach
+	if err := tx.Preload("Sports").Where("branch_id = ?", from).Order("id").Find(&oldCoaches).Error; err != nil {
+		return err
+	}
+	for _, o := range oldCoaches {
+		n := domain.Coach{BranchID: to, Name: o.Name, Bio: o.Bio, Phone: o.Phone, ImageKey: keptImage(o.ImageKey), Active: o.Active}
+		if err := tx.Omit("Sports").Create(&n).Error; err != nil {
+			return err
+		}
+		coaches[o.ID] = n.ID
+		var own []domain.Sport
+		for _, sp := range o.Sports {
+			if id, ok := sports[sp.ID]; ok {
+				own = append(own, domain.Sport{Model: gorm.Model{ID: id}})
+			}
+		}
+		if len(own) > 0 {
+			if err := tx.Model(&n).Association("Sports").Append(own); err != nil {
+				return err
+			}
+		}
+	}
+
+	// the owner of an hour, price or closure: a space, a coach, or the whole branch
+	owner := func(kind string, id uint) (uint, bool) {
+		switch kind {
+		case domain.OwnerResource:
+			n, ok := resources[id]
+			return n, ok
+		case domain.OwnerCoach:
+			n, ok := coaches[id]
+			return n, ok
+		}
+		return 0, kind == domain.OwnerVenue
+	}
+
+	var hours []domain.OpeningHour
+	if err := tx.Where("branch_id = ?", from).Find(&hours).Error; err != nil {
+		return err
+	}
+	for _, o := range hours {
+		if id, ok := owner(o.OwnerType, o.OwnerID); ok {
+			if err := tx.Create(&domain.OpeningHour{BranchID: to, OwnerType: o.OwnerType, OwnerID: id,
+				Weekday: o.Weekday, OpenTime: o.OpenTime, CloseTime: o.CloseTime}).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	var prices []domain.Price
+	if err := tx.Where("branch_id = ?", from).Find(&prices).Error; err != nil {
+		return err
+	}
+	for _, o := range prices {
+		if id, ok := owner(o.OwnerType, o.OwnerID); ok {
+			if err := tx.Create(&domain.Price{BranchID: to, OwnerType: o.OwnerType, OwnerID: id,
+				PricePerHour: o.PricePerHour, Currency: o.Currency}).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// closed days that are still to come (a past holiday means nothing to the copy)
+	var closures []domain.Closure
+	if err := tx.Where("branch_id = ? AND ends_at > ?", from, time.Now()).Find(&closures).Error; err != nil {
+		return err
+	}
+	for _, o := range closures {
+		if id, ok := owner(o.OwnerType, o.OwnerID); ok {
+			if err := tx.Create(&domain.Closure{BranchID: to, OwnerType: o.OwnerType, OwnerID: id,
+				StartsAt: o.StartsAt, EndsAt: o.EndsAt, Reason: o.Reason}).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	// booking rules: the branch's own changes, then per sport and per space
+	var rules []domain.BookingRule
+	if err := tx.Where("branch_id = ? AND scope_type <> ?", from, domain.ScopeCompany).Find(&rules).Error; err != nil {
+		return err
+	}
+	for _, o := range rules {
+		scope := o.ScopeID
+		switch o.ScopeType {
+		case domain.ScopeSport:
+			scope = sports[o.ScopeID]
+		case domain.ScopeResource:
+			scope = resources[o.ScopeID]
+		}
+		if o.ScopeType != domain.ScopeBranch && scope == 0 {
+			continue
+		}
+		o.Model, o.BranchID, o.ScopeID = gorm.Model{}, to, scope
+		if err := tx.Create(&o).Error; err != nil {
+			return err
+		}
+	}
+
+	// weekly classes: the timetable only; its classes are made again for the new branch
+	var tables []domain.ClassTimetable
+	if err := tx.Where("branch_id = ?", from).Order("id").Find(&tables).Error; err != nil {
+		return err
+	}
+	for _, o := range tables {
+		sport, ok := sports[o.SportID]
+		if !ok {
+			continue
+		}
+		o.Model, o.BranchID, o.SportID, o.FilledUntil = gorm.Model{}, to, sport, ""
+		if o.CoachID != nil {
+			id := coaches[*o.CoachID]
+			o.CoachID = &id
+		}
+		if o.ResourceID != nil {
+			id := resources[*o.ResourceID]
+			o.ResourceID = &id
+		}
+		if err := tx.Create(&o).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *branchRepository) get(ctx context.Context, tx *gorm.DB) (*domain.Branch, error) {

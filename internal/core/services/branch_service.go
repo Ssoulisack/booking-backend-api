@@ -59,11 +59,13 @@ func (s *BranchServiceImpl) toSettingsDTO(b *domain.Branch) *dto.SettingsDTO {
 			Address: b.Address, Province: b.Province, Phone: b.Phone, MapURL: b.MapURL, SocialLinks: b.SocialLinks,
 			Timezone: b.OwnTimezone, BookingMode: b.OwnBookingMode, BookingPolicy: b.OwnBookingPolicy,
 			RequireApproval: b.OwnRequireApproval,
+			RingColors:      b.OwnRingColors, HeadingFont: b.OwnHeadingFont, BodyFont: b.OwnBodyFont,
 		},
 		ID: b.ID, Status: b.Status(), CoverURL: s.files.url(b.ShownCoverKey), CompanyName: b.CompanyName,
 		InForce: dto.InForce{
 			Timezone: b.Timezone, Currency: b.Currency, Language: b.Language,
 			BookingMode: b.BookingMode, BookingPolicy: b.BookingPolicy, RequireApproval: b.RequireApproval,
+			RingColors: ringColorsOrEmpty(b.RingColors), HeadingFont: b.HeadingFont, BodyFont: b.BodyFont,
 		},
 		PublicPath: "/b/" + b.Slug, PublishedAt: b.PublishedAt,
 	}
@@ -121,6 +123,8 @@ func (s *BranchServiceImpl) validateSettings(ctx context.Context, b *domain.Bran
 		return badRequest("INVALID_BOOKING_MODE")
 	case req.BookingPolicy != nil && utf8.RuneCountInString(*req.BookingPolicy) > maxBookingPolicyChar:
 		return badRequest("BOOKING_POLICY_TOO_LONG")
+	case !validBranchLook(req):
+		return badRequest("INVALID_LOOK")
 	}
 	if err := validSocialLinks(req.SocialLinks); err != nil {
 		return err
@@ -157,6 +161,7 @@ func (s *BranchServiceImpl) UpdateSettings(ctx context.Context, branchID uint, r
 	b.Address, b.Province, b.Phone, b.MapURL = strings.TrimSpace(req.Address), req.Province, strings.TrimSpace(req.Phone), req.MapURL
 	b.SocialLinks = req.SocialLinks
 	b.OwnTimezone, b.OwnBookingMode, b.OwnBookingPolicy, b.OwnRequireApproval = req.Timezone, req.BookingMode, req.BookingPolicy, req.RequireApproval
+	b.OwnRingColors, b.OwnHeadingFont, b.OwnBodyFont = req.RingColors, req.HeadingFont, req.BodyFont
 	if err := s.branches.Update(ctx, b); err != nil {
 		return nil, err
 	}
@@ -228,4 +233,39 @@ func (s *BranchServiceImpl) Unpublish(ctx context.Context, branchID uint) (*dto.
 		return nil, err
 	}
 	return s.toSettingsDTO(b), nil
+}
+
+// ringColorsOrEmpty gives [] instead of null in the JSON
+func ringColorsOrEmpty(colors []string) []string {
+	if colors == nil {
+		return []string{}
+	}
+	return colors
+}
+
+// validLook checks ring colours (up to MaxRingColors, #rrggbb) and the two font keys ("" = default)
+func validLook(rings []string, heading, body string) bool {
+	if len(rings) > domain.MaxRingColors {
+		return false
+	}
+	for _, c := range rings {
+		if !brandColorPattern.MatchString(c) {
+			return false
+		}
+	}
+	return (heading == "" || domain.Fonts[heading]) && (body == "" || domain.Fonts[body])
+}
+
+func validBranchLook(req *dto.SettingsRequest) bool {
+	var rings []string
+	if req.RingColors != nil {
+		rings = *req.RingColors
+	}
+	val := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	return validLook(rings, val(req.HeadingFont), val(req.BodyFont))
 }

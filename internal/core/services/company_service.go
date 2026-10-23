@@ -54,6 +54,7 @@ func (s *CompanyServiceImpl) toCompanyDTO(c *domain.Company) *dto.CompanyDTO {
 	return &dto.CompanyDTO{
 		CompanyRequest: dto.CompanyRequest{
 			Name: c.Name, LogoKey: c.LogoKey, CoverKey: c.CoverKey, BrandColor: c.BrandColor,
+			RingColors: ringColorsOrEmpty(c.RingColors), HeadingFont: c.HeadingFont, BodyFont: c.BodyFont,
 			Description: c.Description, Phone: c.Phone, Email: c.Email, SocialLinks: c.SocialLinks,
 			Language: c.Language, Currency: c.Currency, Timezone: c.Timezone,
 			BookingMode: c.BookingMode, BookingPolicy: c.BookingPolicy, RequireApproval: c.RequireApproval,
@@ -87,6 +88,8 @@ func (s *CompanyServiceImpl) validateCompany(ctx context.Context, req *dto.Compa
 		return badRequest("INVALID_BRAND_COLOR")
 	case !bookingModes[req.BookingMode]:
 		return badRequest("INVALID_BOOKING_MODE")
+	case !validLook(req.RingColors, req.HeadingFont, req.BodyFont):
+		return badRequest("INVALID_LOOK")
 	case utf8.RuneCountInString(req.Description) > maxDescriptionChars:
 		return badRequest("DESCRIPTION_TOO_LONG")
 	case utf8.RuneCountInString(req.BookingPolicy) > maxBookingPolicyChar:
@@ -115,6 +118,7 @@ func (s *CompanyServiceImpl) UpdateCompany(ctx context.Context, req dto.CompanyR
 	}
 	oldLogo, oldCover := c.LogoKey, c.CoverKey
 	c.Name, c.LogoKey, c.CoverKey, c.BrandColor = req.Name, req.LogoKey, req.CoverKey, req.BrandColor
+	c.RingColors, c.HeadingFont, c.BodyFont = req.RingColors, req.HeadingFont, req.BodyFont
 	c.Description, c.Phone, c.Email, c.SocialLinks = req.Description, strings.TrimSpace(req.Phone), req.Email, req.SocialLinks
 	c.Language, c.Currency, c.Timezone = req.Language, req.Currency, req.Timezone
 	c.BookingMode, c.BookingPolicy, c.RequireApproval = req.BookingMode, req.BookingPolicy, req.RequireApproval
@@ -163,7 +167,21 @@ func (s *CompanyServiceImpl) CreateBranch(ctx context.Context, req dto.CreateBra
 		return nil, conflict("SLUG_TAKEN")
 	}
 	b := domain.Branch{Name: req.Name, Slug: slug}
-	if err := s.branches.Create(ctx, &b); err != nil {
+	if req.CloneFrom != nil {
+		src, err := s.branches.GetByID(ctx, *req.CloneFrom)
+		if err != nil {
+			return nil, orNotFound(err, "BRANCH_NOT_FOUND")
+		}
+		// a draft with the same details; the pictures are not shared (each branch owns its files)
+		b.Description, b.Address, b.Province, b.Phone, b.MapURL = src.Description, src.Address, src.Province, src.Phone, src.MapURL
+		b.SocialLinks = src.SocialLinks
+		b.OwnTimezone, b.OwnBookingMode, b.OwnBookingPolicy, b.OwnRequireApproval =
+			src.OwnTimezone, src.OwnBookingMode, src.OwnBookingPolicy, src.OwnRequireApproval
+		b.OwnRingColors, b.OwnHeadingFont, b.OwnBodyFont = src.OwnRingColors, src.OwnHeadingFont, src.OwnBodyFont
+		if err := s.branches.Clone(ctx, src.ID, &b); err != nil {
+			return nil, err
+		}
+	} else if err := s.branches.Create(ctx, &b); err != nil {
 		return nil, err
 	}
 	d := toBranchDTO(b)

@@ -10,6 +10,9 @@ type CompanyRequest struct {
 	LogoKey         string            `json:"logo_key"`
 	CoverKey        string            `json:"cover_key"`
 	BrandColor      string            `json:"brand_color"`
+	RingColors      []string          `json:"ring_colors"`
+	HeadingFont     string            `json:"heading_font"`
+	BodyFont        string            `json:"body_font"`
 	Description     string            `json:"description"`
 	Phone           string            `json:"phone"`
 	Email           string            `json:"email"`
@@ -28,10 +31,12 @@ type CompanyDTO struct {
 	CoverURL string `json:"cover_url"`
 }
 
-// CreateBranchRequest opens a new branch (draft); slug is generated from the name when empty
+// CreateBranchRequest opens a new branch (draft); slug is generated from the name when empty.
+// CloneFrom (a branch id) starts the new branch as a copy of that branch's setup.
 type CreateBranchRequest struct {
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	CloneFrom *uint  `json:"clone_from"`
 }
 
 // BranchDTO is a branch in the company's list
@@ -65,16 +70,23 @@ type SettingsRequest struct {
 	BookingMode     *string           `json:"booking_mode"`
 	BookingPolicy   *string           `json:"booking_policy"`
 	RequireApproval *bool             `json:"require_approval"`
+	// the look; null = the company's
+	RingColors  *[]string `json:"ring_colors"`
+	HeadingFont *string   `json:"heading_font"`
+	BodyFont    *string   `json:"body_font"`
 }
 
 // InForce is what applies at the branch after its overrides
 type InForce struct {
-	Timezone        string `json:"timezone"`
-	Currency        string `json:"currency"`
-	Language        string `json:"language"`
-	BookingMode     string `json:"booking_mode"`
-	BookingPolicy   string `json:"booking_policy"`
-	RequireApproval bool   `json:"require_approval"`
+	Timezone        string   `json:"timezone"`
+	Currency        string   `json:"currency"`
+	Language        string   `json:"language"`
+	BookingMode     string   `json:"booking_mode"`
+	BookingPolicy   string   `json:"booking_policy"`
+	RequireApproval bool     `json:"require_approval"`
+	RingColors      []string `json:"ring_colors"`
+	HeadingFont     string   `json:"heading_font"`
+	BodyFont        string   `json:"body_font"`
 }
 
 type SettingsDTO struct {
@@ -181,6 +193,9 @@ type PublicCompanyDTO struct {
 	LogoURL     string            `json:"logo_url"`
 	CoverURL    string            `json:"cover_url"`
 	BrandColor  string            `json:"brand_color"`
+	RingColors  []string          `json:"ring_colors"`
+	HeadingFont string            `json:"heading_font"`
+	BodyFont    string            `json:"body_font"`
 	Description string            `json:"description"`
 	Phone       string            `json:"phone"`
 	Email       string            `json:"email"`
@@ -200,6 +215,9 @@ type PublicBranchDTO struct {
 	LogoURL         string            `json:"logo_url"`
 	CoverURL        string            `json:"cover_url"`
 	BrandColor      string            `json:"brand_color"`
+	RingColors      []string          `json:"ring_colors"`
+	HeadingFont     string            `json:"heading_font"`
+	BodyFont        string            `json:"body_font"`
 	Description     string            `json:"description"`
 	Address         string            `json:"address"`
 	Province        string            `json:"province"`
