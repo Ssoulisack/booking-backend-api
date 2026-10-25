@@ -1,4 +1,6 @@
 # secrets and local state never go into the image
+# the config holds passwords and keys: mounted at run time, never copied
+config.yaml
 .env
 .env.*
 data

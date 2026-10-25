@@ -1,4 +1,7 @@
-FROM golang:1.25-alpine AS builder
+# builds on the machine's own CPU and cross-compiles for the target one, so a multi-arch image is fast
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -13,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o main ./cmd/api
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o main ./cmd/api
 
 # Use a smaller image for the final stage
 FROM alpine:3.20
