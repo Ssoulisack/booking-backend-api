@@ -37,7 +37,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	)
 	return &AppServices{
 		user:   services.NewUserService(r.user, r.redis, r.minio),
-		auth:   services.NewAuthService(r.user, r.redis, r.memberships, r.branches, r.passwordResets, r.mailer, r.app.FrontendURL),
+		auth:   services.NewAuthService(r.user, r.redis, r.memberships, r.branches, r.passwordResets, r.social, r.socialIDs, r.mailer, r.app.FrontendURL),
 		access: services.NewAccessService(r.user, r.memberships, r.branches),
 		company: services.NewCompanyService(
 			r.company, r.branches, r.memberships, r.invitations, r.user, r.storage, r.media, r.mailer, r.app.FrontendURL,

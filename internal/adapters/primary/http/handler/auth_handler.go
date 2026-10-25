@@ -15,6 +15,8 @@ type (
 	AuthHandler interface {
 		Register(c *fiber.Ctx) error
 		Login(c *fiber.Ctx) error
+		SocialLogin(c *fiber.Ctx) error
+		SocialConfig(c *fiber.Ctx) error
 		Refresh(c *fiber.Ctx) error
 		Me(c *fiber.Ctx) error
 		UpdateMe(c *fiber.Ctx) error
@@ -55,6 +57,21 @@ func (h *authHandler) Login(c *fiber.Ctx) error {
 	}
 	res, err := h.authService.Login(c.UserContext(), req)
 	return ok(c, res, err)
+}
+
+// SocialLogin expects {"token": ...} from Google (ID token) or Facebook (access token) in /auth/social/:provider
+func (h *authHandler) SocialLogin(c *fiber.Ctx) error {
+	var req dto.SocialLoginRequest
+	if err := bind(c, &req); err != nil {
+		return fail(c, err)
+	}
+	res, err := h.authService.SocialLogin(c.UserContext(), c.Params("provider"), req.Token)
+	return ok(c, res, err)
+}
+
+// SocialConfig tells the login page which providers are switched on
+func (h *authHandler) SocialConfig(c *fiber.Ctx) error {
+	return ok(c, h.authService.SocialConfig(), nil)
 }
 
 // Refresh expects the refresh token as the bearer token (see jwt.AccessRefreshToken)

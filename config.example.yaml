@@ -49,6 +49,14 @@ storage:
   serviceKey: change-me
   publicBaseUrl: ""
 
+# Sign in with Google / Facebook (customers only). Leave a provider empty to switch it off.
+# Google: OAuth client id (type Web) from Google Cloud Console, with your site as an authorised JavaScript origin.
+# Facebook: app id and app secret from developers.facebook.com (Facebook Login); the secret stays on the server.
+social:
+  googleClientId: ""
+  facebookAppId: ""
+  facebookAppSecret: ""
+
 # Development: Mailpit (docker compose up -d mailpit) on localhost:1025, inbox at http://localhost:8025
 # with empty username / password. Release: your SMTP provider's host, port (587 or 465) and credentials.
 mailer:

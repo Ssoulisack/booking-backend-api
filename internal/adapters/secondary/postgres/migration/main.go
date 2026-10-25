@@ -18,6 +18,7 @@ func DatabaseMigrations(db *gorm.DB) error {
 		&domain.Membership{},
 		&domain.Invitation{},
 		&domain.PasswordReset{},
+		&domain.SocialIdentity{},
 		&domain.Media{},
 		&domain.Sport{},
 		&domain.Resource{},

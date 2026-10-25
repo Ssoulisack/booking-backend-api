@@ -5,6 +5,7 @@ import (
 	"backend/internal/adapters/secondary/minio"
 	"backend/internal/adapters/secondary/postgres"
 	"backend/internal/adapters/secondary/redis"
+	"backend/internal/adapters/secondary/social"
 	"backend/internal/adapters/secondary/storage"
 	"backend/internal/config"
 	"backend/internal/core/domain"
@@ -21,6 +22,7 @@ type AppRepositories struct {
 	mailer   output.Mailer
 	postgres postgres.PostgresRepository
 	storage  output.FileStorage
+	social   output.SocialVerifier
 	// app settings the services need (links in emails) and the company to create on a fresh install
 	app     config.AppConfig
 	install config.CompanyConfig
@@ -32,6 +34,7 @@ type AppRepositories struct {
 	memberships    output.MembershipRepository
 	invitations    output.InvitationRepository
 	passwordResets output.PasswordResetRepository
+	socialIDs      output.SocialIdentityRepository
 	media          output.MediaRepository
 	sports         output.SportRepository
 	resources      output.ResourceRepository
@@ -81,6 +84,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		mailer:         mailer.NewSystemMailer(cfg.Mailer, cfg.App.Name),
 		postgres:       postgresRepo,
 		storage:        storage.NewSupabaseStorage(cfg.Storage),
+		social:         social.NewVerifier(cfg.Social),
 		app:            cfg.App,
 		install:        cfg.Company,
 		user:           postgres.NewUserRepository(db),
@@ -90,6 +94,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		memberships:    postgres.NewMembershipRepository(db),
 		invitations:    postgres.NewInvitationRepository(db),
 		passwordResets: postgres.NewPasswordResetRepository(db),
+		socialIDs:      postgres.NewSocialIdentityRepository(db),
 		media:          postgres.NewMediaRepository(db),
 		sports:         postgres.NewScopedRepository[domain.Sport](db, "name"),
 		resources:      postgres.NewScopedRepository[domain.Resource](db, "name"),

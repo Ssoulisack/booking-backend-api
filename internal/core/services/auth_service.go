@@ -29,6 +29,8 @@ type AuthServiceImpl struct {
 	memberships output.MembershipRepository
 	branches    output.BranchRepository
 	resets      output.PasswordResetRepository
+	social      output.SocialVerifier
+	socialIDs   output.SocialIdentityRepository
 	mailer      output.Mailer
 	frontendURL string
 	now         func() time.Time
@@ -40,6 +42,8 @@ func NewAuthService(
 	memberships output.MembershipRepository,
 	branches output.BranchRepository,
 	resets output.PasswordResetRepository,
+	social output.SocialVerifier,
+	socialIDs output.SocialIdentityRepository,
 	mailer output.Mailer,
 	frontendURL string,
 ) input.AuthService {
@@ -49,6 +53,8 @@ func NewAuthService(
 		memberships: memberships,
 		branches:    branches,
 		resets:      resets,
+		social:      social,
+		socialIDs:   socialIDs,
 		mailer:      mailer,
 		frontendURL: strings.TrimRight(frontendURL, "/"),
 		now:         time.Now,

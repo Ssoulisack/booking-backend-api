@@ -6,6 +6,7 @@ import (
 	"backend/internal/adapters/secondary/mysql"
 	"backend/internal/adapters/secondary/postgres"
 	"backend/internal/adapters/secondary/redis"
+	"backend/internal/adapters/secondary/social"
 	"backend/internal/adapters/secondary/storage"
 	"fmt"
 	"strings"
@@ -26,6 +27,7 @@ type Config struct {
 	JWT      JWTConfig
 	Minio    minio.Config
 	Storage  storage.Config
+	Social   social.Config
 	Mailer   mailer.Config
 	Company  CompanyConfig
 }
@@ -162,6 +164,11 @@ func setDefaults() {
 	viper.SetDefault("storage.bucket", "")
 	viper.SetDefault("storage.serviceKey", "")
 	viper.SetDefault("storage.publicBaseUrl", "")
+
+	// Social sign-in (Google, Facebook): a provider with empty credentials is switched off
+	viper.SetDefault("social.googleClientId", "")
+	viper.SetDefault("social.facebookAppId", "")
+	viper.SetDefault("social.facebookAppSecret", "")
 
 	// Mailer defaults
 	viper.SetDefault("mailer.host", "smtp.example.com")

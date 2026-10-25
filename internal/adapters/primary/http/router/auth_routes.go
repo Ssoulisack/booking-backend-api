@@ -17,6 +17,8 @@ func SetupAuthRoutes(router fiber.Router, authHandler handler.AuthHandler, auth 
 	// against password guessing and email flooding
 	a.Post("/register", middleware.RateLimit(1000, time.Hour), authHandler.Register)
 	a.Post("/login", middleware.RateLimit(1000, 15*time.Minute), authHandler.Login)
+	a.Get("/social/config", authHandler.SocialConfig)
+	a.Post("/social/:provider", middleware.RateLimit(30, 15*time.Minute), authHandler.SocialLogin)
 	a.Post("/forgot-password", middleware.RateLimit(1000, 15*time.Minute), authHandler.ForgotPassword)
 	a.Post("/reset-password", middleware.RateLimit(1000, 15*time.Minute), authHandler.ResetPassword)
 

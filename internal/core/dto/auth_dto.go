@@ -27,6 +27,18 @@ type ProfileRequest struct {
 	Nationality string `json:"nationality"`
 }
 
+// SocialLoginRequest carries the token the browser got from Google (an ID token) or Facebook (an
+// access token)
+type SocialLoginRequest struct {
+	Token string `json:"token"`
+}
+
+// SocialConfigDTO tells the login page which providers to offer and the public ids it needs
+type SocialConfigDTO struct {
+	GoogleClientID string `json:"google_client_id"`
+	FacebookAppID  string `json:"facebook_app_id"`
+}
+
 // PasswordRequest is a new password set by the owner or an admin for someone who cannot reset it by email
 type PasswordRequest struct {
 	Password string `json:"password"`
