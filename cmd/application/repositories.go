@@ -63,10 +63,10 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 	}
 
 	// Redis setup
-	redisRepo, err := redis.NewRedisRepository(cfg.Redis)
-	if err != nil {
-		log.Fatalf("❌ Failed to initialize Redis repository: %v", err)
-	}
+	// redisRepo, err := redis.NewRedisRepository(cfg.Redis)
+	// if err != nil {
+	// 	log.Fatalf("❌ Failed to initialize Redis repository: %v", err)
+	// }
 
 	// MinIO setup
 	minioRepo, err := minio.NewMinIORepository(cfg.Minio)
@@ -79,7 +79,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 
 	return &AppRepositories{
 		// mysql:  mysqlRepo,
-		redis:          redisRepo,
+		// redis:          redisRepo,
 		minio:          minioRepo,
 		mailer:         mailer.NewSystemMailer(cfg.Mailer, cfg.App.Name),
 		postgres:       postgresRepo,
