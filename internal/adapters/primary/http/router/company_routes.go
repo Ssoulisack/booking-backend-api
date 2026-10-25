@@ -17,6 +17,7 @@ func SetupCompanyRoutes(router fiber.Router, auth *middleware.Auth, company hand
 	c.Put("/", company.UpdateCompany)
 	c.Get("/rules", company.GetRule)
 	c.Put("/rules", company.SetRule)
+	c.Get("/uploads", company.ListUploads)
 	c.Post("/uploads", company.Upload)
 	c.Delete("/uploads", company.DeleteUpload)
 

@@ -90,6 +90,21 @@ type MediaDTO struct {
 	URL string `json:"url"`
 }
 
+// MediaUseDTO is one place a file is shown: kind is sport, coach, cover or logo
+type MediaUseDTO struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// MediaItemDTO is a file in the media library with where it is used (empty: safe to delete)
+type MediaItemDTO struct {
+	Key       string        `json:"key"`
+	URL       string        `json:"url"`
+	SizeBytes int64         `json:"size_bytes"`
+	CreatedAt time.Time     `json:"created_at"`
+	UsedBy    []MediaUseDTO `json:"used_by"`
+}
+
 // OpeningHourDTO is one open interval; weekday 0 = Sunday, times are "HH:MM"
 type OpeningHourDTO struct {
 	Weekday int    `json:"weekday"`

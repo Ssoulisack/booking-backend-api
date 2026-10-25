@@ -88,6 +88,7 @@ func SetupManageRoutes(
 	b.Put("/rules/:scopeType/:scopeId", manager, rules.SetRule)
 	b.Delete("/rules/:scopeType/:scopeId", manager, rules.DeleteRule)
 
+	b.Get("/uploads", manager, media.List)
 	b.Post("/uploads", manager, media.Upload)
 	b.Delete("/uploads", manager, media.Delete)
 

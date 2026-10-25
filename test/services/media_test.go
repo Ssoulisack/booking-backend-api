@@ -4,6 +4,7 @@ import (
 	"backend/internal/core/domain"
 	"backend/internal/core/dto"
 	"backend/internal/core/port/input"
+	"backend/internal/core/port/output"
 	"backend/internal/core/services"
 	"bytes"
 	"context"
@@ -142,5 +143,61 @@ func TestSportImageMustBeOwnUpload(t *testing.T) {
 	}
 	if len(sports.updated) != 2 {
 		t.Fatalf("only the two valid updates may be saved, got %d", len(sports.updated))
+	}
+}
+
+// The library lists one scope only (a branch never sees the company's files) and says what uses each file
+func TestMediaListIsPerScope(t *testing.T) {
+	ctx := context.Background()
+	media := newFakeMedia()
+	svc := newMediaService(newFakeStorage(), media)
+	cover := "branches/7/branding/11111111-1111-1111-1111-111111111111.png"
+	spare := "branches/7/sports/22222222-2222-2222-2222-222222222222.png"
+	logo := "branches/0/branding/33333333-3333-3333-3333-333333333333.png"
+	other := "branches/8/sports/44444444-4444-4444-4444-444444444444.png"
+	for _, k := range []struct {
+		key string
+		b   uint
+	}{{cover, 7}, {spare, 7}, {logo, 0}, {other, 8}} {
+		media.items[k.key] = domain.Media{BranchID: k.b, Key: k.key, SizeBytes: 5}
+	}
+	media.uses = []output.MediaUse{{Key: cover, Kind: "cover", Name: "Main"}}
+
+	got, err := svc.List(ctx, branch)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("branch 7 must see only its two files, got %+v (%v)", got, err)
+	}
+	for _, f := range got {
+		if f.Key == cover && (len(f.UsedBy) != 1 || f.UsedBy[0].Kind != "cover") {
+			t.Fatalf("cover must say where it is used: %+v", f)
+		}
+		if f.Key == spare && (f.UsedBy == nil || len(f.UsedBy) != 0) {
+			t.Fatalf("an unused file lists an empty used_by, not null: %+v", f)
+		}
+	}
+	if company, _ := svc.List(ctx, 0); len(company) != 1 || company[0].Key != logo {
+		t.Fatalf("the company library holds only company files: %+v", company)
+	}
+}
+
+// A picture still shown somewhere cannot be deleted; an unused one can
+func TestMediaDeleteRefusesFileInUse(t *testing.T) {
+	ctx := context.Background()
+	store, media := newFakeStorage(), newFakeMedia()
+	svc := newMediaService(store, media)
+	used := "branches/7/sports/11111111-1111-1111-1111-111111111111.png"
+	free := "branches/7/sports/22222222-2222-2222-2222-222222222222.png"
+	media.items[used] = domain.Media{BranchID: 7, Key: used}
+	media.items[free] = domain.Media{BranchID: 7, Key: free}
+	media.uses = []output.MediaUse{{Key: used, Kind: "sport", Name: "Tennis"}}
+
+	if err := svc.Delete(ctx, branch, used); err == nil || err.Error() != "FILE_IN_USE" {
+		t.Fatalf("got %v, want FILE_IN_USE", err)
+	}
+	if len(store.deleted) != 0 {
+		t.Fatal("a file in use must stay in storage")
+	}
+	if err := svc.Delete(ctx, branch, free); err != nil || len(store.deleted) != 1 {
+		t.Fatalf("unused file not deleted: %v", err)
 	}
 }

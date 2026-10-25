@@ -38,7 +38,11 @@ func (f *fakeStorage) URL(key string) string { return "https://files.test/" + ke
 
 // ---------- media records ----------
 
-type fakeMedia struct{ items map[string]domain.Media }
+// uses is what the fake says shows a file (a sport, a cover ...): the real repository reads it from the records
+type fakeMedia struct {
+	items map[string]domain.Media
+	uses  []output.MediaUse
+}
 
 func newFakeMedia() *fakeMedia { return &fakeMedia{items: map[string]domain.Media{}} }
 
@@ -53,6 +57,16 @@ func (f *fakeMedia) Get(_ context.Context, branchID uint, key string) (*domain.M
 	}
 	return &m, nil
 }
+func (f *fakeMedia) List(_ context.Context, branchID uint) ([]domain.Media, error) {
+	var out []domain.Media
+	for _, m := range f.items {
+		if m.BranchID == branchID {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+func (f *fakeMedia) Uses(context.Context, uint) ([]output.MediaUse, error) { return f.uses, nil }
 func (f *fakeMedia) Delete(_ context.Context, _ uint, key string) error {
 	delete(f.items, key)
 	return nil

@@ -116,7 +116,6 @@ func (s *CompanyServiceImpl) UpdateCompany(ctx context.Context, req dto.CompanyR
 	if err := s.validateCompany(ctx, &req); err != nil {
 		return nil, err
 	}
-	oldLogo, oldCover := c.LogoKey, c.CoverKey
 	c.Name, c.LogoKey, c.CoverKey, c.BrandColor = req.Name, req.LogoKey, req.CoverKey, req.BrandColor
 	c.RingColors, c.HeadingFont, c.BodyFont = req.RingColors, req.HeadingFont, req.BodyFont
 	c.Description, c.Phone, c.Email, c.SocialLinks = req.Description, strings.TrimSpace(req.Phone), req.Email, req.SocialLinks
@@ -125,8 +124,6 @@ func (s *CompanyServiceImpl) UpdateCompany(ctx context.Context, req dto.CompanyR
 	if err := s.company.Update(ctx, c); err != nil {
 		return nil, err
 	}
-	s.files.replaced(ctx, 0, oldLogo, c.LogoKey)
-	s.files.replaced(ctx, 0, oldCover, c.CoverKey)
 	return s.toCompanyDTO(c), nil
 }
 

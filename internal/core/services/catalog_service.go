@@ -122,20 +122,17 @@ func (s *CatalogServiceImpl) UpdateSport(ctx context.Context, branchID, id uint,
 	if err != nil {
 		return nil, err
 	}
-	oldKey := m.ImageKey
 	m.Name, m.Description, m.ImageKey, m.Active = req.Name, req.Description, req.ImageKey, isActive(req.Active)
 	m.Type = req.Type
 	if err := s.sports.Update(ctx, m); err != nil {
 		return nil, err
 	}
-	s.files.replaced(ctx, branchID, oldKey, m.ImageKey)
 	d := s.toSportDTO(*m)
 	return &d, nil
 }
 
 func (s *CatalogServiceImpl) DeleteSport(ctx context.Context, branchID, id uint) error {
-	m, err := s.sports.GetByID(ctx, branchID, id)
-	if err != nil {
+	if _, err := s.sports.GetByID(ctx, branchID, id); err != nil {
 		return err
 	}
 	inUse, err := s.resources.Count(ctx, branchID, map[string]any{"sport_id": id})
@@ -148,11 +145,7 @@ func (s *CatalogServiceImpl) DeleteSport(ctx context.Context, branchID, id uint)
 	if err := s.refuseIfUsedByClasses(ctx, branchID, "sport_id", id, "SPORT_HAS_CLASS_SESSIONS"); err != nil {
 		return err
 	}
-	if err := s.sports.Delete(ctx, branchID, id); err != nil {
-		return err
-	}
-	s.files.replaced(ctx, branchID, m.ImageKey, "")
-	return nil
+	return s.sports.Delete(ctx, branchID, id)
 }
 
 // ---------- resources ----------
@@ -308,14 +301,12 @@ func (s *CatalogServiceImpl) UpdateCoach(ctx context.Context, branchID, id uint,
 	if err := s.coaches.SetSports(ctx, branchID, id, req.SportIDs); err != nil {
 		return nil, err
 	}
-	oldKey := m.ImageKey
 	m.Name, m.Bio, m.Phone = req.Name, req.Bio, strings.TrimSpace(req.Phone)
 	m.ImageKey, m.Active = req.ImageKey, isActive(req.Active)
 	m.Sports = nil // SetSports owns the association
 	if err := s.coaches.Update(ctx, m); err != nil {
 		return nil, err
 	}
-	s.files.replaced(ctx, branchID, oldKey, m.ImageKey)
 	return s.GetCoach(ctx, branchID, id)
 }
 
@@ -324,15 +315,10 @@ func (s *CatalogServiceImpl) DeleteCoach(ctx context.Context, branchID, id uint)
 	if err := s.refuseIfInUse(ctx, branchID, domain.OwnerCoach, id, "coach_id"); err != nil {
 		return err
 	}
-	m, err := s.coaches.GetByID(ctx, branchID, id)
-	if err != nil {
+	if _, err := s.coaches.GetByID(ctx, branchID, id); err != nil {
 		return err
 	}
-	if err := s.coaches.Delete(ctx, branchID, id); err != nil {
-		return err
-	}
-	s.files.replaced(ctx, branchID, m.ImageKey, "")
-	return nil
+	return s.coaches.Delete(ctx, branchID, id)
 }
 
 // refuseIfUsedByClasses stops deleting something class sessions still point to

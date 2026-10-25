@@ -66,20 +66,6 @@ func (m mediaFiles) requireOwned(ctx context.Context, branchID uint, key string)
 	return nil
 }
 
-// replaced deletes the old file after a successful save; a failure only leaves an orphan file
-func (m mediaFiles) replaced(ctx context.Context, branchID uint, oldKey, newKey string) {
-	if oldKey == "" || oldKey == newKey || isPlaceholder(oldKey) {
-		return
-	}
-	if err := m.storage.Delete(ctx, oldKey); err != nil {
-		log.Printf("⚠️  could not delete replaced image %s: %v", oldKey, err)
-		return
-	}
-	if err := m.media.Delete(ctx, branchID, oldKey); err != nil && !isNotFound(err) {
-		log.Printf("⚠️  could not delete media record %s: %v", oldKey, err)
-	}
-}
-
 func (m mediaFiles) url(key string) string {
 	if isPlaceholder(key) {
 		return key
@@ -129,6 +115,32 @@ func (s *MediaServiceImpl) Upload(ctx context.Context, branchID uint, folder str
 	return &dto.MediaDTO{Key: key, URL: s.files.url(key)}, nil
 }
 
+// List returns every file of the branch (0: the company) newest first, with what uses each one
+func (s *MediaServiceImpl) List(ctx context.Context, branchID uint) ([]dto.MediaItemDTO, error) {
+	files, err := s.files.media.List(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	uses, err := s.files.media.Uses(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	usedBy := map[string][]dto.MediaUseDTO{}
+	for _, u := range uses {
+		usedBy[u.Key] = append(usedBy[u.Key], dto.MediaUseDTO{Kind: u.Kind, Name: u.Name})
+	}
+	out := make([]dto.MediaItemDTO, 0, len(files))
+	for _, f := range files {
+		by := usedBy[f.Key]
+		if by == nil {
+			by = []dto.MediaUseDTO{}
+		}
+		out = append(out, dto.MediaItemDTO{Key: f.Key, URL: s.files.url(f.Key), SizeBytes: f.SizeBytes, CreatedAt: f.CreatedAt, UsedBy: by})
+	}
+	return out, nil
+}
+
+// Delete removes a file nothing uses; a picture still shown somewhere is refused (FILE_IN_USE)
 func (s *MediaServiceImpl) Delete(ctx context.Context, branchID uint, key string) error {
 	if !isValidMediaKey(branchID, key) {
 		return badRequest("INVALID_FILE_KEY")
@@ -139,6 +151,15 @@ func (s *MediaServiceImpl) Delete(ctx context.Context, branchID uint, key string
 	}
 	if rec == nil {
 		return notFound("FILE_NOT_FOUND")
+	}
+	uses, err := s.files.media.Uses(ctx, branchID)
+	if err != nil {
+		return err
+	}
+	for _, u := range uses {
+		if u.Key == key {
+			return conflict("FILE_IN_USE")
+		}
 	}
 	if err := s.files.storage.Delete(ctx, key); err != nil {
 		log.Printf("❌ file delete failed: %v", err)

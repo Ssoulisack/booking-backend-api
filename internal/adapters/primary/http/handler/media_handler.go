@@ -11,6 +11,7 @@ import (
 type (
 	MediaHandler interface {
 		Upload(c *fiber.Ctx) error
+		List(c *fiber.Ctx) error
 		Delete(c *fiber.Ctx) error
 	}
 	mediaHandler struct {
@@ -36,6 +37,12 @@ func (h *mediaHandler) Upload(c *fiber.Ctx) error {
 
 	res, err := h.svc.Upload(c.UserContext(), middleware.BranchID(c), c.Query("folder"), file)
 	return created(c, res, err)
+}
+
+// List returns the branch's media library: every file with where it is used
+func (h *mediaHandler) List(c *fiber.Ctx) error {
+	res, err := h.svc.List(c.UserContext(), middleware.BranchID(c))
+	return ok(c, res, err)
 }
 
 // Delete expects ?key= of a file this branch uploaded

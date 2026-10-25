@@ -76,6 +76,7 @@ type RuleService interface {
 type MediaService interface {
 	Upload(ctx context.Context, branchID uint, folder string, file io.Reader) (*dto.MediaDTO, error)
 	Delete(ctx context.Context, branchID uint, key string) error
+	List(ctx context.Context, branchID uint) ([]dto.MediaItemDTO, error)
 }
 
 // BranchService is one branch's own settings and publishing

@@ -192,6 +192,33 @@ func (r *mediaRepository) Get(ctx context.Context, branchID uint, key string) (*
 	return &m, nil
 }
 
+func (r *mediaRepository) List(ctx context.Context, branchID uint) ([]domain.Media, error) {
+	var files []domain.Media
+	err := r.db.WithContext(ctx).Where("branch_id = ?", branchID).Order("created_at DESC, id DESC").Find(&files).Error
+	return files, exception.HandleGormError(err)
+}
+
+// Uses finds what shows a file: sports, coaches and the branch cover, or for the company its logo and cover
+func (r *mediaRepository) Uses(ctx context.Context, branchID uint) ([]output.MediaUse, error) {
+	var uses []output.MediaUse
+	var err error
+	if branchID == 0 {
+		err = r.db.WithContext(ctx).Raw(`
+			SELECT logo_key AS key, 'logo' AS kind, name FROM companies WHERE logo_key <> '' AND deleted_at IS NULL
+			UNION ALL
+			SELECT cover_key, 'cover', name FROM companies WHERE cover_key <> '' AND deleted_at IS NULL`).Scan(&uses).Error
+	} else {
+		err = r.db.WithContext(ctx).Raw(`
+			SELECT image_key AS key, 'sport' AS kind, name FROM sports WHERE branch_id = ? AND image_key <> '' AND deleted_at IS NULL
+			UNION ALL
+			SELECT image_key, 'coach', name FROM coaches WHERE branch_id = ? AND image_key <> '' AND deleted_at IS NULL
+			UNION ALL
+			SELECT cover_key, 'cover', name FROM branches WHERE id = ? AND cover_key <> '' AND deleted_at IS NULL`,
+			branchID, branchID, branchID).Scan(&uses).Error
+	}
+	return uses, exception.HandleGormError(err)
+}
+
 func (r *mediaRepository) Delete(ctx context.Context, branchID uint, key string) error {
 	return requireAffected(r.db.WithContext(ctx).Where("branch_id = ? AND key = ?", branchID, key).Delete(&domain.Media{}))
 }

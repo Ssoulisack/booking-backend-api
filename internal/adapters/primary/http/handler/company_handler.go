@@ -20,6 +20,7 @@ type (
 		SetRule(c *fiber.Ctx) error
 		Upload(c *fiber.Ctx) error
 		DeleteUpload(c *fiber.Ctx) error
+		ListUploads(c *fiber.Ctx) error
 
 		ListBranches(c *fiber.Ctx) error
 		CreateBranch(c *fiber.Ctx) error
@@ -106,6 +107,12 @@ func (h *companyHandler) Upload(c *fiber.Ctx) error {
 	defer f.Close()
 	res, err := h.media.Upload(c.UserContext(), 0, c.Query("folder"), f)
 	return created(c, res, err)
+}
+
+// ListUploads is the company's media library (logo and cover files only, never a branch's)
+func (h *companyHandler) ListUploads(c *fiber.Ctx) error {
+	res, err := h.media.List(c.UserContext(), 0)
+	return ok(c, res, err)
 }
 
 func (h *companyHandler) DeleteUpload(c *fiber.Ctx) error {

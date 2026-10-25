@@ -156,7 +156,6 @@ func (s *BranchServiceImpl) UpdateSettings(ctx context.Context, branchID uint, r
 	if err := s.validateSettings(ctx, b, &req); err != nil {
 		return nil, err
 	}
-	oldCover := b.CoverKey
 	b.Name, b.Slug, b.CoverKey, b.Description = req.Name, req.Slug, req.CoverKey, req.Description
 	b.Address, b.Province, b.Phone, b.MapURL = strings.TrimSpace(req.Address), req.Province, strings.TrimSpace(req.Phone), req.MapURL
 	b.SocialLinks = req.SocialLinks
@@ -165,7 +164,6 @@ func (s *BranchServiceImpl) UpdateSettings(ctx context.Context, branchID uint, r
 	if err := s.branches.Update(ctx, b); err != nil {
 		return nil, err
 	}
-	s.files.replaced(ctx, branchID, oldCover, b.CoverKey)
 	return s.GetSettings(ctx, branchID)
 }
 
