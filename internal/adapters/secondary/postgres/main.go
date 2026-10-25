@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"backend/internal/adapters/secondary/postgres/migration"
 	"fmt"
 	"time"
 
@@ -58,9 +57,9 @@ func NewPostgresRepository(config Config) (PostgresRepository, error) {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// Run database migrations
-	if err := migration.DatabaseMigrations(db); err != nil {
-		return nil, fmt.Errorf("❌ failed to migrate database: %w", err)
-	}
+	// if err := migration.DatabaseMigrations(db); err != nil {
+	// 	return nil, fmt.Errorf("❌ failed to migrate database: %w", err)
+	// }
 
 	return &postgresRepository{db: db}, nil
 }
