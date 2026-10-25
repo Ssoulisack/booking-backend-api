@@ -65,6 +65,14 @@ mailer:
   password: ""
   port: 1025
   from: no-reply@example.com
+#
+# Release with Gmail (replace the block above with this, then restart):
+# mailer:
+#   host: smtp.gmail.com
+#   port: 587
+#   username: your.address@gmail.com
+#   password: abcdefghijklmnop   # the 16-character App password, not your Gmail password
+#   from: "Booking <your.address@gmail.com>"
 
 # The client this install belongs to. Read on the first start only (empty database): the company
 # and its owner are created from it; afterwards the owner changes everything in the app.
