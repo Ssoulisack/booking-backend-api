@@ -74,7 +74,7 @@ func SetupManageRoutes(
 	b.Put("/class-sessions/:id", manager, schedule.UpdateClassSession)
 	b.Delete("/class-sessions/:id", manager, schedule.DeleteClassSession)
 
-	// weekly timetables: classes are made automatically for the next 60 days
+	// weekly timetables: classes are made automatically for the next 30 days
 	b.Get("/class-timetables", staff, schedule.ListTimetables)
 	b.Post("/class-timetables", manager, schedule.CreateTimetable)
 	b.Put("/class-timetables/:id", manager, schedule.UpdateTimetable)

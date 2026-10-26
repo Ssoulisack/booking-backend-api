@@ -88,4 +88,4 @@ type ClassTimetable struct {
 }
 
 // ClassWindowDays is how far ahead timetable classes are kept made: the booking page's range
-const ClassWindowDays = 60
+const ClassWindowDays = 30

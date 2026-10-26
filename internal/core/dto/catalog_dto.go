@@ -265,7 +265,7 @@ type TimetableDTO struct {
 	Price      int64  `json:"price"`
 	Currency   string `json:"currency"`
 	Active     bool   `json:"active"`
-	// classes are made up to this day (today + 60 days, or the end); "" before the start
+	// classes are made up to this day (today + 30 days, or the end); "" before the start
 	FilledUntil string `json:"filled_until"`
 }
 
