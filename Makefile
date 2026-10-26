@@ -16,7 +16,7 @@ DOCKER_COMPOSE_BUILD=$(DOCKER_COMPOSE) up --build -d
 DOCKER_DOWN=$(DOCKER_COMPOSE) down
 DOCKER_RESTART=$(DOCKER_COMPOSE) restart
 
-.PHONY: run build run-docker logs stop clean release release-dry
+.PHONY: run build run-docker logs stop clean release release-dry db-clear db-drop
 
 # Run the application
 run:
@@ -34,6 +34,17 @@ release:
 # The same build, but nothing is pushed
 release-dry:
 	scripts/release.sh --dry-run
+
+# Empty every table in the database named by CONFIG (asks you to type the db name first)
+#   make db-clear                      uses ./config.yaml
+#   make db-clear CONFIG=path/to.yaml
+CONFIG ?= config.yaml
+db-clear:
+	scripts/reset-db.sh $(CONFIG)
+
+# Drop every table instead (use when the schema changed, then start the API to migrate)
+db-drop:
+	scripts/reset-db.sh --drop $(CONFIG)
 
 # Run Docker container (config.yaml is mounted, never baked into the image)
 run-docker:

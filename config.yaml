@@ -17,22 +17,9 @@ database:
     sslmode: 
     timezone: 
 
-redis:
-  host: 
-  port: 
-  password: 
-  db: 
-
 jwt:
   secret: 
   refreshSecret: 
-
-minio:
-  endpoint: 
-  accessKey: 
-  secretKey: 
-  bucketName: 
-  baseUrl: 
 
 storage:
   projectUrl: 
