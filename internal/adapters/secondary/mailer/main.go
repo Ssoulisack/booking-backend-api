@@ -32,6 +32,9 @@ func (m *mailerRepository) SendMail(mailer dto.MailDTO) error {
 	message.SetHeader("From", m.config.From)
 	message.SetHeader("To", mailer.To)
 	message.SetHeader("Subject", mailer.Subject)
+	if len(mailer.Bcc) > 0 {
+		message.SetHeader("Bcc", mailer.Bcc...)
+	}
 
 	// Add headers to help spam filters
 	message.SetHeader("X-Mailer", "GoMail")

@@ -8,9 +8,11 @@ import (
 	"backend/pkg/response"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"log"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -34,6 +36,7 @@ type BookingServiceImpl struct {
 	classes     output.ClassSessionRepository
 	bookings    output.BookingRepository
 	users       output.UserRepository
+	memberships output.MembershipRepository
 	rules       input.RuleService
 	mailer      output.Mailer
 	frontendURL string
@@ -51,13 +54,14 @@ func NewBookingService(
 	classes output.ClassSessionRepository,
 	bookings output.BookingRepository,
 	users output.UserRepository,
+	memberships output.MembershipRepository,
 	rules input.RuleService,
 	mailer output.Mailer,
 	frontendURL string,
 ) input.BookingService {
 	return &BookingServiceImpl{
 		branches: branches, sports: sports, resources: resources, coaches: coaches, hours: hours,
-		closures: closures, prices: prices, classes: classes, bookings: bookings, users: users, rules: rules,
+		closures: closures, prices: prices, classes: classes, bookings: bookings, users: users, memberships: memberships, rules: rules,
 		mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/"), now: time.Now,
 	}
 }
@@ -511,7 +515,97 @@ func (s *BookingServiceImpl) Create(ctx context.Context, slug string, actor *dom
 			}
 		}
 	}
+	// after the answer is ready: sending takes seconds and must not hold the customer up
+	go s.notifyNewBooking(context.WithoutCancel(ctx), b, out, actor, who.staff != nil, rawToken != "")
 	return out, nil
+}
+
+// notifyNewBooking sends the emails of a new booking: a receipt to the customer (a guest already got
+// their private link) and, for a booking the customer made themselves, ONE email to the branch's
+// active managers and staff. A failed email is logged and never undoes the booking.
+func (s *BookingServiceImpl) notifyNewBooking(ctx context.Context, b *domain.Branch, out *dto.CreatedBookingDTO, actor *domain.User, byStaff, guest bool) {
+	loc := locationOf(b)
+	var what []string
+	if out.SportName != "" {
+		what = append(what, out.SportName)
+	}
+	for _, i := range out.Items {
+		for _, name := range []string{i.ResourceName, i.CoachName, i.ClassTitle} {
+			if name != "" {
+				what = append(what, name)
+			}
+		}
+	}
+	info := output.BookingMail{
+		BranchName: b.Name,
+		Code:       out.Code,
+		What:       strings.Join(what, " · "),
+		When:       out.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04") + "–" + out.EndsAt.In(loc).Format("15:04"),
+		Price:      moneyText(out.TotalPrice, out.Currency),
+		Pending:    out.Status == domain.BookingPending,
+	}
+
+	// who booked, as the team should read it
+	name, phone, customerEmail := out.GuestName, out.GuestPhone, ""
+	if actor != nil && !byStaff {
+		name, phone, customerEmail = actor.Name, actor.Phone, actor.ContactEmail()
+	}
+	info.Customer = strings.TrimSpace(name + " " + phone)
+
+	if !guest { // a guest has their private link email; a customer or a walk-in gets a receipt
+		to, link := customerEmail, s.frontendURL+"/account"
+		if byStaff {
+			to, link = "", s.frontendURL+"/b/"+b.Slug
+			if out.CustomerEmail != "" {
+				to = out.CustomerEmail
+			}
+		}
+		if to != "" {
+			info.Link = link
+			if err := s.mailer.SendBookingReceived(to, info); err != nil {
+				log.Printf("⚠️  booking receipt for %s failed: %v", out.Code, err)
+			}
+		}
+	}
+
+	if byStaff { // the team made it or knows about it
+		return
+	}
+	members, err := s.memberships.ListByBranch(ctx, b.ID)
+	if err != nil {
+		log.Printf("⚠️  team email for booking %s: cannot list the team: %v", out.Code, err)
+		return
+	}
+	var team []string
+	seen := map[string]bool{strings.ToLower(customerEmail): true}
+	for _, m := range members {
+		email := m.User.ContactEmail()
+		if !m.Active || (m.Role != domain.MemberManager && m.Role != domain.MemberStaff) || email == "" || seen[strings.ToLower(email)] {
+			continue
+		}
+		seen[strings.ToLower(email)] = true
+		team = append(team, email)
+	}
+	if len(team) == 0 {
+		return
+	}
+	info.Link = fmt.Sprintf("%s/dashboard/%d/bookings", s.frontendURL, b.ID)
+	if err := s.mailer.SendNewBooking(team, info); err != nil {
+		log.Printf("⚠️  team email for booking %s failed: %v", out.Code, err)
+	}
+}
+
+// moneyText writes an amount with thousands separators, e.g. 150,000 LAK
+func moneyText(amount int64, currency string) string {
+	digits := strconv.FormatInt(amount, 10)
+	var sb strings.Builder
+	for i, d := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 && d != '-' && digits[i-1] != '-' {
+			sb.WriteByte(',')
+		}
+		sb.WriteRune(d)
+	}
+	return strings.TrimSpace(sb.String() + " " + currency)
 }
 
 // createRental books a resource, a coach, or both for starts_at + duration_min

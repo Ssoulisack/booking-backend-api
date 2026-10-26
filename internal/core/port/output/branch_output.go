@@ -71,4 +71,20 @@ type Mailer interface {
 	SendBookingLink(to, branchName, code, link string) error
 	// SendBookingUpdate tells a customer that staff confirmed or cancelled their booking
 	SendBookingUpdate(to, name, branchName, code, status, reason, link string) error
+	// SendBookingReceived tells a customer that their booking was made (or waits for approval)
+	SendBookingReceived(to string, b BookingMail) error
+	// SendNewBooking tells the branch team about a booking a customer made: ONE email to all of them
+	SendNewBooking(to []string, b BookingMail) error
+}
+
+// BookingMail is what the booking emails say about one booking
+type BookingMail struct {
+	BranchName string
+	Code       string
+	Customer   string // who booked: name and phone (for the team)
+	What       string // the sport and the court, coach or class
+	When       string // date and time in the branch's time zone
+	Price      string
+	Pending    bool // waits for the branch to approve it
+	Link       string
 }

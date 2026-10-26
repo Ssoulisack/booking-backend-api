@@ -42,8 +42,19 @@ type emailData struct {
 }
 
 func (m *systemMailer) send(to, subject string, d emailData) error {
-	if domain.IsGeneratedEmail(to) {
-		return nil // a stand-in address of an account without a real email: nothing can be delivered
+	return m.sendMany([]string{to}, subject, d)
+}
+
+// sendMany sends ONE email to several people: the first is in To, the others in Bcc (they do not see each other)
+func (m *systemMailer) sendMany(to []string, subject string, d emailData) error {
+	var real []string
+	for _, a := range to {
+		if a != "" && !domain.IsGeneratedEmail(a) { // a stand-in address has no mailbox: nothing can be delivered
+			real = append(real, a)
+		}
+	}
+	if len(real) == 0 {
+		return nil
 	}
 	d.AppName = m.appName
 	var html bytes.Buffer
@@ -51,7 +62,7 @@ func (m *systemMailer) send(to, subject string, d emailData) error {
 		return err
 	}
 	plain := fmt.Sprintf("%s\n\n%s\n\n%s: %s\n\n%s\n\n-- %s", d.Title, d.Message, d.Button, d.URL, d.Note, m.appName)
-	return m.repo.SendMail(dto.MailDTO{To: to, Subject: subject, Body: plain, BodyHTML: html.String()})
+	return m.repo.SendMail(dto.MailDTO{To: real[0], Bcc: real[1:], Subject: subject, Body: plain, BodyHTML: html.String()})
 }
 
 func (m *systemMailer) SendInvitation(to, companyName, inviterName, role, where, acceptURL string) error {
@@ -107,4 +118,26 @@ func (m *systemMailer) SendBookingUpdate(to, name, branchName, code, status, rea
 		}
 	}
 	return m.send(to, title, emailData{Title: title, Message: message, Button: "Open " + branchName, URL: link, Note: note})
+}
+
+func (m *systemMailer) SendBookingReceived(to string, b output.BookingMail) error {
+	title := fmt.Sprintf("Booking %s received", b.Code)
+	note := "If you can no longer come, please cancel from your bookings or contact the branch."
+	if b.Pending {
+		title = fmt.Sprintf("Booking %s is waiting for approval", b.Code)
+		note = "The branch has to approve it first. You will get another email when it is confirmed."
+	}
+	message := fmt.Sprintf("%s: %s, %s, %s.", b.BranchName, b.What, b.When, b.Price)
+	return m.send(to, title+" - "+b.BranchName, emailData{Title: title, Message: message, Button: "My bookings", URL: b.Link, Note: note})
+}
+
+func (m *systemMailer) SendNewBooking(to []string, b output.BookingMail) error {
+	title := fmt.Sprintf("New booking %s", b.Code)
+	note := "Sent once to the managers and staff of this branch."
+	if b.Pending {
+		title += " (needs approval)"
+		note = "It waits for approval. " + note
+	}
+	message := fmt.Sprintf("%s booked %s, %s, %s.", b.Customer, b.What, b.When, b.Price)
+	return m.sendMany(to, title+" - "+b.BranchName, emailData{Title: title, Message: message, Button: "Open bookings", URL: b.Link, Note: note})
 }

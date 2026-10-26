@@ -33,7 +33,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	rules := services.NewRuleService(r.rules, r.sports, r.resources)
 	booking := services.NewBookingService(
 		r.branches, r.sports, r.resources, r.coaches, r.openingHours, r.closures, r.prices, r.classSessions,
-		r.bookings, r.user, rules, r.mailer, r.app.FrontendURL,
+		r.bookings, r.user, r.memberships, rules, r.mailer, r.app.FrontendURL,
 	)
 	return &AppServices{
 		user:   services.NewUserService(r.user, r.redis, r.minio),
