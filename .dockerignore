@@ -1,14 +1,26 @@
 # secrets and local state never go into the image
-# the config holds passwords and keys: mounted at run time, never copied
-config.yaml
 .env
 .env.*
 data
-var/logs
+var
 
-# not needed to build
+# repository and editor files
 .git
+.gitignore
+.agents
+.DS_Store
+skills-lock.json
+
+# docs, tests and tooling: not needed to build or run
 timeline
 postman
 test
 *.md
+scripts
+git_workflow.sh
+Makefile
+version
+docker-compose.yml
+Dockerfile
+.dockerignore
+config.example.yaml

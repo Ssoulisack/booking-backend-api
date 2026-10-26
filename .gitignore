@@ -7,8 +7,6 @@ data
 #ignore env
 .env
 .env.*
-#ignore local config (copy config.example.yaml to config.yaml)
-config.yaml
 
 #ignore OS files
 .DS_Store

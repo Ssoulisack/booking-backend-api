@@ -1,0 +1,59 @@
+app:
+  name: 
+  frontendUrl: 
+
+server:
+  port: 
+  readTimeout: 
+  writeTimeout: 
+
+database:
+  postgres:
+    host: 
+    port: 
+    user: 
+    password: 
+    dbname: 
+    sslmode: 
+    timezone: 
+
+redis:
+  host: 
+  port: 
+  password: 
+  db: 
+
+jwt:
+  secret: 
+  refreshSecret: 
+
+minio:
+  endpoint: 
+  accessKey: 
+  secretKey: 
+  bucketName: 
+  baseUrl: 
+
+storage:
+  projectUrl: 
+  bucket: 
+  serviceKey: 
+  publicBaseUrl: 
+
+mailer:
+  host: 
+  username: 
+  password: 
+  port: 
+  from: 
+
+social:
+  googleClientId: 
+  facebookAppId: 
+  facebookAppSecret: 
+
+company:
+  name: 
+  ownerName: 
+  ownerEmail: 
+  ownerPassword: 

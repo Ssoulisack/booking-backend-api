@@ -35,9 +35,9 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /app/main .
 
-# config.yaml holds secrets, so it is never part of the image: mount it at run time, e.g.
-#   docker run -v "$PWD/config.yaml:/app/config.yaml:ro" -p 3000:3000 backend
-# (or set APP_* environment variables)
+# config.yaml is baked into the image, so keep the image private (never push it to a public repo).
+# A config.yaml mounted at /app/config.yaml at run time still overrides this one.
+COPY config.yaml .
 USER app
 
 # Expose the application port
