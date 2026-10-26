@@ -53,8 +53,9 @@ func (v *verifier) Public() output.SocialPublic {
 
 func (v *verifier) enabled() map[string]bool {
 	return map[string]bool{
-		domain.ProviderGoogle:   v.config.GoogleClientID != "",
-		domain.ProviderFacebook: v.config.FacebookAppID != "" && v.config.FacebookAppSecret != "",
+		domain.ProviderGoogle: v.config.GoogleClientID != "",
+		// Facebook is off until the app is verified: remove the comment to bring it back
+		// domain.ProviderFacebook: v.config.FacebookAppID != "" && v.config.FacebookAppSecret != "",
 	}
 }
 
