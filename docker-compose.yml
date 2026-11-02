@@ -21,9 +21,13 @@ services:
     volumes:
       - ./data/redis_data:/data
 
-  # Development only: catches every email; inbox at http://localhost:8025, SMTP on port 1025
+  # Tests only: catches every email; inbox at http://localhost:8025, SMTP on port 1025.
+  # Not started by a plain "docker compose up -d"; start it with:
+  #   docker compose --profile test up -d mailpit
+  # Real emails go through the SMTP service in config.yaml (mailer block).
   mailpit:
     image: axllent/mailpit:v1.20.0
+    profiles: ["test"]
     container_name: mailpit
     restart: unless-stopped
     ports:

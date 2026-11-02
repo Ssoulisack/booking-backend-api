@@ -23,13 +23,15 @@ Needs **Go 1.25+** and Docker.
 
 ```sh
 cp config.example.yaml config.yaml          # fill in your values; config.yaml holds secrets
-docker compose up -d postgres redis mailpit # needs a .env with POSTGRES_* and REDIS_PORT
+docker compose up -d                        # Postgres + Redis; needs a .env with POSTGRES_* and REDIS_PORT
 make run                                    # http://localhost:3000
 ```
 
 - On every start the API creates / updates the tables, and on an empty database it creates the company and
   its owner from the `company` block of `config.yaml` (with `ownerPassword` set, you can log in at once).
-- Emails (invites, password resets, booking mails) go to Mailpit in development: http://localhost:8025.
+- Emails (invites, password resets, booking mails) go through the SMTP service in the `mailer` block (Resend).
+  To catch them locally instead, start Mailpit (`docker compose --profile test up -d mailpit`) and point
+  `mailer` at `localhost:1025`; its inbox is http://localhost:8025.
 - Settings can also come from environment variables: `APP_` + the key path with `_`, e.g.
   `APP_STORAGE_R2_SECRETKEY`, `APP_DATABASE_POSTGRES_PASSWORD`.
 
@@ -67,7 +69,7 @@ the files once. With `local`, back up the folder together with the database.
 | ---------------------------------- | -------------------------------------------------------------------------------------- |
 | `make run`                         | Run the API                                                                            |
 | `go test ./test/...`               | Unit tests (`test/domain`, `test/services`, `test/storage`, `test/http`)               |
-| `E2E=1 go test ./test/e2e -count=1`| Whole API against a local Postgres + Mailpit; needs a database `booking_test` (see `test/e2e/e2e_test.go`) |
+| `E2E=1 go test ./test/e2e -count=1`| Whole API against a local Postgres + Mailpit (`docker compose --profile test up -d`); needs a database `booking_test` (see `test/e2e/e2e_test.go`) |
 | `make db-clear` / `make db-drop`   | Empty / drop every table of the database in `config.yaml` (asks you to type its name)  |
 | `make build`                       | Docker image `booking-api:<version>` (version from the `version` file)                 |
 | `make release` / `release-dry`     | Multi-arch image (amd64 + arm64) pushed to Docker Hub / built only                     |
