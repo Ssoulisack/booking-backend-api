@@ -34,20 +34,38 @@ jwt:
   secret: change-me-access-secret-32-chars
   refreshSecret: change-me-refresh-secret-32-char
 
-minio:
-  endpoint: localhost:9000
-  accessKey: change-me
-  secretKey: change-me
-  bucketName: booking
-  baseUrl: http://localhost:9000
-
-# File storage (Supabase Storage). serviceKey is the server-side service_role key: never put it in the frontend.
-# publicBaseUrl is optional (CDN / custom domain); leave empty to use the Supabase public URL.
+# File storage for uploaded pictures (logo, covers, photos).
+# driver picks one section; the other sections are ignored, so you can keep all three filled in.
+# Keys and secrets stay on the server: never put them in the frontend.
 storage:
-  projectUrl: https://<project-ref>.supabase.co
-  bucket: booking-media
-  serviceKey: change-me
-  publicBaseUrl: ""
+  driver: local           # local | r2 | supabase
+
+  # A folder on this machine, served by the backend at /files. Back it up together with the database.
+  # publicBaseUrl: leave empty when site and API share one domain (links become /files/...);
+  # otherwise the backend address, e.g. http://localhost:3000/files in development.
+  local:
+    path: ./data/uploads
+    publicBaseUrl: http://localhost:3000/files
+
+  # Cloudflare R2 (also works with any S3-compatible service: AWS S3, Backblaze B2, DigitalOcean Spaces).
+  # endpoint: R2 → bucket → Settings → S3 API (without the bucket name at the end).
+  # accessKey/secretKey: R2 API token with "Object Read & Write" on this bucket only.
+  # publicBaseUrl (required): the bucket's custom domain, e.g. https://files.example.com
+  r2:
+    endpoint: https://<account-id>.r2.cloudflarestorage.com
+    region: auto
+    bucket: booking-media
+    accessKey: ""
+    secretKey: ""
+    publicBaseUrl: https://files.example.com
+
+  # Supabase Storage. serviceKey is the server-side service_role key.
+  # publicBaseUrl is optional (CDN / custom domain); empty = the Supabase public URL.
+  supabase:
+    projectUrl: https://<project-ref>.supabase.co
+    bucket: booking-media
+    serviceKey: ""
+    publicBaseUrl: ""
 
 # Sign in with Google / Facebook (customers only). Leave a provider empty to switch it off.
 # Google: OAuth client id (type Web) from Google Cloud Console, with your site as an authorised JavaScript origin.

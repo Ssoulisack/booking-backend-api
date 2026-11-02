@@ -2,7 +2,6 @@ package application
 
 import (
 	"backend/internal/adapters/secondary/mailer"
-	"backend/internal/adapters/secondary/minio"
 	"backend/internal/adapters/secondary/postgres"
 	"backend/internal/adapters/secondary/redis"
 	"backend/internal/adapters/secondary/social"
@@ -18,10 +17,10 @@ type AppRepositories struct {
 	// System repositories
 	// mysql    mysql.MySQLRepository
 	redis    redis.CacheRepository
-	minio    minio.MinIORepository
 	mailer   output.Mailer
 	postgres postgres.PostgresRepository
 	storage  output.FileStorage
+	filesDir string // local storage folder served at /files, "" when files live elsewhere
 	social   output.SocialVerifier
 	// app settings the services need (links in emails) and the company to create on a fresh install
 	app     config.AppConfig
@@ -68,10 +67,10 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 	// 	log.Fatalf("❌ Failed to initialize Redis repository: %v", err)
 	// }
 
-	// MinIO setup
-	minioRepo, err := minio.NewMinIORepository(cfg.Minio)
+	// File storage (local folder or Supabase Storage)
+	fileStorage, err := storage.New(cfg.Storage)
 	if err != nil {
-		log.Fatalf("❌ Failed to initialize MinIO repository: %v", err)
+		log.Fatalf("❌ Failed to initialize file storage: %v", err)
 	}
 
 	// Domain repositories
@@ -80,10 +79,10 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 	return &AppRepositories{
 		// mysql:  mysqlRepo,
 		// redis:          redisRepo,
-		minio:          minioRepo,
 		mailer:         mailer.NewSystemMailer(cfg.Mailer, cfg.App.Name),
 		postgres:       postgresRepo,
-		storage:        storage.NewSupabaseStorage(cfg.Storage),
+		storage:        fileStorage,
+		filesDir:       storage.LocalDir(cfg.Storage),
 		social:         social.NewVerifier(cfg.Social),
 		app:            cfg.App,
 		install:        cfg.Company,

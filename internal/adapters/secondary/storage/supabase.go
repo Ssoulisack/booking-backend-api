@@ -10,22 +10,13 @@ import (
 	"time"
 )
 
-// Config holds the Supabase Storage settings. ServiceKey is the server-side
-// service_role key; it must never reach the browser.
-type Config struct {
-	ProjectURL    string // https://<project-ref>.supabase.co
-	Bucket        string
-	ServiceKey    string
-	PublicBaseURL string // optional override, e.g. a CDN or Cloudflare domain
-}
-
 type supabaseStorage struct {
-	config Config
+	config SupabaseConfig
 	client *http.Client
 }
 
 // NewSupabaseStorage creates a FileStorage backed by the Supabase Storage REST API
-func NewSupabaseStorage(config Config) output.FileStorage {
+func NewSupabaseStorage(config SupabaseConfig) output.FileStorage {
 	config.ProjectURL = strings.TrimRight(config.ProjectURL, "/")
 	config.PublicBaseURL = strings.TrimRight(config.PublicBaseURL, "/")
 	return &supabaseStorage{
@@ -75,7 +66,7 @@ func (s *supabaseStorage) URL(key string) string {
 
 func (s *supabaseStorage) ready() error {
 	if s.config.ProjectURL == "" || s.config.Bucket == "" || s.config.ServiceKey == "" {
-		return fmt.Errorf("file storage is not configured (storage.projectUrl, bucket, serviceKey)")
+		return fmt.Errorf("file storage is not configured (storage.supabase: projectUrl, bucket, serviceKey)")
 	}
 	return nil
 }

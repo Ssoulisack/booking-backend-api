@@ -3,7 +3,6 @@ package mappers
 import (
 	"backend/internal/core/domain"
 	"backend/internal/core/dto"
-	"backend/pkg/constants"
 	"backend/pkg/jwt"
 	"backend/pkg/utils"
 	"strings"
@@ -38,7 +37,7 @@ func (m *UserMapper) UserDTOToDomain(user *dto.UserDTO) (*domain.User, error) {
 func (m *UserMapper) UserDomainToDTO(user *domain.User) *dto.UserDTO {
 	return &dto.UserDTO{
 		ID:        user.ID,
-		Avatar:    constants.GetMinioURL(user.Avatar),
+		Avatar:    user.Avatar,
 		Username:  user.Username,
 		Email:     user.Email,
 		Name:      user.Name,

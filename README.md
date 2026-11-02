@@ -1,54 +1,103 @@
-# 🧱 Go Backend Template 2026
+# Booking — backend
 
-A modern, scalable backend template built with Go. Designed for rapid development and clean architecture in 2025.
+Go (Fiber) API of the sport booking system, **client edition**: one install = one company with branches.
+Owners and admins run the company, managers and staff run a branch (sports, courts, coaches, hours, prices,
+classes, desk bookings, cash-up, reports), and customers or guests book on the public pages.
 
----
+The website is `../booking-system-frontend` (React). The plan and progress of both are in
+`../timeline-client-edition/`.
 
-## 🚀 Getting Started
+| API group (`/api/v1/…`)                | Who                              | What                                                                  |
+| -------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `/auth`                                | Everyone                         | Register, log in (email or phone), Google / Facebook, refresh, forgot / reset password, my account |
+| `/public/company`, `/public/branches`  | Everyone, no login               | Company brand, live branches, a branch's sports, courts, coaches, classes, availability, booking   |
+| `/me/bookings`                         | Logged-in customers              | My bookings at every branch, cancel                                   |
+| `/company`                             | Owner, admins                    | Company settings, branches, team and invitations, customers, accounts, rules, uploads, report |
+| `/branches/{branchId}`                 | Manager, staff (+ owner, admins) | One branch: settings, publish, setup, desk bookings, walk-ins, cash-up, reports |
 
-Follow these steps to clone and set up your own project based on this template.
+Postman collections of every route are in `postman/` (back office and public).
 
-### 📥 STEP 1 — Clone the Repository
+## Run locally
 
-```bash
-git clone <your-template-repo-url> your-project-name
-cd your-project-name
+Needs **Go 1.25+** and Docker.
+
+```sh
+cp config.example.yaml config.yaml          # fill in your values; config.yaml holds secrets
+docker compose up -d postgres redis mailpit # needs a .env with POSTGRES_* and REDIS_PORT
+make run                                    # http://localhost:3000
 ```
 
-### 🧹 STEP 2 — Remove Existing Git History
+- On every start the API creates / updates the tables, and on an empty database it creates the company and
+  its owner from the `company` block of `config.yaml` (with `ownerPassword` set, you can log in at once).
+- Emails (invites, password resets, booking mails) go to Mailpit in development: http://localhost:8025.
+- Settings can also come from environment variables: `APP_` + the key path with `_`, e.g.
+  `APP_STORAGE_R2_SECRETKEY`, `APP_DATABASE_POSTGRES_PASSWORD`.
 
-```bash
-git remote remove origin
-rm -rf .git
-git init
+## Configuration (`config.yaml`)
+
+Every setting is explained in `config.example.yaml`. The main blocks:
+
+| Block               | What                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `app`               | Name, `frontendUrl` (links in emails)                                                      |
+| `server`            | Port, timeouts, `proxyHeader` / `trustedProxies` behind a proxy or tunnel                  |
+| `database.postgres` | Any PostgreSQL: local Docker, own server, or Supabase — only this block changes            |
+| `redis`             | Redis address                                                                              |
+| `jwt`               | Access and refresh token secrets (32+ characters)                                          |
+| `storage`           | Uploaded pictures; `driver` picks one section: `local`, `r2` or `supabase` (see below)     |
+| `mailer`            | Any SMTP sender: Mailpit for tests, a sending service (e.g. Resend, Brevo) for real use     |
+| `social`            | Google client id, Facebook app id / secret (empty = that login is off)                     |
+| `company`           | The company and first owner created on a fresh install                                    |
+
+### File storage
+
+| `storage.driver` | Pictures are kept                         | Links                                                        |
+| ---------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| `local`          | In `storage.local.path` on this machine; the API serves them at `/files/*` | `storage.local.publicBaseUrl` (empty = `/files/…` on the same domain) |
+| `r2`             | Cloudflare R2 (or any S3-compatible service: AWS S3, Backblaze B2, DigitalOcean Spaces) | `storage.r2.publicBaseUrl`, the bucket's custom domain (required) |
+| `supabase`       | Supabase Storage                          | Supabase public URL, or `storage.supabase.publicBaseUrl`     |
+
+Only the database keeps the file name (e.g. `branches/3/covers/<uuid>.png`); links are built on every request,
+so changing `publicBaseUrl` updates every picture at once. Switching driver means changing config and copying
+the files once. With `local`, back up the folder together with the database.
+
+## Commands
+
+| Command                            | Does                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------- |
+| `make run`                         | Run the API                                                                            |
+| `go test ./test/...`               | Unit tests (`test/domain`, `test/services`, `test/storage`, `test/http`)               |
+| `E2E=1 go test ./test/e2e -count=1`| Whole API against a local Postgres + Mailpit; needs a database `booking_test` (see `test/e2e/e2e_test.go`) |
+| `make db-clear` / `make db-drop`   | Empty / drop every table of the database in `config.yaml` (asks you to type its name)  |
+| `make build`                       | Docker image `booking-api:<version>` (version from the `version` file)                 |
+| `make release` / `release-dry`     | Multi-arch image (amd64 + arm64) pushed to Docker Hub / built only                     |
+| `make run-docker`                  | Run the image with `config.yaml` mounted (never baked into the image)                  |
+
+## Code map
+
+Hexagonal layout: the core knows nothing about HTTP or the database.
+
 ```
-
-### 🔗 STEP 3 — Add Your Own Git Repository
-
-```bash
-git remote add origin <your-own-repo-url>
-git add .
-git commit -m "Initial commit from Go Backend Template"
-git push -u origin main
+cmd/
+  api/                 main: load config, connect, install, start the server
+  application/         wiring: repositories → services → handlers → routes (+ /files when local storage)
+internal/
+  config/              config.yaml + APP_* environment variables (viper)
+  core/
+    domain/            models and rules (bookings, availability, roles, identity)
+    services/          business logic per area (company, branch, catalog, schedule, booking, desk, reports…)
+    port/              input (service) and output (repository, storage, mailer) interfaces
+    dto/, mappers/     API shapes
+  adapters/
+    primary/http/      Fiber server, handlers, routes, auth middleware, rate limits
+    secondary/
+      postgres/        GORM repositories; migration/ creates the tables on start
+      redis/           cache
+      storage/         storage.go (config, pick driver) · local.go · s3.go (R2) · supabase.go
+      mailer/          SMTP mails
+      social/          Google / Facebook token checks
+pkg/                   shared helpers (responses, errors, JWT, rate limiter, logger, utils)
+test/                  Go tests by area; e2e/ runs the whole API
+postman/               Postman collections
+scripts/               release.sh, reset-db.sh
 ```
-
-### 🛠️ Run the Application
-
-```bash
-make run
-```
-
-
-### 📦 Project Structure
-```
-    .
-    ├── cmd/                # Main application entry points
-    ├── internal/           # Private application and business logic
-    │   ├── primary/        # HTTP handlers
-    │   ├── secondary/     # Database access
-    ├── pkg/                # Shared packages (utilities, helpers)
-    ├── .env                # Environment variables
-    ├── Makefile            # Build and run commands
-    ├── go.mod              # Go module definition
-    └── README.md           # Project documentation
-```# go-backend-template

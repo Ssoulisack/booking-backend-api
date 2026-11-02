@@ -11,6 +11,7 @@ import (
 // AppServices holds all application services
 type AppServices struct {
 	user        input.UserService
+	filesDir    string // local storage folder served at /files
 	auth        input.AuthService
 	access      input.AccessService
 	company     input.CompanyService
@@ -36,9 +37,10 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		r.bookings, r.user, r.memberships, rules, r.mailer, r.app.FrontendURL,
 	)
 	return &AppServices{
-		user:   services.NewUserService(r.user, r.redis, r.minio),
-		auth:   services.NewAuthService(r.user, r.redis, r.memberships, r.branches, r.passwordResets, r.social, r.socialIDs, r.mailer, r.app.FrontendURL),
-		access: services.NewAccessService(r.user, r.memberships, r.branches),
+		filesDir: r.filesDir,
+		user:     services.NewUserService(r.user, r.redis),
+		auth:     services.NewAuthService(r.user, r.redis, r.memberships, r.branches, r.passwordResets, r.social, r.socialIDs, r.mailer, r.app.FrontendURL),
+		access:   services.NewAccessService(r.user, r.memberships, r.branches),
 		company: services.NewCompanyService(
 			r.company, r.branches, r.memberships, r.invitations, r.user, r.storage, r.media, r.mailer, r.app.FrontendURL,
 		),

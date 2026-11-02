@@ -2,7 +2,6 @@ package config
 
 import (
 	"backend/internal/adapters/secondary/mailer"
-	"backend/internal/adapters/secondary/minio"
 	"backend/internal/adapters/secondary/mysql"
 	"backend/internal/adapters/secondary/postgres"
 	"backend/internal/adapters/secondary/redis"
@@ -25,7 +24,6 @@ type Config struct {
 	Postgres postgres.Config
 	Redis    redis.Config
 	JWT      JWTConfig
-	Minio    minio.Config
 	Storage  storage.Config
 	Social   social.Config
 	Mailer   mailer.Config
@@ -67,7 +65,6 @@ type JWTConfig struct {
 	RefreshSecret string
 }
 
-var MinioGlobal minio.Config
 var JWTGlobal JWTConfig
 
 // LoadConfig loads the application configuration from environment variables and config files
@@ -108,7 +105,6 @@ func LoadConfig() (*Config, error) {
 		SSLMode:  viper.GetString("database.postgres.sslmode"),
 		TimeZone: viper.GetString("database.postgres.timezone"),
 	}
-	MinioGlobal = config.Minio
 	JWTGlobal = config.JWT
 	return &config, nil
 }
@@ -152,18 +148,21 @@ func setDefaults() {
 	viper.SetDefault("jwt.secret", "your-secret-key")
 	viper.SetDefault("jwt.refreshSecret", "your-refresh-secret-key")
 
-	// Minio defaults
-	viper.SetDefault("minio.endpoint", "localhost:2087")
-	viper.SetDefault("minio.accessKey", "minio")
-	viper.SetDefault("minio.secretKey", "minio")
-	viper.SetDefault("minio.bucketName", "sabaix")
-	viper.SetDefault("minio.baseUrl", "http://localhost:2087/sabaix")
-
-	// Storage defaults (Supabase Storage); empty until configured
-	viper.SetDefault("storage.projectUrl", "")
-	viper.SetDefault("storage.bucket", "")
-	viper.SetDefault("storage.serviceKey", "")
-	viper.SetDefault("storage.publicBaseUrl", "")
+	// Storage defaults: files in a folder on this machine (driver r2 for Cloudflare R2, supabase for
+	// Supabase Storage). Every key has a default so APP_STORAGE_* environment overrides apply.
+	viper.SetDefault("storage.driver", "local")
+	viper.SetDefault("storage.local.path", "./data/uploads")
+	viper.SetDefault("storage.local.publicBaseUrl", "")
+	viper.SetDefault("storage.r2.endpoint", "")
+	viper.SetDefault("storage.r2.region", "auto")
+	viper.SetDefault("storage.r2.bucket", "")
+	viper.SetDefault("storage.r2.accessKey", "")
+	viper.SetDefault("storage.r2.secretKey", "")
+	viper.SetDefault("storage.r2.publicBaseUrl", "")
+	viper.SetDefault("storage.supabase.projectUrl", "")
+	viper.SetDefault("storage.supabase.bucket", "")
+	viper.SetDefault("storage.supabase.serviceKey", "")
+	viper.SetDefault("storage.supabase.publicBaseUrl", "")
 
 	// Social sign-in (Google, Facebook): a provider with empty credentials is switched off
 	viper.SetDefault("social.googleClientId", "")

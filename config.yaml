@@ -1,46 +1,58 @@
 app:
-  name: 
-  frontendUrl: 
+  name: ""
+  frontendUrl: ""
 
 server:
-  port: 
-  readTimeout: 
-  writeTimeout: 
+  port: ""
+  readTimeout: ""
+  writeTimeout: ""
 
 database:
   postgres:
-    host: 
-    port: 
-    user: 
-    password: 
-    dbname: 
-    sslmode: 
-    timezone: 
+    host: ""
+    port: ""
+    user: ""
+    password: ""
+    dbname: ""
+    sslmode: ""
+    timezone: ""
 
 jwt:
-  secret: 
-  refreshSecret: 
+  secret: ""
+  refreshSecret: ""
 
 storage:
-  projectUrl: 
-  bucket: 
-  serviceKey: 
-  publicBaseUrl: 
+  driver: ""
+  local:
+    path: ""
+    publicBaseUrl: ""
+  r2:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+    publicBaseUrl: ""
+  supabase:
+    projectUrl: ""
+    bucket: ""
+    serviceKey: ""
+    publicBaseUrl: ""
 
 mailer:
-  host: 
-  username: 
-  password: 
-  port: 
-  from: 
+  host: ""
+  username: ""
+  password: ""
+  port: ""
+  from: ""
 
 social:
-  googleClientId: 
-  facebookAppId: 
-  facebookAppSecret: 
+  googleClientId: ""
+  facebookAppId: ""
+  facebookAppSecret: ""
 
 company:
-  name: 
-  ownerName: 
-  ownerEmail: 
-  ownerPassword: 
+  name: ""
+  ownerName: ""
+  ownerEmail: ""
+  ownerPassword: ""
