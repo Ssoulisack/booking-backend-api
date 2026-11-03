@@ -15,6 +15,8 @@ type (
 		UpdateSettings(c *fiber.Ctx) error
 		Publish(c *fiber.Ctx) error
 		Unpublish(c *fiber.Ctx) error
+		GetTableSettings(c *fiber.Ctx) error
+		UpdateTableSettings(c *fiber.Ctx) error
 	}
 	branchHandler struct {
 		svc input.BranchService
@@ -46,5 +48,19 @@ func (h *branchHandler) Publish(c *fiber.Ctx) error {
 
 func (h *branchHandler) Unpublish(c *fiber.Ctx) error {
 	res, err := h.svc.Unpublish(c.UserContext(), middleware.BranchID(c))
+	return ok(c, res, err)
+}
+
+func (h *branchHandler) GetTableSettings(c *fiber.Ctx) error {
+	res, err := h.svc.GetTableSettings(c.UserContext(), middleware.BranchID(c))
+	return ok(c, res, err)
+}
+
+func (h *branchHandler) UpdateTableSettings(c *fiber.Ctx) error {
+	var req dto.TableSettingsDTO
+	if err := bind(c, &req); err != nil {
+		return fail(c, err)
+	}
+	res, err := h.svc.UpdateTableSettings(c.UserContext(), middleware.BranchID(c), req)
 	return ok(c, res, err)
 }

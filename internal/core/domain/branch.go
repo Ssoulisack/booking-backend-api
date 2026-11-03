@@ -71,11 +71,23 @@ type Company struct {
 	RequireApproval bool `gorm:"not null;default:false"`
 }
 
+// Branch types
+const (
+	BranchTypeSport      = "sport"
+	BranchTypeRestaurant = "restaurant"
+)
+
+// ValidBranchType reports whether t is a known branch type
+func ValidBranchType(t string) bool { return t == BranchTypeSport || t == BranchTypeRestaurant }
+
 // Branch is one place of the company with its own booking page. Settings the company sets for
 // everyone (time zone, booking mode, policy, approval) can be overridden per branch (nil = the
 // company's). Brand and currency always come from the company.
 type Branch struct {
 	gorm.Model
+	// Type is what the branch takes bookings for: BranchTypeSport (courts) or BranchTypeRestaurant
+	// (tables). It can change only until the first publish.
+	Type        string     `gorm:"type:varchar(12);not null;default:sport;index"`
 	Name        string     `gorm:"type:varchar(120);not null"`
 	Slug        string     `gorm:"type:varchar(60);not null;uniqueIndex:idx_branches_slug,where:deleted_at IS NULL"`
 	Published   bool       `gorm:"not null;default:false"`
@@ -91,6 +103,17 @@ type Branch struct {
 	Phone       string            `gorm:"type:varchar(30)"`
 	MapURL      string            `gorm:"type:varchar(500)"`
 	SocialLinks map[string]string `gorm:"type:jsonb;serializer:json"`
+	// SisterBranchID is another branch at the same place, shown as "Also at this place" (nil: none)
+	SisterBranchID *uint
+
+	// table settings (restaurant branches only)
+	TableMode           string `gorm:"type:varchar(15);not null;default:one_at_a_time"`
+	HoldMinutes         int    `gorm:"not null;default:120"` // TableModeHold: how long a booking holds its table
+	LateMinutes         int    `gorm:"not null;default:15"`  // not arrived this long after the time: no-show
+	WalkinBeforeBooking bool   `gorm:"not null;default:false"`
+	MaxGuestsOnline     int    `gorm:"not null;default:20"`
+	ApprovalAboveGuests *int   // bigger groups wait for staff approval; nil = never
+	LastCallMinutes     int    `gorm:"not null;default:60"` // last online booking this long before closing
 
 	// overrides of the company settings; nil = use the company's
 	OwnTimezone        *string `gorm:"column:timezone;type:varchar(64)"`

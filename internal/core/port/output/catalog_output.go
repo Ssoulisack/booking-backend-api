@@ -9,6 +9,7 @@ import (
 
 type SportRepository = ScopedRepository[domain.Sport]
 type ResourceRepository = ScopedRepository[domain.Resource]
+type FloorItemRepository = ScopedRepository[domain.FloorItem]
 
 // ClosureRepository also finds the closures (of any owner, including the venue) overlapping a period
 type ClosureRepository interface {

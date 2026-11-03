@@ -141,8 +141,22 @@ func toOpeningHourDTO(h domain.OpeningHour) dto.OpeningHourDTO {
 	return dto.OpeningHourDTO{Weekday: h.Weekday, Open: h.OpenTime, Close: h.CloseTime}
 }
 
+// hoursOwner checks the owner of opening hours: a resource or coach, or for a restaurant also
+// the whole place (venue, id 0), whose hours every table follows
+func (s *ScheduleServiceImpl) hoursOwner(ctx context.Context, branchID uint, ownerType string, ownerID uint) error {
+	venue := false
+	if ownerType == domain.OwnerVenue {
+		b, err := s.branches.GetByID(ctx, branchID)
+		if err != nil {
+			return err
+		}
+		venue = b.Type == domain.BranchTypeRestaurant
+	}
+	return s.requireOwner(ctx, branchID, ownerType, ownerID, venue)
+}
+
 func (s *ScheduleServiceImpl) GetOpeningHours(ctx context.Context, branchID uint, ownerType string, ownerID uint) ([]dto.OpeningHourDTO, error) {
-	if err := s.requireOwner(ctx, branchID, ownerType, ownerID, false); err != nil {
+	if err := s.hoursOwner(ctx, branchID, ownerType, ownerID); err != nil {
 		return nil, err
 	}
 	rows, err := s.hours.ListByOwner(ctx, branchID, ownerType, ownerID)
@@ -154,7 +168,7 @@ func (s *ScheduleServiceImpl) GetOpeningHours(ctx context.Context, branchID uint
 
 // SetOpeningHours replaces the whole weekly schedule; an empty list means "never open"
 func (s *ScheduleServiceImpl) SetOpeningHours(ctx context.Context, branchID uint, ownerType string, ownerID uint, req dto.OpeningHoursRequest) ([]dto.OpeningHourDTO, error) {
-	if err := s.requireOwner(ctx, branchID, ownerType, ownerID, false); err != nil {
+	if err := s.hoursOwner(ctx, branchID, ownerType, ownerID); err != nil {
 		return nil, err
 	}
 	rows, err := buildOpeningHours(branchID, ownerType, ownerID, req.Hours)

@@ -31,6 +31,7 @@ func DatabaseMigrations(db *gorm.DB) error {
 		&domain.BookingRule{},
 		&domain.Booking{},
 		&domain.BookingItem{},
+		&domain.FloorItem{},
 	); err != nil {
 		return err
 	}

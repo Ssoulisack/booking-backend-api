@@ -13,6 +13,8 @@ type (
 		ListSports(c *fiber.Ctx) error
 		UpdateSport(c *fiber.Ctx) error
 		DeleteSport(c *fiber.Ctx) error
+		GetFloorPlan(c *fiber.Ctx) error
+		SaveFloorPlan(c *fiber.Ctx) error
 
 		CreateResource(c *fiber.Ctx) error
 		GetResource(c *fiber.Ctx) error
@@ -40,6 +42,11 @@ func (h *catalogHandler) GetSport(c *fiber.Ctx) error    { return scopedGet(c, h
 func (h *catalogHandler) ListSports(c *fiber.Ctx) error  { return scopedList(c, h.svc.ListSports) }
 func (h *catalogHandler) UpdateSport(c *fiber.Ctx) error { return scopedUpdate(c, h.svc.UpdateSport) }
 func (h *catalogHandler) DeleteSport(c *fiber.Ctx) error { return scopedRemove(c, h.svc.DeleteSport) }
+
+func (h *catalogHandler) GetFloorPlan(c *fiber.Ctx) error { return scopedGet(c, h.svc.GetFloorPlan) }
+func (h *catalogHandler) SaveFloorPlan(c *fiber.Ctx) error {
+	return scopedUpdate(c, h.svc.SaveFloorPlan)
+}
 
 func (h *catalogHandler) CreateResource(c *fiber.Ctx) error {
 	return scopedCreate(c, h.svc.CreateResource)

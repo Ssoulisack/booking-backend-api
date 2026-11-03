@@ -35,6 +35,7 @@ type CompanyDTO struct {
 // CloneFrom (a branch id) starts the new branch as a copy of that branch's setup.
 type CreateBranchRequest struct {
 	Name      string `json:"name"`
+	Type      string `json:"type"` // sport (default) or restaurant; a copy keeps the source's type
 	Slug      string `json:"slug"`
 	CloneFrom *uint  `json:"clone_from"`
 }
@@ -42,6 +43,7 @@ type CreateBranchRequest struct {
 // BranchDTO is a branch in the company's list
 type BranchDTO struct {
 	ID          uint       `json:"id"`
+	Type        string     `json:"type"`
 	Name        string     `json:"name"`
 	Slug        string     `json:"slug"`
 	Status      string     `json:"status"` // draft, published, closed
@@ -59,6 +61,7 @@ type BranchDTO struct {
 type SettingsRequest struct {
 	Name            string            `json:"name"`
 	Slug            string            `json:"slug"` // can change only until the first publish
+	Type            string            `json:"type"` // sport / restaurant; can change only until the first publish
 	CoverKey        string            `json:"cover_key"`
 	Description     string            `json:"description"`
 	Address         string            `json:"address"`
@@ -66,6 +69,7 @@ type SettingsRequest struct {
 	Phone           string            `json:"phone"`
 	MapURL          string            `json:"map_url"`
 	SocialLinks     map[string]string `json:"social_links"`
+	SisterBranchID  *uint             `json:"sister_branch_id"` // "Also at this place"; null = none
 	Timezone        *string           `json:"timezone"`
 	BookingMode     *string           `json:"booking_mode"`
 	BookingPolicy   *string           `json:"booking_policy"`
@@ -167,6 +171,7 @@ type AcceptInvitationRequest struct {
 // MyBranchDTO feeds the dashboard's branch switcher: every branch for the owner and admins
 type MyBranchDTO struct {
 	BranchID uint   `json:"branch_id"`
+	Type     string `json:"type"`
 	Name     string `json:"name"`
 	Slug     string `json:"slug"`
 	Status   string `json:"status"`
@@ -206,6 +211,7 @@ type PublicCompanyDTO struct {
 
 // PublicBranchDTO is one branch's booking page: its own details and the settings in force
 type PublicBranchDTO struct {
+	Type            string            `json:"type"`
 	Name            string            `json:"name"`
 	Slug            string            `json:"slug"`
 	CompanyName     string            `json:"company_name"`
@@ -227,6 +233,16 @@ type PublicBranchDTO struct {
 	BookingPolicy   string            `json:"booking_policy"`
 	BookingMode     string            `json:"booking_mode"`
 	RequireApproval bool              `json:"require_approval"`
+	// Sister is the other branch at the same place ("Also at this place"); nil when none is live
+	Sister *SisterBranchDTO `json:"sister"`
+}
+
+// SisterBranchDTO links one booking page to the other branch at the same place
+type SisterBranchDTO struct {
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
+	CoverURL string `json:"cover_url"`
 }
 
 // PublicCoachDTO leaves out the coach's private phone number
@@ -252,6 +268,7 @@ type PublicResourceDTO struct {
 
 // DirectoryBranchDTO is one branch on the public home
 type DirectoryBranchDTO struct {
+	Type     string           `json:"type"`
 	Name     string           `json:"name"`
 	Slug     string           `json:"slug"`
 	CoverURL string           `json:"cover_url"`

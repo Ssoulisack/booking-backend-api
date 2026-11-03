@@ -103,11 +103,26 @@ func copySetup(tx *gorm.DB, from, to uint) error {
 	}
 	for _, o := range oldSports {
 		n := domain.Sport{BranchID: to, Name: o.Name, Slug: o.Slug, Description: o.Description,
-			ImageKey: keptImage(o.ImageKey), Active: o.Active, Type: o.Type}
+			ImageKey: keptImage(o.ImageKey), Active: o.Active, Type: o.Type, PlanWidth: o.PlanWidth, PlanHeight: o.PlanHeight, Floor: o.Floor}
 		if err := tx.Create(&n).Error; err != nil {
 			return err
 		}
 		sports[o.ID] = n.ID
+	}
+
+	// restaurant floor plans: the objects drawn on each area
+	var oldItems []domain.FloorItem
+	if err := tx.Where("branch_id = ?", from).Order("id").Find(&oldItems).Error; err != nil {
+		return err
+	}
+	for _, o := range oldItems {
+		if area, ok := sports[o.AreaID]; ok {
+			n := domain.FloorItem{BranchID: to, AreaID: area, Kind: o.Kind, Label: o.Label, Color: o.Color,
+				PlanX: o.PlanX, PlanY: o.PlanY, PlanW: o.PlanW, PlanH: o.PlanH, Rotation: o.Rotation, TargetFloor: o.TargetFloor}
+			if err := tx.Create(&n).Error; err != nil {
+				return err
+			}
+		}
 	}
 
 	resources := map[uint]uint{}
@@ -116,7 +131,9 @@ func copySetup(tx *gorm.DB, from, to uint) error {
 		return err
 	}
 	for _, o := range oldResources {
-		n := domain.Resource{BranchID: to, SportID: sports[o.SportID], Name: o.Name, Kind: o.Kind, Active: o.Active}
+		n := domain.Resource{BranchID: to, SportID: sports[o.SportID], Name: o.Name, Kind: o.Kind, Active: o.Active,
+			Seats: o.Seats, ExtraChairs: o.ExtraChairs, Shape: o.Shape,
+			PlanX: o.PlanX, PlanY: o.PlanY, PlanW: o.PlanW, PlanH: o.PlanH, Rotation: o.Rotation}
 		if err := tx.Create(&n).Error; err != nil {
 			return err
 		}

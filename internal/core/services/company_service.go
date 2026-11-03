@@ -131,7 +131,7 @@ func (s *CompanyServiceImpl) UpdateCompany(ctx context.Context, req dto.CompanyR
 
 func toBranchDTO(b domain.Branch) dto.BranchDTO {
 	return dto.BranchDTO{
-		ID: b.ID, Name: b.Name, Slug: b.Slug, Status: b.Status(), Address: b.Address, Province: b.Province,
+		ID: b.ID, Type: b.Type, Name: b.Name, Slug: b.Slug, Status: b.Status(), Address: b.Address, Province: b.Province,
 		PublicPath: "/b/" + b.Slug, PublishedAt: b.PublishedAt, CreatedAt: b.CreatedAt,
 	}
 }
@@ -163,13 +163,23 @@ func (s *CompanyServiceImpl) CreateBranch(ctx context.Context, req dto.CreateBra
 	if taken {
 		return nil, conflict("SLUG_TAKEN")
 	}
-	b := domain.Branch{Name: req.Name, Slug: slug}
+	if req.Type == "" {
+		req.Type = domain.BranchTypeSport
+	}
+	if !domain.ValidBranchType(req.Type) {
+		return nil, badRequest("INVALID_BRANCH_TYPE")
+	}
+	b := domain.Branch{Name: req.Name, Slug: slug, Type: req.Type}
 	if req.CloneFrom != nil {
 		src, err := s.branches.GetByID(ctx, *req.CloneFrom)
 		if err != nil {
 			return nil, orNotFound(err, "BRANCH_NOT_FOUND")
 		}
 		// a draft with the same details; the pictures are not shared (each branch owns its files)
+		b.Type = src.Type // the copied setup only makes sense for the same kind of place
+		b.TableMode, b.HoldMinutes, b.LateMinutes = src.TableMode, src.HoldMinutes, src.LateMinutes
+		b.WalkinBeforeBooking, b.MaxGuestsOnline = src.WalkinBeforeBooking, src.MaxGuestsOnline
+		b.ApprovalAboveGuests, b.LastCallMinutes = src.ApprovalAboveGuests, src.LastCallMinutes
 		b.Description, b.Address, b.Province, b.Phone, b.MapURL = src.Description, src.Address, src.Province, src.Phone, src.MapURL
 		b.SocialLinks = src.SocialLinks
 		b.OwnTimezone, b.OwnBookingMode, b.OwnBookingPolicy, b.OwnRequireApproval =

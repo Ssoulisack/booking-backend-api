@@ -16,6 +16,9 @@ type CatalogService interface {
 	GetSport(ctx context.Context, branchID, id uint) (*dto.SportDTO, error)
 	ListSports(ctx context.Context, branchID uint, q dto.ListQuery) (*dto.PagedResult[dto.SportDTO], error)
 	UpdateSport(ctx context.Context, branchID, id uint, req dto.SportRequest) (*dto.SportDTO, error)
+	// restaurant areas: the floor plan with its tables
+	GetFloorPlan(ctx context.Context, branchID, areaID uint) (*dto.FloorPlanDTO, error)
+	SaveFloorPlan(ctx context.Context, branchID, areaID uint, req dto.FloorPlanRequest) (*dto.FloorPlanDTO, error)
 	DeleteSport(ctx context.Context, branchID, id uint) error
 
 	CreateResource(ctx context.Context, branchID uint, req dto.ResourceRequest) (*dto.ResourceDTO, error)
@@ -85,6 +88,9 @@ type BranchService interface {
 	UpdateSettings(ctx context.Context, branchID uint, req dto.SettingsRequest) (*dto.SettingsDTO, error)
 	Publish(ctx context.Context, branchID uint) (*dto.SettingsDTO, error)
 	Unpublish(ctx context.Context, branchID uint) (*dto.SettingsDTO, error)
+	// restaurant branches: how tables are booked
+	GetTableSettings(ctx context.Context, branchID uint) (*dto.TableSettingsDTO, error)
+	UpdateTableSettings(ctx context.Context, branchID uint, req dto.TableSettingsDTO) (*dto.TableSettingsDTO, error)
 }
 
 // CompanyService is what the owner and admins run: the company, its branches, the team and users

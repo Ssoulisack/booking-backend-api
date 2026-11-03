@@ -71,13 +71,25 @@ func (s *PublicServiceImpl) Branch(ctx context.Context, slug string) (*dto.Publi
 		return nil, err
 	}
 	return &dto.PublicBranchDTO{
-		Name: b.Name, Slug: b.Slug, CompanyName: b.CompanyName, Timezone: b.Timezone, Currency: b.Currency, Language: b.Language,
+		Type: b.Type, Sister: s.sister(ctx, b), Name: b.Name, Slug: b.Slug, CompanyName: b.CompanyName, Timezone: b.Timezone, Currency: b.Currency, Language: b.Language,
 		LogoURL: s.files.url(b.LogoKey), CoverURL: s.files.url(b.ShownCoverKey), BrandColor: b.BrandColor,
 		RingColors: ringColorsOrEmpty(b.RingColors), HeadingFont: b.HeadingFont, BodyFont: b.BodyFont,
 		Description: b.Description, Address: b.Address, Province: b.Province, Phone: b.Phone, MapURL: b.MapURL,
 		SocialLinks: b.SocialLinks, BookingPolicy: b.BookingPolicy, BookingMode: b.BookingMode,
 		RequireApproval: b.RequireApproval,
 	}, nil
+}
+
+// sister is the "Also at this place" branch, when it is live too
+func (s *PublicServiceImpl) sister(ctx context.Context, b *domain.Branch) *dto.SisterBranchDTO {
+	if b.SisterBranchID == nil {
+		return nil
+	}
+	o, err := s.branches.GetByID(ctx, *b.SisterBranchID)
+	if err != nil || !o.IsPublic() {
+		return nil
+	}
+	return &dto.SisterBranchDTO{Type: o.Type, Name: o.Name, Slug: o.Slug, CoverURL: s.files.url(o.ShownCoverKey)}
 }
 
 func (s *PublicServiceImpl) Sports(ctx context.Context, slug string) ([]dto.SportDTO, error) {
@@ -251,7 +263,7 @@ func (s *PublicServiceImpl) Directory(ctx context.Context, q dto.DirectoryQuery)
 	return pageOf(items, total, page, limit, func(b domain.Branch) dto.DirectoryBranchDTO {
 		b.WithCompany(*company)
 		d := dto.DirectoryBranchDTO{
-			Name: b.Name, Slug: b.Slug, CoverURL: s.files.url(b.ShownCoverKey),
+			Type: b.Type, Name: b.Name, Slug: b.Slug, CoverURL: s.files.url(b.ShownCoverKey),
 			Address: b.Address, Province: b.Province, Currency: b.Currency,
 			Sports: mapSlice(sports[b.ID], func(sp domain.Sport) dto.DirectorySport {
 				return dto.DirectorySport{Name: sp.Name, Type: sp.Type}

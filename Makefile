@@ -16,11 +16,16 @@ DOCKER_COMPOSE_BUILD=$(DOCKER_COMPOSE) up --build -d
 DOCKER_DOWN=$(DOCKER_COMPOSE) down
 DOCKER_RESTART=$(DOCKER_COMPOSE) restart
 
-.PHONY: run build run-docker logs stop clean release release-dry db-clear db-drop
+.PHONY: run migrate build run-docker logs stop clean release release-dry db-clear db-drop
 
 # Run the application
 run:
 	$(GORUN) ./cmd/api
+
+# Create / update the tables of the database in config.yaml, then stop. The API does not migrate on
+# start: run this once on a new install and after every update that changes the database.
+migrate:
+	$(GORUN) ./cmd/migrate
 
 # Build Docker image
 build:
@@ -42,7 +47,7 @@ CONFIG ?= config.yaml
 db-clear:
 	scripts/reset-db.sh $(CONFIG)
 
-# Drop every table instead (use when the schema changed, then start the API to migrate)
+# Drop every table instead (use when the schema changed, then run make migrate)
 db-drop:
 	scripts/reset-db.sh --drop $(CONFIG)
 

@@ -53,7 +53,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		public: services.NewPublicService(r.company, r.branches, r.directory, r.sports, r.resources, r.coaches,
 			r.classSessions, r.bookings, r.prices, r.storage),
 		branch:  services.NewBranchService(r.branches, r.sports, r.resources, r.openingHours, r.prices, r.storage, r.media),
-		catalog: services.NewCatalogService(r.sports, r.resources, r.coaches, r.classSessions, r.bookings, r.storage, r.media),
+		catalog: services.NewCatalogService(r.sports, r.resources, r.coaches, r.classSessions, r.bookings, r.storage, r.media, r.branches, r.floorItems),
 		schedule: services.NewScheduleService(
 			r.openingHours, r.closures, r.prices, r.classSessions, r.sports, r.resources, r.coaches, r.bookings, r.branches,
 			r.timetables,

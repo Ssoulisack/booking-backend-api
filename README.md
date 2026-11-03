@@ -24,11 +24,14 @@ Needs **Go 1.25+** and Docker.
 ```sh
 cp config.example.yaml config.yaml          # fill in your values; config.yaml holds secrets
 docker compose up -d                        # Postgres + Redis; needs a .env with POSTGRES_* and REDIS_PORT
+make migrate                                # create the tables (once, and after updates that change them)
 make run                                    # http://localhost:3000
 ```
 
-- On every start the API creates / updates the tables, and on an empty database it creates the company and
+- The API does **not** change the database on start: `make migrate` creates / updates the tables (it only adds
+  what is missing and never deletes data). On an empty database the API's first start creates the company and
   its owner from the `company` block of `config.yaml` (with `ownerPassword` set, you can log in at once).
+- After an update that changes the database: back up → new code → `make migrate` → start.
 - Emails (invites, password resets, booking mails) go through the SMTP service in the `mailer` block (Resend).
   To catch them locally instead, start Mailpit (`docker compose --profile test up -d mailpit`) and point
   `mailer` at `localhost:1025`; its inbox is http://localhost:8025.
@@ -68,6 +71,7 @@ the files once. With `local`, back up the folder together with the database.
 | Command                            | Does                                                                                   |
 | ---------------------------------- | -------------------------------------------------------------------------------------- |
 | `make run`                         | Run the API                                                                            |
+| `make migrate`                     | Create / update the tables of the database in `config.yaml`, then stop                 |
 | `go test ./test/...`               | Unit tests (`test/domain`, `test/services`, `test/storage`, `test/http`)               |
 | `E2E=1 go test ./test/e2e -count=1`| Whole API against a local Postgres + Mailpit (`docker compose --profile test up -d`); needs a database `booking_test` (see `test/e2e/e2e_test.go`) |
 | `make db-clear` / `make db-drop`   | Empty / drop every table of the database in `config.yaml` (asks you to type its name)  |
@@ -82,6 +86,7 @@ Hexagonal layout: the core knows nothing about HTTP or the database.
 ```
 cmd/
   api/                 main: load config, connect, install, start the server
+  migrate/             make migrate: create / update the tables, then stop
   application/         wiring: repositories → services → handlers → routes (+ /files when local storage)
 internal/
   config/              config.yaml + APP_* environment variables (viper)
@@ -93,7 +98,7 @@ internal/
   adapters/
     primary/http/      Fiber server, handlers, routes, auth middleware, rate limits
     secondary/
-      postgres/        GORM repositories; migration/ creates the tables on start
+      postgres/        GORM repositories; migration/ creates the tables (run by cmd/migrate)
       redis/           cache
       storage/         storage.go (config, pick driver) · local.go · s3.go (R2) · supabase.go
       mailer/          SMTP mails

@@ -30,8 +30,12 @@ type SportRequest struct {
 	Description string `json:"description"`
 	ImageKey    string `json:"image_key"`
 	Active      *bool  `json:"active"`
-	// Type is one of domain.SportTypes (empty: "other")
+	// Type is one of domain.SportTypes (empty: "other"); restaurant areas are always "other"
 	Type string `json:"type"`
+	// restaurant areas: floor plan size in grid squares (0: the default 20 × 12)
+	PlanWidth  int `json:"plan_width"`
+	PlanHeight int `json:"plan_height"`
+	Floor      int `json:"floor"` // restaurant areas: 0 ground, 1 first, -1 basement
 }
 
 type SportDTO struct {
@@ -43,13 +47,29 @@ type SportDTO struct {
 	ImageURL    string `json:"image_url"`
 	Active      bool   `json:"active"`
 	Type        string `json:"type"`
+	PlanWidth   int    `json:"plan_width"`
+	PlanHeight  int    `json:"plan_height"`
+	Floor       int    `json:"floor"`
 }
 
 type ResourceRequest struct {
 	SportID uint   `json:"sport_id"`
 	Name    string `json:"name"`
-	Kind    string `json:"kind"`
+	Kind    string `json:"kind"` // restaurant branches: always "table"
 	Active  *bool  `json:"active"`
+	TableFields
+}
+
+// TableFields are a restaurant table's seats and place on the floor plan (ignored at sport branches)
+type TableFields struct {
+	Seats       int    `json:"seats"`
+	ExtraChairs int    `json:"extra_chairs"`
+	Shape       string `json:"shape"` // round, square, long
+	PlanX       int    `json:"plan_x"`
+	PlanY       int    `json:"plan_y"`
+	PlanW       int    `json:"plan_w"` // 0: a size that suits the seats
+	PlanH       int    `json:"plan_h"`
+	Rotation    int    `json:"rotation"` // 0, 90, 180, 270
 }
 
 type ResourceDTO struct {
@@ -58,6 +78,60 @@ type ResourceDTO struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 	Active  bool   `json:"active"`
+	TableFields
+}
+
+// FloorPlanRequest saves an area's plan at once: its size and where each of its tables stands
+type FloorPlanRequest struct {
+	PlanWidth  int             `json:"plan_width"`
+	PlanHeight int             `json:"plan_height"`
+	Tables     []TablePlaceDTO `json:"tables"`
+	// Items replaces every object of the area (bar, pole, stage, toilet, entry, label, zone);
+	// null keeps them as they are
+	Items *[]FloorItemDTO `json:"items"`
+}
+
+// FloorItemDTO is an object on the floor plan that is not booked
+type FloorItemDTO struct {
+	ID       uint   `json:"id"`
+	Kind     string `json:"kind"`
+	Label    string `json:"label"`
+	Color    string `json:"color"` // zones only
+	PlanX    int    `json:"plan_x"`
+	PlanY    int    `json:"plan_y"`
+	PlanW    int    `json:"plan_w"`
+	PlanH    int    `json:"plan_h"`
+	Rotation int    `json:"rotation"`
+	// stairs only: the floor they lead to
+	TargetFloor *int `json:"target_floor"`
+}
+
+type TablePlaceDTO struct {
+	ID       uint   `json:"id"`
+	PlanX    int    `json:"plan_x"`
+	PlanY    int    `json:"plan_y"`
+	PlanW    int    `json:"plan_w"`
+	PlanH    int    `json:"plan_h"`
+	Rotation int    `json:"rotation"`
+	Shape    string `json:"shape"`
+}
+
+// FloorPlanDTO is an area with every table on its plan
+type FloorPlanDTO struct {
+	Area   SportDTO       `json:"area"`
+	Tables []ResourceDTO  `json:"tables"`
+	Items  []FloorItemDTO `json:"items"`
+}
+
+// TableSettingsDTO is how a restaurant branch takes table bookings
+type TableSettingsDTO struct {
+	TableMode           string `json:"table_mode"`   // one_at_a_time or hold
+	HoldMinutes         int    `json:"hold_minutes"` // hold: how long a booking keeps its table
+	LateMinutes         int    `json:"late_minutes"` // not arrived this long after the time: no-show
+	WalkinBeforeBooking bool   `json:"walkin_before_booking"`
+	MaxGuestsOnline     int    `json:"max_guests_online"`
+	ApprovalAboveGuests *int   `json:"approval_above_guests"` // null: never
+	LastCallMinutes     int    `json:"last_call_minutes"`     // last online booking before closing
 }
 
 type CoachRequest struct {

@@ -33,6 +33,9 @@ func SetupManageRoutes(
 	b.Put("/settings", company, branch.UpdateSettings)
 	b.Post("/publish", company, branch.Publish)
 	b.Post("/unpublish", company, branch.Unpublish)
+	// restaurant branches: how tables are booked
+	b.Get("/table-settings", staff, branch.GetTableSettings)
+	b.Put("/table-settings", manager, branch.UpdateTableSettings)
 
 	// catalog: everyone reads, managers change
 	b.Get("/sports", staff, catalog.ListSports)
@@ -40,6 +43,9 @@ func SetupManageRoutes(
 	b.Post("/sports", manager, catalog.CreateSport)
 	b.Put("/sports/:id", manager, catalog.UpdateSport)
 	b.Delete("/sports/:id", manager, catalog.DeleteSport)
+	// restaurant areas: the floor plan (size and where each table stands), saved at once
+	b.Get("/sports/:id/plan", staff, catalog.GetFloorPlan)
+	b.Put("/sports/:id/plan", manager, catalog.SaveFloorPlan)
 
 	b.Get("/resources", staff, catalog.ListResources)
 	b.Get("/resources/:id", staff, catalog.GetResource)

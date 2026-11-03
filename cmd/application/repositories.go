@@ -37,6 +37,7 @@ type AppRepositories struct {
 	media          output.MediaRepository
 	sports         output.SportRepository
 	resources      output.ResourceRepository
+	floorItems     output.FloorItemRepository
 	coaches        output.CoachRepository
 	openingHours   output.OpeningHourRepository
 	closures       output.ClosureRepository
@@ -97,6 +98,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		media:          postgres.NewMediaRepository(db),
 		sports:         postgres.NewScopedRepository[domain.Sport](db, "name"),
 		resources:      postgres.NewScopedRepository[domain.Resource](db, "name"),
+		floorItems:     postgres.NewScopedRepository[domain.FloorItem](db, "label"),
 		coaches:        postgres.NewCoachRepository(db),
 		openingHours:   postgres.NewOpeningHourRepository(db),
 		closures:       postgres.NewClosureRepository(db),
