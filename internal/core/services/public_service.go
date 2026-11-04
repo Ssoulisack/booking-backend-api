@@ -272,6 +272,10 @@ func (s *PublicServiceImpl) Directory(ctx context.Context, q dto.DirectoryQuery)
 		if p, ok := prices[b.ID]; ok {
 			d.FromPrice, d.Currency = &p.PricePerHour, p.Currency
 		}
+		if b.Type == domain.BranchTypeRestaurant { // its "sports" are areas (Indoor, Terrace), not sports
+			d.Sports = []dto.DirectorySport{}
+			d.FromPrice = nil
+		}
 		return d
 	}), nil
 }

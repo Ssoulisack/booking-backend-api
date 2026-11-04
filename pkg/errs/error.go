@@ -4,8 +4,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"net/http"
 )
+
 var code int
 var message string
+
 type AppError struct {
 	Status  int
 	Message string
@@ -32,7 +34,7 @@ func NewErrorResponses(ctx *fiber.Ctx, err error) error {
 
 func NewAppErrorStatusMessage(statusCode int, err error) error {
 	return AppError{
-		Status:    statusCode,
+		Status:  statusCode,
 		Message: err.Error(),
 	}
 }

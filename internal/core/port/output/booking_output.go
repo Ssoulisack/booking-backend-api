@@ -17,6 +17,8 @@ type BookingRepository interface {
 	GetForCustomer(ctx context.Context, customerID, id uint) (*domain.Booking, error)
 	// GetByGuestToken returns (nil, nil) when no booking of the branch has that token
 	GetByGuestToken(ctx context.Context, branchID uint, tokenHash string) (*domain.Booking, error)
+	// GetByCode returns (nil, nil) when no booking of the branch has that code
+	GetByCode(ctx context.Context, branchID uint, code string) (*domain.Booking, error)
 	ListForCustomer(ctx context.Context, customerID uint, q ListQuery) ([]domain.Booking, int64, error)
 	// Cancel marks the booking cancelled and frees its items, in one transaction
 	Cancel(ctx context.Context, b *domain.Booking, reason string, at time.Time) error
@@ -43,6 +45,19 @@ type BookingRepository interface {
 	SetStatus(ctx context.Context, b *domain.Booking, status string) error
 	// SetPayment saves the payment fields
 	SetPayment(ctx context.Context, b *domain.Booking) error
+
+	// ---- restaurant tables ----
+
+	// Finish completes a booking (bill closed) or marks it no-show and frees its tables from `at` on
+	Finish(ctx context.Context, b *domain.Booking, status string, at time.Time) error
+	// SetArrived records when a confirmed group came in
+	SetArrived(ctx context.Context, b *domain.Booking, at time.Time) error
+	// MoveItems frees the booking's tables from `at` on and stores the new ones (b.SportID and b.Zones
+	// saved too); 409 SLOT_NOT_AVAILABLE when one of them is taken
+	MoveItems(ctx context.Context, b *domain.Booking, at time.Time, items []domain.BookingItem) error
+	// TablesToSettle lists confirmed table bookings of every branch whose group is late (not arrived
+	// by arrive_by) or whose time is over (closing time passed)
+	TablesToSettle(ctx context.Context, now time.Time) ([]domain.Booking, error)
 	// Customers lists accounts that booked with the branch, with their booking counts
 	// Customers lists accounts who booked at the branch (0: at any branch), most recent first
 	Customers(ctx context.Context, branchID uint, keyword string, q ListQuery) ([]CustomerRow, int64, error)

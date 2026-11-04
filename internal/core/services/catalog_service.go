@@ -504,6 +504,8 @@ func floorItemsOf(branchID, areaID uint, in []dto.FloorItemDTO) ([]domain.FloorI
 	return out, nil
 }
 
+const maxNewTables = 200 // made by one plan save (copies)
+
 // SaveFloorPlan sets the plan size and moves, turns or resizes the area's tables at once; the
 // whole plan is checked first (inside the plan, no two tables on the same square), so a refused
 // save changes nothing
@@ -552,6 +554,40 @@ func (s *CatalogServiceImpl) SaveFloorPlan(ctx context.Context, branchID, areaID
 		t.PlanX, t.PlanY, t.PlanW, t.PlanH, t.Rotation, t.Shape = p.PlanX, p.PlanY, p.PlanW, p.PlanH, p.Rotation, p.Shape
 		changed[i] = true
 	}
+	// tables made with this save take part in every check below, and are stored last
+	if len(req.NewTables) > maxNewTables {
+		return nil, badRequest("TOO_MANY_NEW_TABLES")
+	}
+	var fresh []domain.Resource
+	for _, n := range req.NewTables {
+		name := strings.TrimSpace(n.Name)
+		switch {
+		case name == "":
+			return nil, badRequest("NAME_IS_REQUIRED")
+		case n.Seats < 1 || n.Seats > domain.MaxTableSeats:
+			return nil, badRequest("INVALID_SEATS")
+		case n.ExtraChairs < 0 || n.ExtraChairs > domain.MaxExtraChairs:
+			return nil, badRequest("INVALID_EXTRA_CHAIRS")
+		case !validRotation(n.Rotation):
+			return nil, badRequest("INVALID_ROTATION")
+		case n.PlanW < 1 || n.PlanH < 1 || n.PlanW > domain.MaxTableSize || n.PlanH > domain.MaxTableSize:
+			return nil, badRequest("INVALID_TABLE_SIZE")
+		}
+		shape := n.Shape
+		if shape == "" {
+			shape = domain.TableShapeSquare
+		}
+		if !domain.ValidTableShape(shape) {
+			return nil, badRequest("INVALID_TABLE_SHAPE")
+		}
+		fresh = append(fresh, domain.Resource{
+			BranchID: branchID, SportID: areaID, Name: name, Kind: domain.ResourceKindTable, Active: isActive(n.Active),
+			Seats: n.Seats, ExtraChairs: n.ExtraChairs, Shape: shape,
+			PlanX: n.PlanX, PlanY: n.PlanY, PlanW: n.PlanW, PlanH: n.PlanH, Rotation: n.Rotation,
+		})
+	}
+	existing := len(tables)
+	tables = append(tables, fresh...)
 	// the objects: the new list, or the ones already there
 	var items []domain.FloorItem
 	if req.Items != nil {
@@ -591,7 +627,12 @@ func (s *CatalogServiceImpl) SaveFloorPlan(ctx context.Context, branchID, areaID
 		return nil, err
 	}
 	for i := range tables {
-		if changed[i] {
+		switch {
+		case i >= existing:
+			if err := s.resources.Create(ctx, &tables[i]); err != nil {
+				return nil, err
+			}
+		case changed[i]:
 			if err := s.resources.Update(ctx, &tables[i]); err != nil {
 				return nil, err
 			}

@@ -236,6 +236,7 @@ func toTableSettings(b *domain.Branch) *dto.TableSettingsDTO {
 		TableMode: b.TableMode, HoldMinutes: b.HoldMinutes, LateMinutes: b.LateMinutes,
 		WalkinBeforeBooking: b.WalkinBeforeBooking, MaxGuestsOnline: b.MaxGuestsOnline,
 		ApprovalAboveGuests: b.ApprovalAboveGuests, LastCallMinutes: b.LastCallMinutes,
+		BookingStyle: b.BookingStyle, ArriveByTime: b.ArriveByTime, LateBookingMinutes: b.LateBookingMinutes,
 	}
 }
 
@@ -278,9 +279,32 @@ func (s *BranchServiceImpl) UpdateTableSettings(ctx context.Context, branchID ui
 	case req.LastCallMinutes < 0 || req.LastCallMinutes > 6*60:
 		return nil, badRequest("INVALID_LAST_CALL")
 	}
+	if req.BookingStyle == "" {
+		req.BookingStyle = domain.BookingStyleTime
+	}
+	switch req.BookingStyle {
+	case domain.BookingStyleTime:
+	case domain.BookingStyleArriveBy:
+		if _, err := parseClock(req.ArriveByTime, false); err != nil {
+			return nil, badRequest("INVALID_ARRIVE_BY_TIME")
+		}
+		if req.LateBookingMinutes < 5 || req.LateBookingMinutes > 120 {
+			return nil, badRequest("INVALID_LATE_BOOKING_MINUTES")
+		}
+		req.TableMode = domain.TableModeOneAtATime // a bar books the evening: one booking per table
+	default:
+		return nil, badRequest("INVALID_BOOKING_STYLE")
+	}
+	if req.ArriveByTime == "" {
+		req.ArriveByTime = b.ArriveByTime
+	}
+	if req.LateBookingMinutes == 0 {
+		req.LateBookingMinutes = b.LateBookingMinutes
+	}
 	b.TableMode, b.HoldMinutes, b.LateMinutes = req.TableMode, req.HoldMinutes, req.LateMinutes
 	b.WalkinBeforeBooking, b.MaxGuestsOnline = req.WalkinBeforeBooking, req.MaxGuestsOnline
 	b.ApprovalAboveGuests, b.LastCallMinutes = req.ApprovalAboveGuests, req.LastCallMinutes
+	b.BookingStyle, b.ArriveByTime, b.LateBookingMinutes = req.BookingStyle, req.ArriveByTime, req.LateBookingMinutes
 	if err := s.branches.Update(ctx, b); err != nil {
 		return nil, err
 	}

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"backend/cmd/application"
-	"backend/internal/adapters/primary/http"
+	"backend/internal/app"
+	"backend/internal/http"
 
-	"backend/internal/config"
+	"backend/internal/platform/config"
 	"backend/pkg/logger"
 	"log"
 	"time"
@@ -30,15 +30,16 @@ func main() {
 		serverConfig,
 	)
 
-	repositories := application.SetupRepositories(cfg)
-	defer application.CloseRepositories(repositories)
-	services := application.SetupServices(repositories)
-	if err := application.Install(services); err != nil {
+	repositories := app.SetupRepositories(cfg)
+	defer app.CloseRepositories(repositories)
+	services := app.SetupServices(repositories)
+	if err := app.Install(services); err != nil {
 		log.Fatalf("❌ Failed to prepare the install: %v", err)
 	}
-	application.KeepTimetablesRolling(services)
-	handlers := application.SetupHandlers(services)
-	application.SetupRoutes(server.App(), handlers)
+	app.KeepTimetablesRolling(services)
+	app.KeepTablesSettled(services)
+	handlers := app.SetupHandlers(services)
+	app.SetupRoutes(server.App(), handlers)
 
 	// Start HTTP server
 	log.Println("🌟 Server starting on port:", cfg.Server.Port, "🚀")

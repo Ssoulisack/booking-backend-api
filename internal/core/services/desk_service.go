@@ -43,7 +43,7 @@ func (s *BookingServiceImpl) branch(ctx context.Context, branchID uint) (*domain
 }
 
 func (s *BookingServiceImpl) ListBookings(ctx context.Context, branchID uint, q dto.BookingQuery) (*dto.PagedResult[dto.BookingDTO], error) {
-	_, loc, err := s.branch(ctx, branchID)
+	br, loc, err := s.branch(ctx, branchID)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +76,9 @@ func (s *BookingServiceImpl) ListBookings(ctx context.Context, branchID uint, q 
 	items, total, err := s.bookings.List(ctx, branchID, f, lq)
 	if err != nil {
 		return nil, err
+	}
+	for i := range items {
+		items[i].Branch = *br // the booking style and late minutes of a table booking come from it
 	}
 	return pageOf(items, total, page, limit, toBookingDTO), nil
 }
@@ -147,10 +150,17 @@ func (s *BookingServiceImpl) ChangeStatus(ctx context.Context, branchID, id uint
 	now := s.now()
 	switch req.Status {
 	case domain.BookingCompleted, domain.BookingNoShow:
-		if now.Before(bk.StartsAt) {
+		// an arrived restaurant group may close its bill before the booked time
+		early := bk.Guests > 0 && bk.ArrivedAt != nil && req.Status == domain.BookingCompleted
+		if now.Before(bk.StartsAt) && !early {
 			return nil, badRequest("BOOKING_NOT_STARTED")
 		}
-		err = s.bookings.SetStatus(ctx, bk, req.Status)
+		if bk.Guests > 0 {
+			// restaurant tables: bill closed or no-show, the tables are free from now on
+			err = s.bookings.Finish(ctx, bk, req.Status, now)
+		} else {
+			err = s.bookings.SetStatus(ctx, bk, req.Status)
+		}
 	case domain.BookingCancelled:
 		err = s.bookings.Cancel(ctx, bk, strings.TrimSpace(req.Reason), now)
 	default:
@@ -228,17 +238,31 @@ func (s *BookingServiceImpl) Calendar(ctx context.Context, branchID uint, date s
 	if err != nil {
 		return nil, err
 	}
+	sports, _, err := s.sports.List(ctx, branchID, all)
+	if err != nil {
+		return nil, err
+	}
+	sportByID := map[uint]domain.Sport{}
+	for _, sp := range sports {
+		sportByID[sp.ID] = sp
+	}
 	lanes := map[string]*dto.CalendarLane{}
 	var order []string
-	addLane := func(ownerType string, id uint, name string) {
-		lanes[laneKey(ownerType, id)] = &dto.CalendarLane{OwnerType: ownerType, OwnerID: id, Name: name, Entries: []dto.CalendarEntry{}}
-		order = append(order, laneKey(ownerType, id))
+	addLane := func(lane dto.CalendarLane) {
+		lane.Entries = []dto.CalendarEntry{}
+		key := laneKey(lane.OwnerType, lane.OwnerID)
+		lanes[key] = &lane
+		order = append(order, key)
 	}
 	for _, r := range resources {
-		addLane(domain.OwnerResource, r.ID, r.Name)
+		sp := sportByID[r.SportID]
+		addLane(dto.CalendarLane{
+			OwnerType: domain.OwnerResource, OwnerID: r.ID, Name: r.Name,
+			GroupID: r.SportID, GroupName: sp.Name, Floor: sp.Floor, Seats: r.Seats,
+		})
 	}
 	for _, c := range coaches {
-		addLane(domain.OwnerCoach, c.ID, c.Name)
+		addLane(dto.CalendarLane{OwnerType: domain.OwnerCoach, OwnerID: c.ID, Name: c.Name})
 	}
 	put := func(ownerType string, id *uint, e dto.CalendarEntry) {
 		if id == nil {
@@ -258,9 +282,13 @@ func (s *BookingServiceImpl) Calendar(ctx context.Context, branchID uint, date s
 			continue
 		}
 		for _, item := range b.Items {
+			if !item.Active {
+				continue // a table the group was moved away from before using it
+			}
 			e := dto.CalendarEntry{
 				Kind: "booking", StartsAt: item.StartsAt.In(loc), EndsAt: item.EndsAt.In(loc), BookingID: b.ID,
 				Code: b.Code, Status: b.Status, Name: bookerName(b), Paid: b.PaymentStatus == domain.PaymentPaid,
+				Guests: b.Guests, Arrived: b.ArrivedAt != nil,
 			}
 			put(domain.OwnerResource, item.ResourceID, e)
 			put(domain.OwnerCoach, item.CoachID, e)

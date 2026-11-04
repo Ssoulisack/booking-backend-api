@@ -114,6 +114,11 @@ type Branch struct {
 	MaxGuestsOnline     int    `gorm:"not null;default:20"`
 	ApprovalAboveGuests *int   // bigger groups wait for staff approval; nil = never
 	LastCallMinutes     int    `gorm:"not null;default:60"` // last online booking this long before closing
+	// how customers book: BookingStyleTime (pick a start time) or BookingStyleArriveBy (a bar:
+	// only the evening; arrive by ArriveByTime, or within LateBookingMinutes when booking later)
+	BookingStyle       string `gorm:"type:varchar(10);not null;default:time"`
+	ArriveByTime       string `gorm:"type:varchar(5);not null;default:'19:30'"`
+	LateBookingMinutes int    `gorm:"not null;default:15"`
 
 	// overrides of the company settings; nil = use the company's
 	OwnTimezone        *string `gorm:"column:timezone;type:varchar(64)"`

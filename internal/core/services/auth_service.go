@@ -1,11 +1,11 @@
 package services
 
 import (
-	"backend/internal/adapters/secondary/redis"
 	"backend/internal/core/domain"
 	"backend/internal/core/dto"
 	"backend/internal/core/port/input"
 	"backend/internal/core/port/output"
+	"backend/internal/platform/redis"
 	"backend/pkg/jwt"
 	"backend/pkg/response"
 	"backend/pkg/utils"

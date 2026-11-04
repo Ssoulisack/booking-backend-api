@@ -7,9 +7,9 @@
 package main
 
 import (
-	"backend/internal/adapters/secondary/postgres"
-	"backend/internal/adapters/secondary/postgres/migration"
-	"backend/internal/config"
+	"backend/internal/platform/config"
+	"backend/internal/platform/postgres"
+	"backend/internal/platform/postgres/migration"
 	"log"
 )
 

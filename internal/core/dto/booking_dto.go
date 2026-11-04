@@ -43,6 +43,9 @@ type GuestInfo struct {
 // CreateBookingRequest books a resource and/or coach (starts_at + duration_min), or seats in a
 // group class (class_session_id + seats). Guests fill guest; logged-in customers leave it empty.
 type CreateBookingRequest struct {
+	// restaurant branches: the chosen tables and the group size (no duration)
+	TableIDs       []uint     `json:"table_ids"`
+	Guests         int        `json:"guests"`
 	ResourceID     *uint      `json:"resource_id"`
 	CoachID        *uint      `json:"coach_id"`
 	SportID        uint       `json:"sport_id"`
@@ -52,6 +55,13 @@ type CreateBookingRequest struct {
 	Seats          int        `json:"seats"`
 	Guest          *GuestInfo `json:"guest"`
 	Notes          string     `json:"notes"`
+}
+
+// FindBookingRequest finds a booking without its private link: its code and the phone it was made with
+type FindBookingRequest struct {
+	Code   string `json:"code"`
+	Phone  string `json:"phone"`
+	Reason string `json:"reason"` // cancel only
 }
 
 type CancelBookingRequest struct {
@@ -70,6 +80,8 @@ type BookingItemDTO struct {
 	StartsAt       time.Time `json:"starts_at"`
 	EndsAt         time.Time `json:"ends_at"`
 	Price          int64     `json:"price"`
+	// false once let go: a cancelled booking, or a table the group was moved away from before using it
+	Active bool `json:"active"`
 }
 
 type BookingDTO struct {
@@ -101,6 +113,16 @@ type BookingDTO struct {
 	CancelReason     string           `json:"cancel_reason,omitempty"`
 	CreatedAt        time.Time        `json:"created_at"`
 	Items            []BookingItemDTO `json:"items"`
+	// restaurant tables: the group size, and the time the group loses its table if not there
+	Guests    int        `json:"guests,omitempty"`
+	ArriveBy  *time.Time `json:"arrive_by,omitempty"`
+	ArrivedAt *time.Time `json:"arrived_at,omitempty"`
+	// arrive_by: a bar booking for the evening (its start is only "from opening"); time: a start time
+	BookingStyle string `json:"booking_style,omitempty"`
+	// restaurant tables: the floor of the area (sport_name) the tables are in; 0 = ground floor
+	AreaFloor *int `json:"area_floor,omitempty"`
+	// the zones the tables stand in (e.g. "Smoking"), when booked
+	Zones string `json:"zones,omitempty"`
 }
 
 // CreatedBookingDTO adds the guest's private link, returned only once at booking time
@@ -150,6 +172,20 @@ type StatusChangeRequest struct {
 	Reason string `json:"reason"`
 }
 
+// MoveTablesRequest puts a restaurant group at other tables
+type MoveTablesRequest struct {
+	TableIDs []uint `json:"table_ids"`
+}
+
+// WalkInRequest seats a group that came without booking; name and phone are optional
+type WalkInRequest struct {
+	TableIDs []uint `json:"table_ids"`
+	Guests   int    `json:"guests"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Notes    string `json:"notes"`
+}
+
 // PaymentRequest marks a booking paid (with a method) or unpaid
 type PaymentRequest struct {
 	Status string `json:"status"`
@@ -171,12 +207,19 @@ type CalendarEntry struct {
 	SeatsTaken int       `json:"seats_taken,omitempty"`
 	Capacity   int       `json:"capacity,omitempty"`
 	Reason     string    `json:"reason,omitempty"`
+	Guests     int       `json:"guests,omitempty"`  // restaurant bookings: people in the group
+	Arrived    bool      `json:"arrived,omitempty"` // staff marked the group as arrived
 }
 
 type CalendarLane struct {
-	OwnerType string          `json:"owner_type"`
-	OwnerID   uint            `json:"owner_id"`
-	Name      string          `json:"name"`
+	OwnerType string `json:"owner_type"`
+	OwnerID   uint   `json:"owner_id"`
+	Name      string `json:"name"`
+	// the sport (sport branches) or the area (restaurants) a court / table belongs to; 0 for coaches
+	GroupID   uint            `json:"group_id"`
+	GroupName string          `json:"group_name"`
+	Floor     int             `json:"floor"` // the area's floor (restaurants)
+	Seats     int             `json:"seats"` // restaurant tables
 	Entries   []CalendarEntry `json:"entries"`
 }
 
@@ -195,4 +238,49 @@ type CustomerDTO struct {
 	Phone         string    `json:"phone"`
 	Bookings      int64     `json:"bookings"`
 	LastBookingAt time.Time `json:"last_booking_at"`
+}
+
+// ---------- restaurant tables ----------
+
+// TableAvailabilityQuery asks for the free times and tables of a day for a group
+type TableAvailabilityQuery struct {
+	Date   string `query:"date"`
+	Guests int    `query:"guests"`
+}
+
+type TableAvailabilityDTO struct {
+	Date            string `json:"date"`
+	Timezone        string `json:"timezone"`
+	Guests          int    `json:"guests"`
+	MaxGuestsOnline int    `json:"max_guests_online"`
+	LateMinutes     int    `json:"late_minutes"`
+	// time: customers pick one of Times; arrive_by: Times has the one evening, nothing to pick
+	BookingStyle string         `json:"booking_style"`
+	Times        []TableTimeDTO `json:"times"` // only times where the group fits somewhere
+}
+
+// TableTimeDTO is one start time with the tables free for the whole booking
+type TableTimeDTO struct {
+	StartsAt     time.Time `json:"starts_at"`
+	ArriveBy     time.Time `json:"arrive_by"` // not there by then: the table goes to others
+	FreeTableIDs []uint    `json:"free_table_ids"`
+	// no free tables can seat the group on real seats: one with extra chairs may be chosen
+	ExtraChairsAllowed bool `json:"extra_chairs_allowed"`
+}
+
+// PublicAreaDTO is a restaurant area as customers see it: its plan, tables and objects
+type PublicAreaDTO struct {
+	ID         uint             `json:"id"`
+	Name       string           `json:"name"`
+	Floor      int              `json:"floor"`
+	PlanWidth  int              `json:"plan_width"`
+	PlanHeight int              `json:"plan_height"`
+	Tables     []PublicTableDTO `json:"tables"`
+	Items      []FloorItemDTO   `json:"items"`
+}
+
+type PublicTableDTO struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+	TableFields
 }

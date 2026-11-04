@@ -1,8 +1,8 @@
 package jwt
 
 import (
-	"backend/internal/config"
 	"backend/internal/core/dto"
+	"backend/internal/platform/config"
 	"backend/pkg/response"
 	"encoding/json"
 	"strings"

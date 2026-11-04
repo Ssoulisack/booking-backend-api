@@ -35,6 +35,12 @@ const (
 	TableModeHold = "hold"
 )
 
+// Booking styles of a restaurant branch
+const (
+	BookingStyleTime     = "time"      // customers pick a start time
+	BookingStyleArriveBy = "arrive_by" // a bar: customers book the evening and must arrive by a set time
+)
+
 // Footprint is the table's rectangle on the plan, turned by its rotation
 func (r Resource) Footprint() (x, y, w, h int) {
 	w, h = r.PlanW, r.PlanH
@@ -137,6 +143,18 @@ func (f FloorItem) FitsIn(width, height int) bool {
 	return x >= 0 && y >= 0 && w >= 1 && h >= 1 && x+w <= width && y+h <= height
 }
 
+// Holds reports whether a zone holds the table: the table's centre lies inside the zone
+func (f FloorItem) Holds(t Resource) bool {
+	if f.Kind != FloorItemZone {
+		return false
+	}
+	zx, zy, zw, zh := f.Footprint()
+	tx, ty, tw, th := t.Footprint()
+	// doubled to stay in whole numbers: centre = x + w/2
+	cx, cy := 2*tx+tw, 2*ty+th
+	return cx > 2*zx && cx < 2*(zx+zw) && cy > 2*zy && cy < 2*(zy+zh)
+}
+
 // Covers reports whether a blocking item stands on any square of the table
 func (f FloorItem) Covers(t Resource) bool {
 	if !f.Blocks() {
@@ -145,4 +163,133 @@ func (f FloorItem) Covers(t Resource) bool {
 	ax, ay, aw, ah := f.Footprint()
 	bx, by, bw, bh := t.Footprint()
 	return ax < bx+bw && bx < ax+aw && ay < by+bh && by < ay+ah
+}
+
+// ---------- choosing tables ----------
+
+// JoinGap is how far apart (in grid squares) two tables may stand and still be joined for one group
+const JoinGap = 1
+
+// TableChoice is how a customer's tables seat their group
+type TableChoice struct {
+	Seats      int  // real seats of the chosen tables
+	ExtraUsed  bool // the group only fits with extra chairs (allowed when nothing else can seat it)
+	ExtraTotal int  // seats + extra chairs
+}
+
+// sumSeats adds up the real seats, or the seats with extra chairs
+func sumSeats(tables []Resource, withExtra bool) int {
+	n := 0
+	for _, t := range tables {
+		n += t.Seats
+		if withExtra {
+			n += t.ExtraChairs
+		}
+	}
+	return n
+}
+
+// connected reports whether the tables form one group, each next to another, in one area
+func connected(tables []Resource) bool {
+	if len(tables) == 0 {
+		return false
+	}
+	seen := map[int]bool{0: true}
+	queue := []int{0}
+	for len(queue) > 0 {
+		i := queue[0]
+		queue = queue[1:]
+		for j := range tables {
+			if !seen[j] && tables[j].SportID == tables[i].SportID && tables[i].NextTo(tables[j], JoinGap) {
+				seen[j] = true
+				queue = append(queue, j)
+			}
+		}
+	}
+	return len(seen) == len(tables)
+}
+
+// groups splits tables into the groups that stand together (same area, each next to another)
+func groups(tables []Resource) [][]Resource {
+	var out [][]Resource
+	used := make([]bool, len(tables))
+	for i := range tables {
+		if used[i] {
+			continue
+		}
+		used[i] = true
+		group := []Resource{tables[i]}
+		for k := 0; k < len(group); k++ {
+			for j := range tables {
+				if !used[j] && tables[j].SportID == group[k].SportID && group[k].NextTo(tables[j], JoinGap) {
+					used[j] = true
+					group = append(group, tables[j])
+				}
+			}
+		}
+		out = append(out, group)
+	}
+	return out
+}
+
+// RealSeatsChoice reports whether the free tables can seat the group on real seats (one table,
+// or tables next to each other); while they can, extra chairs are not offered
+func RealSeatsChoice(free []Resource, guests int) bool {
+	for _, g := range groups(free) {
+		if sumSeats(g, false) >= guests {
+			return true
+		}
+	}
+	return false
+}
+
+// AnyChoice reports whether the group fits anywhere, with extra chairs if need be
+func AnyChoice(free []Resource, guests int) bool {
+	if RealSeatsChoice(free, guests) {
+		return true
+	}
+	for _, g := range groups(free) {
+		if sumSeats(g, true) >= guests {
+			return true
+		}
+	}
+	return false
+}
+
+// CheckTables applies the rules to a customer's tables for a group, given the free tables of the
+// branch at that time (the chosen ones included). It returns the reason as an error code when
+// the choice is not allowed:
+//   - TABLES_NOT_TOGETHER: not one group of tables next to each other in one area
+//   - TABLES_TOO_SMALL: not enough seats (extra chairs count only when nothing else is left)
+//   - TABLE_IS_EXTRA: one table could be left out and the rest would still be enough
+func CheckTables(chosen []Resource, guests int, free []Resource) (*TableChoice, string) {
+	if len(chosen) == 0 {
+		return nil, "TABLE_REQUIRED"
+	}
+	if !connected(chosen) {
+		return nil, "TABLES_NOT_TOGETHER"
+	}
+	seats := sumSeats(chosen, false)
+	if seats >= guests {
+		for _, t := range chosen {
+			if seats-t.Seats >= guests {
+				return nil, "TABLE_IS_EXTRA"
+			}
+		}
+		return &TableChoice{Seats: seats, ExtraTotal: sumSeats(chosen, true)}, ""
+	}
+	// short of real seats: extra chairs only as a last resort
+	if RealSeatsChoice(free, guests) {
+		return nil, "TABLES_TOO_SMALL"
+	}
+	total := sumSeats(chosen, true)
+	if total < guests {
+		return nil, "TABLES_TOO_SMALL"
+	}
+	for _, t := range chosen {
+		if total-t.Seats-t.ExtraChairs >= guests {
+			return nil, "TABLE_IS_EXTRA"
+		}
+	}
+	return &TableChoice{Seats: seats, ExtraUsed: true, ExtraTotal: total}, ""
 }

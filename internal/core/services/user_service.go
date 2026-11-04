@@ -1,8 +1,8 @@
 package services
 
 import (
-	"backend/internal/adapters/secondary/redis"
 	"backend/internal/core/port/output"
+	"backend/internal/platform/redis"
 )
 
 type UserService interface {

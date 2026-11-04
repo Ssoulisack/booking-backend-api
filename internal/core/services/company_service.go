@@ -180,6 +180,7 @@ func (s *CompanyServiceImpl) CreateBranch(ctx context.Context, req dto.CreateBra
 		b.TableMode, b.HoldMinutes, b.LateMinutes = src.TableMode, src.HoldMinutes, src.LateMinutes
 		b.WalkinBeforeBooking, b.MaxGuestsOnline = src.WalkinBeforeBooking, src.MaxGuestsOnline
 		b.ApprovalAboveGuests, b.LastCallMinutes = src.ApprovalAboveGuests, src.LastCallMinutes
+		b.BookingStyle, b.ArriveByTime, b.LateBookingMinutes = src.BookingStyle, src.ArriveByTime, src.LateBookingMinutes
 		b.Description, b.Address, b.Province, b.Phone, b.MapURL = src.Description, src.Address, src.Province, src.Phone, src.MapURL
 		b.SocialLinks = src.SocialLinks
 		b.OwnTimezone, b.OwnBookingMode, b.OwnBookingPolicy, b.OwnRequireApproval =

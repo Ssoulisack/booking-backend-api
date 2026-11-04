@@ -91,6 +91,13 @@ type Booking struct {
 	CreatedByID      *uint     // the member who made a staff booking
 	CancelledAt      *time.Time
 	CancelReason     string `gorm:"type:varchar(255)"`
+	// restaurant tables: the group size; staff tap Arrived when it comes (0 / nil for courts and classes)
+	Guests    int `gorm:"not null;default:0"`
+	ArrivedAt *time.Time
+	// ArriveBy: not there by then, the group loses its tables (no-show)
+	ArriveBy *time.Time
+	// Zones the tables stood in when booked (e.g. "Smoking"), joined by ", "; a snapshot
+	Zones string `gorm:"type:varchar(120);not null;default:''"`
 
 	Items []BookingItem `gorm:"foreignKey:BookingID"`
 }

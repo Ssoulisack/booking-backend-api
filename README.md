@@ -87,22 +87,21 @@ Hexagonal layout: the core knows nothing about HTTP or the database.
 cmd/
   api/                 main: load config, connect, install, start the server
   migrate/             make migrate: create / update the tables, then stop
-  application/         wiring: repositories → services → handlers → routes (+ /files when local storage)
 internal/
-  config/              config.yaml + APP_* environment variables (viper)
-  core/
+  app/                 wiring: repositories → services → handlers → routes (+ /files when local storage)
+  platform/            shared plumbing
+    config/            config.yaml + APP_* environment variables (viper)
+    postgres/          connection, GORM repositories, migration/ (run by cmd/migrate), numbering, errors
+    redis/  mailer/    cache · SMTP mails
+    storage/           storage.go (config, pick driver) · local.go · s3.go (R2) · supabase.go
+    social/            Google / Facebook token checks
+    middleware/        auth, rate limits
+  core/                business code (moving to modules)
     domain/            models and rules (bookings, availability, roles, identity)
     services/          business logic per area (company, branch, catalog, schedule, booking, desk, reports…)
     port/              input (service) and output (repository, storage, mailer) interfaces
     dto/, mappers/     API shapes
-  adapters/
-    primary/http/      Fiber server, handlers, routes, auth middleware, rate limits
-    secondary/
-      postgres/        GORM repositories; migration/ creates the tables (run by cmd/migrate)
-      redis/           cache
-      storage/         storage.go (config, pick driver) · local.go · s3.go (R2) · supabase.go
-      mailer/          SMTP mails
-      social/          Google / Facebook token checks
+  http/                Fiber server, handlers, routes
 pkg/                   shared helpers (responses, errors, JWT, rate limiter, logger, utils)
 test/                  Go tests by area; e2e/ runs the whole API
 postman/               Postman collections

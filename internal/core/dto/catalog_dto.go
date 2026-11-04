@@ -86,6 +86,9 @@ type FloorPlanRequest struct {
 	PlanWidth  int             `json:"plan_width"`
 	PlanHeight int             `json:"plan_height"`
 	Tables     []TablePlaceDTO `json:"tables"`
+	// NewTables are tables made together with this save (copies of tables and groups of tables);
+	// they are checked with all the others and only stored if the whole plan is valid
+	NewTables []NewTableDTO `json:"new_tables"`
 	// Items replaces every object of the area (bar, pole, stage, toilet, entry, label, zone);
 	// null keeps them as they are
 	Items *[]FloorItemDTO `json:"items"`
@@ -104,6 +107,20 @@ type FloorItemDTO struct {
 	Rotation int    `json:"rotation"`
 	// stairs only: the floor they lead to
 	TargetFloor *int `json:"target_floor"`
+}
+
+// NewTableDTO is a table to create on the plan: its name, seats and place
+type NewTableDTO struct {
+	Name        string `json:"name"`
+	Seats       int    `json:"seats"`
+	ExtraChairs int    `json:"extra_chairs"`
+	Active      *bool  `json:"active"`
+	Shape       string `json:"shape"`
+	PlanX       int    `json:"plan_x"`
+	PlanY       int    `json:"plan_y"`
+	PlanW       int    `json:"plan_w"`
+	PlanH       int    `json:"plan_h"`
+	Rotation    int    `json:"rotation"`
 }
 
 type TablePlaceDTO struct {
@@ -132,6 +149,9 @@ type TableSettingsDTO struct {
 	MaxGuestsOnline     int    `json:"max_guests_online"`
 	ApprovalAboveGuests *int   `json:"approval_above_guests"` // null: never
 	LastCallMinutes     int    `json:"last_call_minutes"`     // last online booking before closing
+	BookingStyle        string `json:"booking_style"`         // time or arrive_by (bars)
+	ArriveByTime        string `json:"arrive_by_time"`        // arrive_by: HH:MM, e.g. 19:30
+	LateBookingMinutes  int    `json:"late_booking_minutes"`  // arrive_by: booked after that time, arrive within this
 }
 
 type CoachRequest struct {

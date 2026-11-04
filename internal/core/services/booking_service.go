@@ -40,6 +40,7 @@ type BookingServiceImpl struct {
 	rules       input.RuleService
 	mailer      output.Mailer
 	frontendURL string
+	floorItems  output.FloorItemRepository
 	now         func() time.Time
 }
 
@@ -58,11 +59,12 @@ func NewBookingService(
 	rules input.RuleService,
 	mailer output.Mailer,
 	frontendURL string,
+	floorItems output.FloorItemRepository,
 ) input.BookingService {
 	return &BookingServiceImpl{
 		branches: branches, sports: sports, resources: resources, coaches: coaches, hours: hours,
 		closures: closures, prices: prices, classes: classes, bookings: bookings, users: users, memberships: memberships, rules: rules,
-		mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/"), now: time.Now,
+		mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/"), floorItems: floorItems, now: time.Now,
 	}
 }
 
@@ -491,9 +493,12 @@ func (s *BookingServiceImpl) Create(ctx context.Context, slug string, actor *dom
 
 	var bk *domain.Booking
 	var rawToken string
-	if req.ClassSessionID != nil {
+	switch {
+	case b.Type == domain.BranchTypeRestaurant:
+		bk, rawToken, err = s.createTableBooking(ctx, b, who, req)
+	case req.ClassSessionID != nil:
 		bk, rawToken, err = s.createClassBooking(ctx, b, who, req)
-	} else {
+	default:
 		bk, rawToken, err = s.createRental(ctx, b, who, req)
 	}
 	if err != nil {
@@ -543,6 +548,20 @@ func (s *BookingServiceImpl) notifyNewBooking(ctx context.Context, b *domain.Bra
 		When:       out.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04") + "–" + out.EndsAt.In(loc).Format("15:04"),
 		Price:      moneyText(out.TotalPrice, out.Currency),
 		Pending:    out.Status == domain.BookingPending,
+	}
+	if out.Guests > 0 { // a table: no end time or price, the group size and when to arrive instead
+		if out.Zones != "" {
+			info.What += " · " + out.Zones
+		}
+		info.What = fmt.Sprintf("%s · %d guests", info.What, out.Guests)
+		info.When = out.StartsAt.In(loc).Format("Mon 2 Jan 2006, 15:04")
+		if out.BookingStyle == domain.BookingStyleArriveBy { // a bar: the evening, not a start time
+			info.When = out.StartsAt.In(loc).Format("Mon 2 Jan 2006")
+		}
+		if out.ArriveBy != nil {
+			info.When += ", please arrive by " + out.ArriveBy.In(loc).Format("15:04")
+		}
+		info.Price = "free to book"
 	}
 
 	// who booked, as the team should read it
@@ -758,7 +777,7 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 		Items: mapSlice(b.Items, func(i domain.BookingItem) dto.BookingItemDTO {
 			item := dto.BookingItemDTO{
 				Kind: i.Kind, ResourceID: i.ResourceID, CoachID: i.CoachID, ClassSessionID: i.ClassSessionID,
-				Seats: i.Seats, StartsAt: i.StartsAt, EndsAt: i.EndsAt, Price: i.Price,
+				Seats: i.Seats, StartsAt: i.StartsAt, EndsAt: i.EndsAt, Price: i.Price, Active: i.Active,
 			}
 			if i.Resource != nil {
 				item.ResourceName = i.Resource.Name
@@ -774,6 +793,14 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 	}
 	if b.Sport != nil {
 		d.SportName = b.Sport.Name
+	}
+	if b.Guests > 0 {
+		d.Guests, d.ArrivedAt, d.ArriveBy, d.BookingStyle = b.Guests, b.ArrivedAt, b.ArriveBy, b.Branch.BookingStyle
+		if b.Sport != nil {
+			floor := b.Sport.Floor
+			d.AreaFloor = &floor
+		}
+		d.Zones = b.Zones
 	}
 	if b.Customer != nil {
 		d.CustomerName, d.CustomerEmail = b.Customer.Name, b.Customer.ContactEmail()
@@ -820,6 +847,76 @@ func (s *BookingServiceImpl) guestBooking(ctx context.Context, slug, token strin
 		return nil, gone
 	}
 	return bk, nil
+}
+
+// samePhone compares two phone numbers by their last 8 digits, so "020 5555 1234",
+// "+856 20 5555 1234" and "2055551234" are the same number
+func samePhone(a, b string) bool {
+	digits := func(s string) string {
+		var out strings.Builder
+		for _, r := range s {
+			if unicode.IsDigit(r) {
+				out.WriteRune(r)
+			}
+		}
+		return out.String()
+	}
+	x, y := digits(a), digits(b)
+	if len(x) < 8 || len(y) < 8 {
+		return false
+	}
+	return x[len(x)-8:] == y[len(y)-8:]
+}
+
+// foundBooking finds a booking by its code and the phone it was made with (a guest's phone or
+// the customer's account phone). A wrong code and a wrong phone get the same answer.
+func (s *BookingServiceImpl) foundBooking(ctx context.Context, slug string, req dto.FindBookingRequest) (*domain.Booking, error) {
+	gone := notFound("NO_BOOKING_WITH_CODE_AND_PHONE")
+	code := strings.ToUpper(strings.TrimSpace(req.Code))
+	if code == "" || strings.TrimSpace(req.Phone) == "" {
+		return nil, badRequest("CODE_AND_PHONE_REQUIRED")
+	}
+	b, err := s.branches.GetBySlug(ctx, slug)
+	if err != nil {
+		if isNotFound(err) {
+			return nil, gone
+		}
+		return nil, err
+	}
+	bk, err := s.bookings.GetByCode(ctx, b.ID, code)
+	if err != nil {
+		return nil, err
+	}
+	if bk == nil {
+		return nil, gone
+	}
+	phone := bk.GuestPhone
+	if bk.Customer != nil && bk.Customer.Phone != "" {
+		phone = bk.Customer.Phone
+	}
+	if !samePhone(phone, req.Phone) {
+		return nil, gone
+	}
+	return bk, nil
+}
+
+// FindBooking shows a booking to whoever knows its code and phone
+func (s *BookingServiceImpl) FindBooking(ctx context.Context, slug string, req dto.FindBookingRequest) (*dto.BookingDTO, error) {
+	bk, err := s.foundBooking(ctx, slug, req)
+	if err != nil {
+		return nil, err
+	}
+	d := toBookingDTO(*bk)
+	return &d, nil
+}
+
+// FindCancel cancels a booking found by code and phone, with the same rules as the guest link
+func (s *BookingServiceImpl) FindCancel(ctx context.Context, slug string, req dto.FindBookingRequest) (*dto.BookingDTO, error) {
+	bk, err := s.foundBooking(ctx, slug, req)
+	if err != nil {
+		return nil, err
+	}
+	return s.cancel(ctx, bk, req.Reason)
 }
 
 func (s *BookingServiceImpl) GuestView(ctx context.Context, slug, token string) (*dto.BookingDTO, error) {

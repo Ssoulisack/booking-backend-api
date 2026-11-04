@@ -18,6 +18,12 @@ type DeskService interface {
 	SetPayment(ctx context.Context, branchID uint, actor *domain.User, id uint, req dto.PaymentRequest) (*dto.BookingDTO, error)
 	Calendar(ctx context.Context, branchID uint, date string, days int) (*dto.CalendarDTO, error)
 	Customers(ctx context.Context, branchID uint, q dto.ListQuery) (*dto.PagedResult[dto.CustomerDTO], error)
+	// restaurants: the group came in, other tables, a group without booking, and the job that
+	// settles late groups (no-show) and evenings that are over (bill closed)
+	MarkArrived(ctx context.Context, branchID, id uint) (*dto.BookingDTO, error)
+	MoveTables(ctx context.Context, branchID, id uint, req dto.MoveTablesRequest) (*dto.BookingDTO, error)
+	WalkIn(ctx context.Context, branchID uint, actor *domain.User, req dto.WalkInRequest) (*dto.BookingDTO, error)
+	SettleTables(ctx context.Context) error
 	// FindCustomer finds an account by phone, customer number or email (shown before booking for it)
 	FindCustomer(ctx context.Context, branchID uint, q string) (*dto.CustomerMatchDTO, error)
 }
