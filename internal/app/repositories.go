@@ -15,7 +15,6 @@ import (
 // Repositories holds all data storage interfaces
 type AppRepositories struct {
 	// System repositories
-	// mysql    mysql.MySQLRepository
 	redis    redis.CacheRepository
 	mailer   output.Mailer
 	postgres postgres.PostgresRepository
@@ -23,17 +22,16 @@ type AppRepositories struct {
 	filesDir string // local storage folder served at /files, "" when files live elsewhere
 	social   output.SocialVerifier
 	// app settings the services need (links in emails) and the company to create on a fresh install
-	app     config.AppConfig
-	install config.CompanyConfig
+	app      config.AppConfig
+	install  config.CompanyConfig
+	payments config.PaymentsConfig
 	// Domain repositories
 	user           output.UserRepository
 	company        output.CompanyRepository
 	branches       output.BranchRepository
 	directory      output.DirectoryRepository
 	memberships    output.MembershipRepository
-	invitations    output.InvitationRepository
 	passwordResets output.PasswordResetRepository
-	socialIDs      output.SocialIdentityRepository
 	media          output.MediaRepository
 	sports         output.SportRepository
 	resources      output.ResourceRepository
@@ -51,10 +49,6 @@ type AppRepositories struct {
 // setupRepositories initializes all data storage connections
 func SetupRepositories(cfg *config.Config) *AppRepositories {
 	// MySQL setup
-	// mysqlRepo, err := mysql.NewMySQLRepository(cfg.Database)
-	// if err != nil {
-	// 	log.Fatalf("❌ Failed to initialize MySQL repository: %v", err)
-	// }
 
 	// PostgreSQL setup
 	postgresRepo, err := postgres.NewPostgresRepository(cfg.Postgres)
@@ -78,7 +72,6 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 	db := postgresRepo.GetDB()
 
 	return &AppRepositories{
-		// mysql:  mysqlRepo,
 		// redis:          redisRepo,
 		mailer:         mailer.NewSystemMailer(cfg.Mailer, cfg.App.Name),
 		postgres:       postgresRepo,
@@ -87,14 +80,13 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		social:         social.NewVerifier(cfg.Social),
 		app:            cfg.App,
 		install:        cfg.Company,
+		payments:       cfg.Payments,
 		user:           postgres.NewUserRepository(db),
 		company:        postgres.NewCompanyRepository(db),
 		branches:       postgres.NewBranchRepository(db),
 		directory:      postgres.NewDirectoryRepository(db),
 		memberships:    postgres.NewMembershipRepository(db),
-		invitations:    postgres.NewInvitationRepository(db),
 		passwordResets: postgres.NewPasswordResetRepository(db),
-		socialIDs:      postgres.NewSocialIdentityRepository(db),
 		media:          postgres.NewMediaRepository(db),
 		sports:         postgres.NewScopedRepository[domain.Sport](db, "name"),
 		resources:      postgres.NewScopedRepository[domain.Resource](db, "name"),
@@ -112,9 +104,6 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 
 // closeRepositories gracefully closes all connections
 func CloseRepositories(repos *AppRepositories) {
-	// if repos.mysql != nil {
-	// 	repos.mysql.Close()
-	// }
 	if repos.redis != nil {
 		repos.redis.Close()
 	}

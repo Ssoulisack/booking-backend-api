@@ -114,9 +114,13 @@ type BookingDTO struct {
 	CreatedAt        time.Time        `json:"created_at"`
 	Items            []BookingItemDTO `json:"items"`
 	// restaurant tables: the group size, and the time the group loses its table if not there
-	Guests    int        `json:"guests,omitempty"`
-	ArriveBy  *time.Time `json:"arrive_by,omitempty"`
-	ArrivedAt *time.Time `json:"arrived_at,omitempty"`
+	Guests int `json:"guests,omitempty"`
+	// event days: the event bought, pay by (hold ends), and when the customer said the slip was sent
+	EventID    *uint      `json:"event_id,omitempty"`
+	PayBy      *time.Time `json:"pay_by,omitempty"`
+	SlipSentAt *time.Time `json:"slip_sent_at,omitempty"`
+	ArriveBy   *time.Time `json:"arrive_by,omitempty"`
+	ArrivedAt  *time.Time `json:"arrived_at,omitempty"`
 	// arrive_by: a bar booking for the evening (its start is only "from opening"); time: a start time
 	BookingStyle string `json:"booking_style,omitempty"`
 	// restaurant tables: the floor of the area (sport_name) the tables are in; 0 = ground floor
@@ -147,6 +151,7 @@ type BookingQuery struct {
 	CustomerID    uint   `query:"customer_id"`
 	Status        string `query:"status"`
 	PaymentStatus string `query:"payment_status"`
+	EventID       uint   `query:"event_id"`
 }
 
 // StaffBookingRequest is a booking made by a member: for an existing customer (customer_email)
@@ -254,6 +259,8 @@ type TableAvailabilityDTO struct {
 	Guests          int    `json:"guests"`
 	MaxGuestsOnline int    `json:"max_guests_online"`
 	LateMinutes     int    `json:"late_minutes"`
+	// set when an event takes over this day: tables are sold for the event, not booked free
+	Event *EventRefDTO `json:"event,omitempty"`
 	// time: customers pick one of Times; arrive_by: Times has the one evening, nothing to pick
 	BookingStyle string         `json:"booking_style"`
 	Times        []TableTimeDTO `json:"times"` // only times where the group fits somewhere
@@ -283,4 +290,30 @@ type PublicTableDTO struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
 	TableFields
+}
+
+// EventRefDTO tells a customer that an event takes over the day they asked about
+type EventRefDTO struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
+// EventBookingInput is what the events module hands the booking service to store: who, which tables
+// at which price, and how long to hold them. The events module decided all of that already.
+type EventBookingInput struct {
+	Slug        string
+	Actor       *domain.User
+	Guest       *GuestInfo
+	Notes       string
+	EventID     uint
+	Date        string // YYYY-MM-DD, branch time zone
+	Guests      int
+	HoldMinutes int
+	Tables      []EventTableSale
+}
+
+// EventTableSale is one table sold, with its price
+type EventTableSale struct {
+	ID    uint
+	Price int64
 }

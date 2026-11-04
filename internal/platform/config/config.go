@@ -2,7 +2,6 @@ package config
 
 import (
 	"backend/internal/platform/mailer"
-	"backend/internal/platform/mysql"
 	"backend/internal/platform/postgres"
 	"backend/internal/platform/redis"
 	"backend/internal/platform/social"
@@ -20,14 +19,30 @@ import (
 type Config struct {
 	App      AppConfig
 	Server   ServerConfig
-	Database mysql.Config
 	Postgres postgres.Config
 	Redis    redis.Config
 	JWT      JWTConfig
 	Storage  storage.Config
 	Social   social.Config
+	Payments PaymentsConfig
 	Mailer   mailer.Config
 	Company  CompanyConfig
+}
+
+// PaymentsConfig: online payment gateways (config.yaml "payments"). A gateway with no keys is off and the
+// booking pages keep the QR / transfer / WhatsApp way. Keys stay on the server and are never logged.
+type PaymentsConfig struct {
+	PhaJay PhaJayConfig
+}
+
+// PhaJayConfig: https://payment-doc.phajay.co/v1 (keys in the portal https://portal.phajay.co).
+// Before KYC use TestKey for calls and DevSecretKey for webhooks; after approval SecretKey does both.
+// Keys can contain "$": write them in double quotes in YAML and check the length in the start-up log.
+type PhaJayConfig struct {
+	BaseURL      string // default https://payment-gateway.phajay.co
+	TestKey      string // calls to the API before KYC
+	DevSecretKey string // webhook signing before KYC
+	SecretKey    string // production: calls and webhook signing
 }
 
 // CompanyConfig names the client this install belongs to. On the first start the company and its
@@ -120,15 +135,6 @@ func setDefaults() {
 	viper.SetDefault("server.readTimeout", 10)
 	viper.SetDefault("server.writeTimeout", 10)
 
-	// Database defaults
-	viper.SetDefault("database.mysql.host", "localhost")
-	viper.SetDefault("database.mysql.port", "3306")
-	viper.SetDefault("database.mysql.user", "root")
-	viper.SetDefault("database.mysql.password", "rootpassword")
-	viper.SetDefault("database.mysql.dbname", "go-app")
-	viper.SetDefault("database.mysql.sslmode", "disable")
-	viper.SetDefault("database.mysql.timezone", "UTC")
-
 	// Postgres defaults
 	viper.SetDefault("database.postgres.host", "localhost")
 	viper.SetDefault("database.postgres.port", "5432")
@@ -168,6 +174,12 @@ func setDefaults() {
 	viper.SetDefault("social.googleClientId", "")
 	viper.SetDefault("social.facebookAppId", "")
 	viper.SetDefault("social.facebookAppSecret", "")
+
+	// Payment gateways: empty keys switch a gateway off
+	viper.SetDefault("payments.phajay.baseUrl", "https://payment-gateway.phajay.co")
+	viper.SetDefault("payments.phajay.testKey", "")
+	viper.SetDefault("payments.phajay.devSecretKey", "")
+	viper.SetDefault("payments.phajay.secretKey", "")
 
 	// Mailer defaults
 	viper.SetDefault("mailer.host", "smtp.example.com")

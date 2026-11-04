@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -40,6 +41,7 @@ const (
 	MethodTransfer = "transfer"
 	MethodQR       = "qr"
 	MethodOther    = "other"
+	MethodOnline   = "online" // paid through a payment gateway (never chosen by staff)
 )
 
 // statusChanges lists the allowed one-way moves; cancelled, completed and no-show are final
@@ -96,6 +98,11 @@ type Booking struct {
 	ArrivedAt *time.Time
 	// ArriveBy: not there by then, the group loses its tables (no-show)
 	ArriveBy *time.Time
+	// event days (events module): the event whose tables this booking bought, the time to pay by, and
+	// when the customer said they sent the payment slip (the hold then no longer runs out by itself)
+	EventID    *uint `gorm:"index"`
+	PayBy      *time.Time
+	SlipSentAt *time.Time
 	// Zones the tables stood in when booked (e.g. "Smoking"), joined by ", "; a snapshot
 	Zones string `gorm:"type:varchar(120);not null;default:''"`
 
@@ -128,3 +135,35 @@ type BookingItem struct {
 	Price        int64         `gorm:"not null;default:0"`
 	Active       bool          `gorm:"not null;default:true"`
 }
+
+// EventDay is an event that takes over a day of a restaurant: normal table booking is off that day
+type EventDay struct {
+	ID   uint
+	Name string
+}
+
+// PayFacts is what the payments module needs to know about a booking
+type PayFacts struct {
+	ID            uint
+	BranchID      uint
+	BranchSlug    string
+	Code          string
+	Total         int64
+	Currency      string
+	Status        string
+	PaymentStatus string
+	PayBy         *time.Time
+}
+
+// Payable: money can still be taken for it (not paid, not cancelled, something to pay)
+func (f PayFacts) Payable() bool {
+	return f.PaymentStatus == PaymentUnpaid && f.Total > 0 &&
+		(f.Status == BookingPending || f.Status == BookingConfirmed)
+}
+
+var (
+	// ErrNotPayable: the booking was cancelled, so money that arrived for it must be given back
+	ErrNotPayable = errors.New("booking cannot take a payment")
+	// ErrAlreadyPaid: the booking was already paid (by staff or another payment)
+	ErrAlreadyPaid = errors.New("booking is already paid")
+)

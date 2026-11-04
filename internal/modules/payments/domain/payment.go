@@ -1,0 +1,58 @@
+// Package domain: what a payment is. An online payment is one attempt to pay a booking through a
+// gateway; the gateway-facing words (charge, notice, state) live here too, so every gateway adapter
+// speaks the same language.
+package domain
+
+import "time"
+
+// Payment statuses
+const (
+	StatusPending         = "pending"          // a charge was created, nothing paid yet
+	StatusPaid            = "paid"             // money received and the booking settled
+	StatusExpired         = "expired"          // the gateway says the time ran out
+	StatusFailed          = "failed"           // the gateway refused to create it
+	StatusMismatch        = "mismatch"         // the gateway reports a different amount: NOT settled, the team looks at it
+	StatusRefundDue       = "refund_due"       // money arrived for a booking that cannot take it (cancelled, or paid already)
+	StatusDisputed        = "disputed"         // the gateway reports a dispute
+	StatusRefundRequested = "refund_requested" // the team asked the gateway for the money back
+	StatusRefunded        = "refunded"
+)
+
+// Payment is one attempt to pay a booking online. A booking can have several (a customer who changes
+// bank); only one of them ever settles it.
+type Payment struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	BranchID  uint   `gorm:"not null;index"`
+	BookingID uint   `gorm:"not null;index"`
+	Provider  string `gorm:"type:varchar(20);not null;index:idx_payment_ref,priority:1"`
+	Method    string `gorm:"type:varchar(20);not null"`
+	// OrderNo is ours and unique ("<booking code>-<attempt>"); ProviderRef is the gateway's id
+	OrderNo     string `gorm:"type:varchar(40);not null;uniqueIndex"`
+	ProviderRef string `gorm:"type:varchar(80);index:idx_payment_ref,priority:2"`
+
+	Amount   int64  `gorm:"not null"`
+	Currency string `gorm:"type:varchar(3);not null"`
+	Status   string `gorm:"type:varchar(20);not null;index"`
+
+	QRCode      string `gorm:"type:text"`
+	Deeplink    string `gorm:"type:text"`
+	RedirectURL string `gorm:"type:text"`
+	ExpiresAt   time.Time
+	PaidAt      *time.Time
+	RefundRef   string `gorm:"type:varchar(80)"`
+	Note        string `gorm:"type:varchar(255)"`
+}
+
+func (Payment) TableName() string { return "payments" }
+
+// Settled reports whether the payment can no longer change by itself
+func (p Payment) Settled() bool {
+	switch p.Status {
+	case StatusPaid, StatusRefundDue, StatusRefundRequested, StatusRefunded:
+		return true
+	}
+	return false
+}

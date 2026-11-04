@@ -100,3 +100,14 @@ company:
   ownerEmail: owner@example.com
   # leave empty in production: the owner gets an email with a link to choose a password
   ownerPassword: ""
+
+# Online payment (PhaJay). Leave the keys empty to keep the QR / transfer / WhatsApp way only.
+# Keys: https://portal.phajay.co (Key Management). Before KYC: testKey (calls) + devSecretKey (webhook
+# signature); after approval: secretKey (both). A key may contain "$": keep the double quotes.
+# Webhook URL to set in the portal: https://<your-domain>/api/v1/payments/webhooks/phajay
+payments:
+  phajay:
+    baseUrl: "https://payment-gateway.phajay.co"
+    testKey: ""
+    devSecretKey: ""
+    secretKey: ""

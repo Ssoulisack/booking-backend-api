@@ -46,6 +46,17 @@ type BookingRepository interface {
 	// SetPayment saves the payment fields
 	SetPayment(ctx context.Context, b *domain.Booking) error
 
+	// ---- event days ----
+
+	// ActiveResourceItems lists the active table / court items of a branch overlapping [from, to)
+	ActiveResourceItems(ctx context.Context, branchID uint, from, to time.Time) ([]domain.BookingItem, error)
+	// EventHoldsExpired lists unpaid event bookings whose pay-by time has passed without a slip sent
+	EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error)
+	// ExtendPayBy moves the pay-by time later (never earlier): a customer who is paying online keeps their hold
+	ExtendPayBy(ctx context.Context, id uint, until time.Time) error
+	// SetSlipSent records when the customer said the slip was sent (only a pending, unpaid event booking)
+	SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time) error
+
 	// ---- restaurant tables ----
 
 	// Finish completes a booking (bill closed) or marks it no-show and frees its tables from `at` on
@@ -73,6 +84,7 @@ type BookingFilter struct {
 	Status        string
 	PaymentStatus string
 	Keyword       string // code, guest name or phone, customer name or email
+	EventID       uint   // bookings of one event
 }
 
 // CustomerRow is one customer of a branch
@@ -84,4 +96,10 @@ type CustomerRow struct {
 	Phone         string
 	Bookings      int64
 	LastBookingAt time.Time
+}
+
+// EventDays tells the booking service whether an event takes over a day of a restaurant (the events
+// module implements it); nil, nil means no event that day
+type EventDays interface {
+	EventOn(ctx context.Context, branchID uint, day string) (*domain.EventDay, error)
 }

@@ -251,6 +251,9 @@ func (r *bookingRepository) filtered(ctx context.Context, branchID uint, f outpu
 	if f.PaymentStatus != "" {
 		tx = tx.Where("bookings.payment_status = ?", f.PaymentStatus)
 	}
+	if f.EventID != 0 {
+		tx = tx.Where("bookings.event_id = ?", f.EventID)
+	}
 	if f.ResourceID != 0 {
 		tx = tx.Where("bookings.id IN (SELECT booking_id FROM booking_items WHERE resource_id = ?)", f.ResourceID)
 	}
@@ -427,4 +430,44 @@ func (r *bookingRepository) TablesToSettle(ctx context.Context, now time.Time) (
 			domain.BookingConfirmed, now, now).
 		Order("id").Limit(500).Find(&out).Error
 	return out, exception.HandleGormError(err)
+}
+
+// ---------- event days ----------
+
+func (r *bookingRepository) ActiveResourceItems(ctx context.Context, branchID uint, from, to time.Time) ([]domain.BookingItem, error) {
+	var out []domain.BookingItem
+	err := r.db.WithContext(ctx).
+		Where("branch_id = ? AND active AND resource_id IS NOT NULL AND starts_at < ? AND ends_at > ?", branchID, to, from).
+		Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *bookingRepository) EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error) {
+	var out []domain.Booking
+	err := r.db.WithContext(ctx).
+		Where("event_id IS NOT NULL AND status = ? AND payment_status = ? AND slip_sent_at IS NULL AND pay_by < ?",
+			domain.BookingPending, domain.PaymentUnpaid, now).
+		Order("id").Limit(500).Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *bookingRepository) SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time) error {
+	res := r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Where("id = ? AND branch_id = ? AND status = ? AND payment_status = ? AND event_id IS NOT NULL",
+			b.ID, b.BranchID, domain.BookingPending, domain.PaymentUnpaid).
+		Update("slip_sent_at", at)
+	if res.Error != nil {
+		return exception.HandleGormError(res.Error)
+	}
+	if res.RowsAffected != 1 {
+		return response.NewError(http.StatusConflict, "NOT_WAITING_FOR_PAYMENT")
+	}
+	b.SlipSentAt = &at
+	return nil
+}
+
+func (r *bookingRepository) ExtendPayBy(ctx context.Context, id uint, until time.Time) error {
+	err := r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Where("id = ? AND (pay_by IS NULL OR pay_by < ?)", id, until).Update("pay_by", until).Error
+	return exception.HandleGormError(err)
 }

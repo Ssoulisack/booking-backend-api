@@ -370,52 +370,6 @@ func (r *membershipRepository) Replace(ctx context.Context, userID uint, role st
 	}))
 }
 
-// ---------- invitations ----------
-
-type invitationRepository struct{ db *gorm.DB }
-
-func NewInvitationRepository(db *gorm.DB) output.InvitationRepository {
-	return &invitationRepository{db: db}
-}
-
-func (r *invitationRepository) pending(ctx context.Context, now time.Time) *gorm.DB {
-	return r.db.WithContext(ctx).Model(&domain.Invitation{}).Where("accepted_at IS NULL AND expires_at > ?", now)
-}
-
-func (r *invitationRepository) Create(ctx context.Context, inv *domain.Invitation) error {
-	return exception.HandleGormError(r.db.WithContext(ctx).Create(inv).Error)
-}
-
-func (r *invitationRepository) GetByTokenHash(ctx context.Context, hash string) (*domain.Invitation, error) {
-	return firstOrNil[domain.Invitation](r.db.WithContext(ctx).Where("token_hash = ?", hash))
-}
-
-func (r *invitationRepository) GetByID(ctx context.Context, id uint) (*domain.Invitation, error) {
-	var inv domain.Invitation
-	if err := r.db.WithContext(ctx).First(&inv, id).Error; err != nil {
-		return nil, exception.HandleGormError(err)
-	}
-	return &inv, nil
-}
-
-func (r *invitationRepository) ListPending(ctx context.Context, now time.Time) ([]domain.Invitation, error) {
-	var items []domain.Invitation
-	err := r.pending(ctx, now).Order("id ASC").Find(&items).Error
-	return items, exception.HandleGormError(err)
-}
-
-func (r *invitationRepository) PendingForEmail(ctx context.Context, email string, now time.Time) (*domain.Invitation, error) {
-	return firstOrNil[domain.Invitation](r.pending(ctx, now).Where("email = ?", email))
-}
-
-func (r *invitationRepository) Update(ctx context.Context, inv *domain.Invitation) error {
-	return exception.HandleGormError(r.db.WithContext(ctx).Save(inv).Error)
-}
-
-func (r *invitationRepository) Delete(ctx context.Context, id uint) error {
-	return requireAffected(r.db.WithContext(ctx).Delete(&domain.Invitation{}, id))
-}
-
 // ---------- password resets ----------
 
 type passwordResetRepository struct{ db *gorm.DB }

@@ -7,6 +7,7 @@
 package main
 
 import (
+	"backend/internal/app"
 	"backend/internal/platform/config"
 	"backend/internal/platform/postgres"
 	"backend/internal/platform/postgres/migration"
@@ -25,7 +26,7 @@ func main() {
 	defer repo.Close()
 
 	log.Printf("🔧 Migrating database %q on %s ...", cfg.Postgres.DBName, cfg.Postgres.Host)
-	if err := migration.DatabaseMigrations(repo.GetDB()); err != nil {
+	if err := migration.DatabaseMigrations(repo.GetDB(), app.Models()...); err != nil {
 		log.Fatalf("❌ Migration failed: %v", err)
 	}
 	log.Println("✅ Database is up to date")

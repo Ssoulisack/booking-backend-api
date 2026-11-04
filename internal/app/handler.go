@@ -1,49 +1,44 @@
 package app
 
 import (
-	"backend/internal/core/mappers"
-	"backend/internal/http/handler"
+	"backend/internal/modules/booking"
+	"backend/internal/modules/catalog"
+	"backend/internal/modules/company"
+	"backend/internal/modules/events"
+	"backend/internal/modules/identity"
+	"backend/internal/modules/media"
+	"backend/internal/modules/payments"
+	"backend/internal/modules/reports"
+	"backend/internal/modules/restaurant"
 	"backend/internal/platform/middleware"
 )
 
-// handler.AuthHandler
-
 type AppHandler struct {
 	authMiddleware *middleware.Auth
-	auth           handler.AuthHandler
-	user           handler.UserHandler
-	company        handler.CompanyHandler
-	branch         handler.BranchHandler
-	invitations    handler.InvitationHandler
-	public         handler.PublicHandler
-	catalog        handler.CatalogHandler
-	schedule       handler.ScheduleHandler
-	rules          handler.RuleHandler
-	media          handler.MediaHandler
-	booking        handler.BookingHandler
-	desk           handler.DeskHandler
-	reports        handler.ReportHandler
+	identity       *identity.Module
+	company        *company.Module
+	catalog        *catalog.Module
+	media          *media.Module
+	booking        *booking.Module
+	reports        *reports.Module
+	restaurant     *restaurant.Module
+	events         *events.Module
+	payments       *payments.Module
 	filesDir       string // local storage folder served at /files
 }
 
 func SetupHandlers(svc *AppServices) *AppHandler {
-	classicMapper := mappers.NewClassicMapper[any, any]()
-	mapperFactory := mappers.NewMapperFactory(classicMapper)
 	return &AppHandler{
 		filesDir:       svc.filesDir,
-		authMiddleware: middleware.NewAuth(svc.access),
-		auth:           handler.NewAuthHandler(svc.auth, mapperFactory),
-		user:           handler.NewUserHandler(svc.user, mapperFactory),
-		company:        handler.NewCompanyHandler(svc.company, svc.rules, svc.media, svc.desk, svc.reports),
-		branch:         handler.NewBranchHandler(svc.branch),
-		invitations:    handler.NewInvitationHandler(svc.invitations),
-		public:         handler.NewPublicHandler(svc.public),
-		catalog:        handler.NewCatalogHandler(svc.catalog),
-		schedule:       handler.NewScheduleHandler(svc.schedule),
-		rules:          handler.NewRuleHandler(svc.rules),
-		media:          handler.NewMediaHandler(svc.media),
-		booking:        handler.NewBookingHandler(svc.booking),
-		desk:           handler.NewDeskHandler(svc.desk),
-		reports:        handler.NewReportHandler(svc.reports),
+		authMiddleware: svc.identity.Middleware(),
+		identity:       svc.identity,
+		company:        svc.company,
+		catalog:        svc.catalog,
+		media:          svc.media,
+		booking:        svc.booking,
+		reports:        svc.reports,
+		restaurant:     svc.restaurant,
+		events:         svc.events,
+		payments:       svc.payments,
 	}
 }

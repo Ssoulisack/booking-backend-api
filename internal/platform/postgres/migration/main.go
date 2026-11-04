@@ -10,15 +10,19 @@ import (
 
 // DatabaseMigrations creates or updates every table, then adds the rules gorm cannot express.
 // The company and its first owner are created afterwards by the install service (config.yaml).
-func DatabaseMigrations(db *gorm.DB) error {
+// modules are the tables of the modules (each module owns its own; the app lists them).
+func DatabaseMigrations(db *gorm.DB, modules ...any) error {
+	if len(modules) > 0 {
+		if err := db.AutoMigrate(modules...); err != nil {
+			return err
+		}
+	}
 	if err := db.AutoMigrate(
 		&domain.User{},
 		&domain.Company{},
 		&domain.Branch{},
 		&domain.Membership{},
-		&domain.Invitation{},
 		&domain.PasswordReset{},
-		&domain.SocialIdentity{},
 		&domain.Media{},
 		&domain.Sport{},
 		&domain.Resource{},

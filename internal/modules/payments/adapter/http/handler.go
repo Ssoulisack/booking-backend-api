@@ -1,0 +1,105 @@
+package http
+
+import (
+	"backend/internal/modules/payments/domain"
+	"backend/internal/modules/payments/dto"
+	"backend/internal/modules/payments/port"
+	"backend/internal/platform/httpx"
+	"backend/internal/platform/middleware"
+	"errors"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+// Handler answers the module's routes (the driving side: it only knows the input port)
+type Handler struct{ svc port.Service }
+
+// New builds the handler
+func New(svc port.Service) *Handler { return &Handler{svc: svc} }
+
+func (h *Handler) Options(c *fiber.Ctx) error {
+	res, err := h.svc.Options(c.UserContext(), c.Params("slug"))
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) StartByToken(c *fiber.Ctx) error {
+	var req dto.StartRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.StartByToken(c.UserContext(), c.Params("slug"), c.Params("token"), req)
+	return httpx.Created(c, res, err)
+}
+
+func (h *Handler) CheckByToken(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.CheckByToken(c.UserContext(), c.Params("slug"), c.Params("token"), id)
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) StartByCustomer(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	var req dto.StartRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.StartByCustomer(c.UserContext(), middleware.CurrentUser(c).ID, id, req)
+	return httpx.Created(c, res, err)
+}
+
+func (h *Handler) CheckByCustomer(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	pid, err := httpx.ID(c, "pid")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.CheckByCustomer(c.UserContext(), middleware.CurrentUser(c).ID, id, pid)
+	return httpx.OK(c, res, err)
+}
+
+// Webhook is the gateway's callback: 200 when signed (and applied or ignored), 401 when not signed
+func (h *Handler) Webhook(c *fiber.Ctx) error {
+	err := h.svc.HandleWebhook(c.UserContext(), c.Params("provider"), func(k string) string { return c.Get(k) }, c.Body())
+	switch {
+	case err == nil:
+		return c.SendStatus(fiber.StatusOK)
+	case errors.Is(err, domain.ErrBadSignature):
+		return c.SendStatus(fiber.StatusUnauthorized)
+	case errors.Is(err, domain.ErrNotFound):
+		return c.SendStatus(fiber.StatusNotFound)
+	default:
+		return c.SendStatus(fiber.StatusInternalServerError) // the gateway may send it again
+	}
+}
+
+func (h *Handler) ForBooking(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.ForBooking(c.UserContext(), middleware.BranchID(c), id)
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) Attention(c *fiber.Ctx) error {
+	res, err := h.svc.Attention(c.UserContext(), middleware.BranchID(c))
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) Refund(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.Refund(c.UserContext(), middleware.BranchID(c), id)
+	return httpx.OK(c, res, err)
+}

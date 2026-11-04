@@ -40,18 +40,6 @@ type MembershipRepository interface {
 	Replace(ctx context.Context, userID uint, role string, branchIDs []uint, active bool) error
 }
 
-type InvitationRepository interface {
-	Create(ctx context.Context, inv *domain.Invitation) error
-	// GetByTokenHash returns (nil, nil) when no invitation matches
-	GetByTokenHash(ctx context.Context, hash string) (*domain.Invitation, error)
-	GetByID(ctx context.Context, id uint) (*domain.Invitation, error)
-	// ListPending lists invitations not yet accepted and not expired at now
-	ListPending(ctx context.Context, now time.Time) ([]domain.Invitation, error)
-	PendingForEmail(ctx context.Context, email string, now time.Time) (*domain.Invitation, error)
-	Update(ctx context.Context, inv *domain.Invitation) error
-	Delete(ctx context.Context, id uint) error
-}
-
 type PasswordResetRepository interface {
 	Create(ctx context.Context, r *domain.PasswordReset) error
 	// GetByTokenHash returns (nil, nil) when no reset matches

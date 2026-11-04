@@ -2,7 +2,6 @@
 package social
 
 import (
-	"backend/internal/core/domain"
 	"backend/internal/core/port/output"
 	"backend/pkg/response"
 	"context"
@@ -12,6 +11,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+)
+
+// The sign-in providers
+const (
+	Google   = "google"
+	Facebook = "facebook"
 )
 
 // Config holds the app credentials. A provider with empty credentials is switched off.
@@ -32,20 +37,25 @@ type verifier struct {
 }
 
 func NewVerifier(config Config) output.SocialVerifier {
+	return NewVerifierAt(config, "https://oauth2.googleapis.com/tokeninfo", "https://graph.facebook.com/v19.0")
+}
+
+// NewVerifierAt is NewVerifier with the providers' endpoints given (the tests point them at a fake server)
+func NewVerifierAt(config Config, googleTokenInfo, facebookGraph string) output.SocialVerifier {
 	return &verifier{
 		config:          config,
 		client:          &http.Client{Timeout: 10 * time.Second},
-		googleTokenInfo: "https://oauth2.googleapis.com/tokeninfo",
-		facebookGraph:   "https://graph.facebook.com/v19.0",
+		googleTokenInfo: googleTokenInfo,
+		facebookGraph:   facebookGraph,
 	}
 }
 
 func (v *verifier) Public() output.SocialPublic {
 	p := output.SocialPublic{}
-	if v.enabled()[domain.ProviderGoogle] {
+	if v.enabled()[Google] {
 		p.GoogleClientID = v.config.GoogleClientID
 	}
-	if v.enabled()[domain.ProviderFacebook] {
+	if v.enabled()[Facebook] {
 		p.FacebookAppID = v.config.FacebookAppID
 	}
 	return p
@@ -53,9 +63,9 @@ func (v *verifier) Public() output.SocialPublic {
 
 func (v *verifier) enabled() map[string]bool {
 	return map[string]bool{
-		domain.ProviderGoogle: v.config.GoogleClientID != "",
+		Google: v.config.GoogleClientID != "",
 		// Facebook is off until the app is verified: remove the comment to bring it back
-		// domain.ProviderFacebook: v.config.FacebookAppID != "" && v.config.FacebookAppSecret != "",
+		// Facebook: v.config.FacebookAppID != "" && v.config.FacebookAppSecret != "",
 	}
 }
 
@@ -69,7 +79,7 @@ func (v *verifier) Verify(ctx context.Context, provider, token string) (*output.
 	if token == "" {
 		return nil, invalid()
 	}
-	if provider == domain.ProviderGoogle {
+	if provider == Google {
 		return v.google(ctx, token)
 	}
 	return v.facebook(ctx, token)

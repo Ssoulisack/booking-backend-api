@@ -138,36 +138,6 @@ type TransferOwnershipRequest struct {
 	UserID uint `json:"user_id"`
 }
 
-// InviteRequest asks someone to join: role "admin" (every branch) or "manager" / "staff" with branch_ids
-type InviteRequest struct {
-	Email     string `json:"email"`
-	Role      string `json:"role"`
-	BranchIDs []uint `json:"branch_ids"`
-}
-
-type InvitationDTO struct {
-	ID        uint        `json:"id"`
-	Email     string      `json:"email"`
-	Role      string      `json:"role"`
-	Branches  []BranchRef `json:"branches"`
-	ExpiresAt time.Time   `json:"expires_at"`
-}
-
-// InvitationInfoDTO is what the accept page shows before the user accepts
-type InvitationInfoDTO struct {
-	CompanyName   string   `json:"company_name"`
-	Email         string   `json:"email"`
-	Role          string   `json:"role"`
-	Branches      []string `json:"branches"`       // empty for an admin (every branch)
-	AccountExists bool     `json:"account_exists"` // true: log in first; false: choose a name and password
-}
-
-type AcceptInvitationRequest struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
-	Phone    string `json:"phone"`
-}
-
 // MyBranchDTO feeds the dashboard's branch switcher: every branch for the owner and admins
 type MyBranchDTO struct {
 	BranchID uint   `json:"branch_id"`
@@ -180,15 +150,6 @@ type MyBranchDTO struct {
 }
 
 // ---------- password reset ----------
-
-type ForgotPasswordRequest struct {
-	Email string `json:"email"`
-}
-
-type ResetPasswordRequest struct {
-	Token    string `json:"token"`
-	Password string `json:"password"`
-}
 
 // ---------- public ----------
 

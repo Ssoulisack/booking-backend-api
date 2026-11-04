@@ -2,9 +2,9 @@ package middleware
 
 import (
 	"backend/internal/core/domain"
-	"backend/internal/core/port/input"
 	"backend/pkg/jwt"
 	"backend/pkg/response"
+	"context"
 	"net/http"
 	"strings"
 
@@ -20,10 +20,19 @@ const (
 // Auth checks who is calling and what they may do. The token only proves identity:
 // account status and branch roles are read from the database on every request.
 type Auth struct {
-	access input.AccessService
+	access Access
 }
 
-func NewAuth(access input.AccessService) *Auth {
+// Access is what the check needs from the identity module
+type Access interface {
+	// Authenticate loads the token's user and refuses disabled users and tokens issued before a password reset
+	Authenticate(ctx context.Context, userID uint, issuedAt int64) (*domain.User, error)
+	// BranchRole returns the caller's role at the branch if it ranks at least minRole
+	// (the owner and admins: their company role at every branch)
+	BranchRole(ctx context.Context, user *domain.User, branchID uint, minRole string) (string, error)
+}
+
+func NewAuth(access Access) *Auth {
 	return &Auth{access: access}
 }
 
@@ -41,6 +50,10 @@ func (a *Auth) authenticate(c *fiber.Ctx) (*domain.User, error) {
 
 // RequireUser lets only logged-in, enabled users through
 func (a *Auth) RequireUser(c *fiber.Ctx) error {
+	// every module registers its own /branches/:branchId group with this check: look the user up once
+	if CurrentUser(c) != nil {
+		return c.Next()
+	}
 	user, err := a.authenticate(c)
 	if err != nil {
 		return response.NewErrorResponses(c, err)

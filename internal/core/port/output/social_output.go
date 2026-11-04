@@ -1,7 +1,6 @@
 package output
 
 import (
-	"backend/internal/core/domain"
 	"context"
 )
 
@@ -23,9 +22,3 @@ type SocialVerifier interface {
 
 // SocialPublic are the public ids of the configured providers (never the Facebook app secret)
 type SocialPublic struct{ GoogleClientID, FacebookAppID string }
-
-type SocialIdentityRepository interface {
-	// Find returns (nil, nil) when the provider account is not linked to anyone yet
-	Find(ctx context.Context, provider, uid string) (*domain.SocialIdentity, error)
-	Create(ctx context.Context, identity *domain.SocialIdentity) error
-}

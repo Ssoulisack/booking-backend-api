@@ -3,7 +3,6 @@ module backend
 go 1.25
 
 require (
-	github.com/go-sql-driver/mysql v1.7.0
 	github.com/gofiber/fiber/v2 v2.52.9
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/jinzhu/copier v0.4.0
@@ -63,6 +62,5 @@ require (
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	go.uber.org/zap v1.27.0
 	golang.org/x/sys v0.30.0 // indirect
-	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
 )

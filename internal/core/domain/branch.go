@@ -206,21 +206,6 @@ type Membership struct {
 	Branch    Branch `gorm:"foreignKey:BranchID"`
 }
 
-// Invitation is a pending email invite to join the team: as an admin (every branch) or as a
-// manager / staff member at the chosen branches. Only the token's hash is stored.
-type Invitation struct {
-	ID          uint `gorm:"primaryKey"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Email       string    `gorm:"type:varchar(255);not null;index"`
-	Role        string    `gorm:"type:varchar(10);not null"`
-	BranchIDs   []uint    `gorm:"type:jsonb;serializer:json"` // empty for an admin
-	TokenHash   string    `gorm:"type:varchar(64);not null;uniqueIndex"`
-	ExpiresAt   time.Time `gorm:"not null"`
-	AcceptedAt  *time.Time
-	InvitedByID uint `gorm:"not null"`
-}
-
 // PasswordReset is a single-use reset link. Only the token's hash is stored.
 type PasswordReset struct {
 	ID        uint `gorm:"primaryKey"`
