@@ -57,6 +57,9 @@ storage:
     bucket: booking-media
     accessKey: ""
     secretKey: ""
+    # TESTING ONLY, before KYC the gateway takes 1 to 999 kip: 100000 sends 100,000 kip as 1 (and reads amounts back
+    # multiplied). Ignored when secretKey is set. Leave 0 for real money.
+    testAmountDivisor: 0
     publicBaseUrl: https://files.example.com
 
   # Supabase Storage. serviceKey is the server-side service_role key.

@@ -33,6 +33,8 @@ type PhaJay struct {
 	loc         *time.Location
 	banks       []domain.Method
 	banksByKey  map[string]bool
+	// divisor > 1: a test account (before KYC) takes 1 to 999 kip, so amounts are sent divided and read back multiplied
+	divisor float64
 }
 
 // New returns nil when no key is set: the gateway is off
@@ -68,7 +70,32 @@ func New(cfg config.PhaJayConfig) *PhaJay {
 	for _, b := range p.banks {
 		p.banksByKey[b.Key] = true
 	}
+	// never with the production key: real money is always the real amount
+	if cfg.SecretKey == "" && cfg.TestAmountDivisor > 1 {
+		p.divisor = float64(cfg.TestAmountDivisor)
+	}
 	return p
+}
+
+// TestScale reports the test amount divisor in force (0: real amounts), for the start-up log
+func (p *PhaJay) TestScale() int { return int(p.divisor) }
+
+// toGateway is the amount PhaJay is asked for: the real amount, or (test mode) the amount divided,
+// at least 1 and with at most two decimals
+func (p *PhaJay) toGateway(amount int64) any {
+	if p.divisor == 0 {
+		return amount
+	}
+	v := math.Round(float64(amount)/p.divisor*100) / 100
+	return math.Max(v, 1)
+}
+
+// fromGateway is the real amount behind an amount PhaJay reports
+func (p *PhaJay) fromGateway(f float64) int64 {
+	if p.divisor == 0 {
+		return kip(f)
+	}
+	return kip(f * p.divisor)
 }
 
 // KeyInfo describes the loaded keys for the start-up log: lengths only, never the keys. A key that
@@ -145,7 +172,8 @@ func (p *PhaJay) do(ctx context.Context, method, path string, basic bool, body a
 		if msg.Message == "PAYMENT_NOT_FOUND" {
 			return domain.ErrNotFound
 		}
-		return fmt.Errorf("phajay: %s %s: %d %s", method, path, res.StatusCode, msg.Message)
+		// the gateway explains a refusal in its body (never the key): keep a short copy for the log
+		return fmt.Errorf("phajay: %s %s: %d %s %s", method, path, res.StatusCode, msg.Message, bodyHint(raw))
 	}
 	return nil
 }
@@ -155,7 +183,7 @@ func (p *PhaJay) Charge(ctx context.Context, r domain.ChargeRequest) (*domain.Ch
 		return nil, domain.ErrUnsupported
 	}
 	body := map[string]any{
-		"amount": r.Amount, "description": plain(r.Description), "orderNo": r.OrderNo,
+		"amount": p.toGateway(r.Amount), "description": plain(r.Description), "orderNo": r.OrderNo,
 		"tag1": r.Tags[0], "tag2": r.Tags[1], "tag3": r.Tags[2],
 	}
 	if r.Method == "link" {
@@ -246,7 +274,7 @@ func (p *PhaJay) VerifyWebhook(header func(string) string, body []byte) (*domain
 	if status == "" {
 		status = e.Message
 	}
-	n := &domain.Notice{ProviderRef: e.TransactionID, OrderNo: e.OrderNo, State: stateOf(status, nil), Amount: kip(e.TxnAmount), Method: e.PaymentMethod}
+	n := &domain.Notice{ProviderRef: e.TransactionID, OrderNo: e.OrderNo, State: stateOf(status, nil), Amount: p.fromGateway(e.TxnAmount), Method: e.PaymentMethod}
 	if t, err := time.ParseInLocation("02/01/2006 15:04:05", e.TxnDateTime, p.loc); err == nil {
 		n.PaidAt = t
 	}
@@ -271,7 +299,7 @@ func (p *PhaJay) Status(ctx context.Context, ref string) (*domain.Notice, error)
 	paid := d.IsPaid
 	return &domain.Notice{
 		ProviderRef: d.TransactionID, OrderNo: d.OrderNo, State: stateOf(d.Status, &paid),
-		Amount: kip(d.Amount), Method: d.PaymentMethod,
+		Amount: p.fromGateway(d.Amount), Method: d.PaymentMethod,
 	}, nil
 }
 
@@ -292,3 +320,12 @@ func (p *PhaJay) Refund(ctx context.Context, ref string) (string, error) {
 }
 
 var _ port.Provider = (*PhaJay)(nil)
+
+// bodyHint is the start of the gateway's answer, one line, for an error message
+func bodyHint(raw []byte) string {
+	s := strings.Join(strings.Fields(string(raw)), " ")
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return s
+}

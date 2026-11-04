@@ -43,6 +43,10 @@ type PhaJayConfig struct {
 	TestKey      string // calls to the API before KYC
 	DevSecretKey string // webhook signing before KYC
 	SecretKey    string // production: calls and webhook signing
+	// TestAmountDivisor makes tests possible before KYC, when the gateway only takes 1 to 999 kip: the
+	// amount sent is the real amount divided by this (100000: 100,000 kip is sent as 1), and the gateway's
+	// amounts are multiplied back. Only used while no production SecretKey is set; 0 = off.
+	TestAmountDivisor int
 }
 
 // CompanyConfig names the client this install belongs to. On the first start the company and its
@@ -180,6 +184,7 @@ func setDefaults() {
 	viper.SetDefault("payments.phajay.testKey", "")
 	viper.SetDefault("payments.phajay.devSecretKey", "")
 	viper.SetDefault("payments.phajay.secretKey", "")
+	viper.SetDefault("payments.phajay.testAmountDivisor", 0)
 
 	// Mailer defaults
 	viper.SetDefault("mailer.host", "smtp.example.com")

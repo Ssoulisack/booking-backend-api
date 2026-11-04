@@ -62,6 +62,9 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	if p := phajay.New(r.payments.PhaJay); p != nil {
 		gateways = append(gateways, p)
 		log.Printf("💳 PhaJay payments on (%s)", phajay.KeyInfo(r.payments.PhaJay))
+		if n := p.TestScale(); n > 0 {
+			log.Printf("⚠️  PhaJay TEST AMOUNTS: the gateway is asked for the amount divided by %d (test account, before KYC). Never use this with real money.", n)
+		}
 	} else {
 		log.Printf("💳 online payments off (no gateway keys in config.yaml)")
 	}
