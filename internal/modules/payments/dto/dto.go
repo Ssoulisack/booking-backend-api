@@ -68,6 +68,6 @@ type SettingsDTO struct {
 // SettingsRequest turns online payment on or off for the branch
 type SettingsRequest struct {
 	OnlineEnabled bool `json:"online_enabled"`
-	// ChargeMinutes: 5 to 30; not sent (0) = the default, 15
+	// ChargeMinutes: 5 to 30; not sent (0) = the default, 30
 	ChargeMinutes int `json:"charge_minutes"`
 }

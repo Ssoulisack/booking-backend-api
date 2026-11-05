@@ -23,7 +23,7 @@ func conflict(code string) error   { return response.NewError(http.StatusConflic
 func notFound(code string) error   { return response.NewError(http.StatusNotFound, code) }
 
 const (
-	defaultChargeMinutes = 15 // how long a customer has to pay a QR / page we created, unless the branch chose
+	defaultChargeMinutes = 30 // how long a customer has to pay a QR / page we created, unless the branch chose (30 = how long PhaJay keeps a QR payable)
 	minChargeMinutes     = 5
 	maxChargeMinutes     = 30
 	pollAfter            = time.Minute      // a webhook gets this long before the status check steps in
