@@ -3,6 +3,7 @@ package service
 import (
 	"backend/internal/core/domain"
 	"context"
+	"log"
 	"time"
 )
 
@@ -68,4 +69,45 @@ func (s *Service) SettlePaid(ctx context.Context, branchID, bookingID uint, ref 
 		return err
 	}
 	return s.afterPaid(ctx, bk)
+}
+
+// customerOf gives where a booking's emails to the customer go: the account's email, or the one a guest gave
+func customerOf(bk *domain.Booking) (to, name string) {
+	to, name = bk.GuestEmail, bk.GuestName
+	if bk.Customer != nil {
+		to, name = bk.Customer.Email, bk.Customer.Name
+	}
+	return to, name
+}
+
+// BookingReleased emails the customer that their unpaid event booking was released (the events job calls it
+// after cancelling it). No email on file: nothing to send. A failed email is logged and changes nothing.
+func (s *Service) BookingReleased(ctx context.Context, branchID, bookingID uint) {
+	bk, err := s.bookings.GetByID(ctx, branchID, bookingID)
+	if err != nil || bk == nil {
+		return
+	}
+	to, name := customerOf(bk)
+	if to == "" {
+		return
+	}
+	if err := s.mailer.SendBookingReleased(to, name, bk.Branch.Name, bk.Code, s.frontendURL+"/b/"+bk.Branch.Slug); err != nil {
+		log.Printf("⚠️  released email for booking %s failed: %v", bk.Code, err)
+	}
+}
+
+// NotifyRefund emails the customer that the bank was asked to refund a payment (done false) or confirmed it
+// (done true). It runs after the answer is ready; a failed email is logged and changes nothing.
+func (s *Service) NotifyRefund(ctx context.Context, branchID, bookingID uint, amount int64, currency string, done bool) {
+	bk, err := s.bookings.GetByID(ctx, branchID, bookingID)
+	if err != nil || bk == nil {
+		return
+	}
+	to, name := customerOf(bk)
+	if to == "" {
+		return
+	}
+	if err := s.mailer.SendRefund(to, name, bk.Branch.Name, bk.Code, moneyText(amount, currency), s.frontendURL+"/b/"+bk.Branch.Slug, done); err != nil {
+		log.Printf("⚠️  refund email for booking %s failed: %v", bk.Code, err)
+	}
 }

@@ -54,4 +54,6 @@ type Bookings interface {
 	SetHold(ctx context.Context, bookingID uint, until time.Time) error
 	// SettlePaid records the booking as paid online once; domain.ErrNotPayable / ErrAlreadyPaid when it cannot
 	SettlePaid(ctx context.Context, branchID, bookingID uint, ref string) error
+	// NotifyRefund emails the booking's customer that a refund was asked (done false) or confirmed (done true)
+	NotifyRefund(ctx context.Context, branchID, bookingID uint, amount int64, currency string, done bool)
 }

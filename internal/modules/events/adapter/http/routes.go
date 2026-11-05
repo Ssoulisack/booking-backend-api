@@ -30,5 +30,5 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	pub.Get("/events", h.PublicList)
 	pub.Get("/events/:id", h.PublicDetail)
 	pub.Get("/event-pay", h.PublicPay)
-	pub.Post("/events/:id/bookings", middleware.RateLimit(1000, time.Hour), auth.OptionalUser, h.PublicBook)
+	pub.Post("/events/:id/bookings", middleware.RateLimit(60, time.Hour), auth.OptionalUser, h.PublicBook)
 }

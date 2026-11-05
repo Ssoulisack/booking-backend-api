@@ -56,7 +56,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	eventsModule := events.New(events.Deps{
 		DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports,
 		Resources: r.resources, FloorItems: r.floorItems, Bookings: r.bookings, Media: r.media,
-		Files: r.storage, Booker: restaurantModule.Service,
+		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
 	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,

@@ -25,6 +25,9 @@ type BookingService interface {
 	MyBookings(ctx context.Context, userID uint, q dto.ListQuery) (*dto.PagedResult[dto.BookingDTO], error)
 	MyBooking(ctx context.Context, userID, id uint) (*dto.BookingDTO, error)
 	CancelMine(ctx context.Context, userID, id uint, req dto.CancelBookingRequest) (*dto.BookingDTO, error)
+	// ClaimMine adds a booking made without an account (a guest) to the customer's account: the booking's phone
+	// must be the phone on the account
+	ClaimMine(ctx context.Context, userID uint, req dto.ClaimBookingRequest) (*dto.BookingDTO, error)
 }
 
 // DeskService is the branch team's day-to-day work on bookings

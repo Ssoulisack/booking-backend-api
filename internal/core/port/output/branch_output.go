@@ -63,6 +63,10 @@ type Mailer interface {
 	SendBookingReceived(to string, b BookingMail) error
 	// SendNewBooking tells the branch team about a booking a customer made: ONE email to all of them
 	SendNewBooking(to []string, b BookingMail) error
+	// SendBookingReleased tells a customer their unpaid event booking was released (not paid in time)
+	SendBookingReleased(to, name, branchName, code, link string) error
+	// SendRefund tells a customer a refund was asked at the bank (done false) or the bank confirmed it (done true)
+	SendRefund(to, name, branchName, code, amount, link string, done bool) error
 }
 
 // BookingMail is what the booking emails say about one booking

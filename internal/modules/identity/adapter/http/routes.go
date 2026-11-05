@@ -14,12 +14,12 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 
 	// Public - routes that don't require authentication; rate limited per client IP
 	// against password guessing and email flooding
-	a.Post("/register", middleware.RateLimit(1000, time.Hour), h.Register)
-	a.Post("/login", middleware.RateLimit(1000, 15*time.Minute), h.Login)
+	a.Post("/register", middleware.RateLimit(60, time.Hour), h.Register)
+	a.Post("/login", middleware.RateLimit(120, time.Hour), h.Login)
 	a.Get("/social/config", h.SocialConfig)
 	a.Post("/social/:provider", middleware.RateLimit(30, 15*time.Minute), h.SocialLogin)
-	a.Post("/forgot-password", middleware.RateLimit(1000, 15*time.Minute), h.ForgotPassword)
-	a.Post("/reset-password", middleware.RateLimit(1000, 15*time.Minute), h.ResetPassword)
+	a.Post("/forgot-password", middleware.RateLimit(5, 15*time.Minute), h.ForgotPassword)
+	a.Post("/reset-password", middleware.RateLimit(10, 15*time.Minute), h.ResetPassword)
 
 	// Private - routes that require authentication
 	a.Post("/refresh", jwt.AccessRefreshToken, h.Refresh)
@@ -29,7 +29,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 
 	// invite links: anyone with the link
 	api.Get("/invitations/:token", h.Invitation)
-	api.Post("/invitations/:token/accept", middleware.RateLimit(1000, 15*time.Minute), auth.OptionalUser, h.AcceptInvitation)
+	api.Post("/invitations/:token/accept", middleware.RateLimit(10, 15*time.Minute), auth.OptionalUser, h.AcceptInvitation)
 
 	// the company owner and admins manage who is invited
 	team := api.Group("/company/invitations", auth.RequireUser, auth.RequireCompany)

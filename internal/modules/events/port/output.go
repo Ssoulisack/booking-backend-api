@@ -40,3 +40,9 @@ type Booker interface {
 	CreateEventBooking(ctx context.Context, in coredto.EventBookingInput) (*coredto.CreatedBookingDTO, error)
 	OpenOn(ctx context.Context, branchID uint, date string) (start, end time.Time, open bool, err error)
 }
+
+// Notifier tells a customer what happened to their booking (the booking service sends the email)
+type Notifier interface {
+	// BookingReleased: the unpaid booking was cancelled by the job because it was not paid in time
+	BookingReleased(ctx context.Context, branchID, bookingID uint)
+}

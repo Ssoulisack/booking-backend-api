@@ -255,3 +255,44 @@ func (m *systemMailer) SendNewBooking(to []string, b output.BookingMail) error {
 	}
 	return m.sendMany(to, subjectOf(lo.Title, en.Title)+" - "+b.BranchName, emailData{URL: b.Link, Lao: lo, En: en})
 }
+
+func (m *systemMailer) SendBookingReleased(to, name, branchName, code, link string) error {
+	lo := emailText{
+		Title:   fmt.Sprintf("ການຈອງ %s ຖືກປ່ອຍແລ້ວ", code),
+		Message: fmt.Sprintf("ສະບາຍດີ %s, ພວກເຮົາບໍ່ໄດ້ຮັບການຊຳລະເງິນສຳລັບການຈອງ %s ທີ່ %s ທັນເວລາ ໂຕະຈຶ່ງຖືກປ່ອຍໃຫ້ລູກຄ້າອື່ນ.", name, code, branchName),
+		Button:  "ເປີດ " + branchName,
+		Note:    "ຖ້າທ່ານຍັງຢາກມາ ກະລຸນາຈອງໃໝ່ທີ່ໜ້າສາຂາ. ຖ້າທ່ານຊຳລະແລ້ວ ກະລຸນາຕິດຕໍ່ສາຂາ: ພວກເຮົາຈະກວດສອບ ແລະ ຄືນເງິນໃຫ້ຖ້າຈຳເປັນ.",
+	}
+	en := emailText{
+		Title:   fmt.Sprintf("Booking %s released", code),
+		Message: fmt.Sprintf("Hi %s, we did not receive the payment for your booking %s at %s in time, so the tables were released for other customers.", name, code, branchName),
+		Button:  "Open " + branchName,
+		Note:    "If you still want to come, please book again on the branch page. If you already paid, please contact the branch: we will check it and give your money back if needed.",
+	}
+	return m.send(to, subjectOf(lo.Title, en.Title), emailData{URL: link, Lao: lo, En: en})
+}
+
+// SendRefund: the bank was asked to give the money back (done false), or confirmed it (done true)
+func (m *systemMailer) SendRefund(to, name, branchName, code, amount, link string, done bool) error {
+	lo := emailText{
+		Title:   fmt.Sprintf("ຄືນເງິນສຳລັບການຈອງ %s", code),
+		Message: fmt.Sprintf("ສະບາຍດີ %s, %s ໄດ້ຂໍໃຫ້ທະນາຄານຄືນເງິນ %s ສຳລັບການຈອງ %s.", name, branchName, amount, code),
+		Button:  "ເປີດ " + branchName,
+		Note:    "ທະນາຄານອາດໃຊ້ເວລາສອງສາມມື້ເພື່ອຄືນເງິນເຂົ້າບັນຊີທີ່ທ່ານຊຳລະ. ທ່ານຈະໄດ້ຮັບອີເມວອີກສະບັບເມື່ອສຳເລັດ.",
+	}
+	en := emailText{
+		Title:   fmt.Sprintf("Refund for booking %s", code),
+		Message: fmt.Sprintf("Hi %s, %s asked the bank to refund %s for booking %s.", name, branchName, amount, code),
+		Button:  "Open " + branchName,
+		Note:    "The bank may take a few days to return the money to the account you paid from. You will get another email when it is done.",
+	}
+	if done {
+		lo.Title = fmt.Sprintf("ຄືນເງິນສຳເລັດ: ການຈອງ %s", code)
+		lo.Message = fmt.Sprintf("ສະບາຍດີ %s, ທະນາຄານຢືນຢັນການຄືນເງິນ %s ສຳລັບການຈອງ %s ທີ່ %s ແລ້ວ.", name, amount, code, branchName)
+		lo.Note = "ເງິນກຳລັງກັບຄືນເຂົ້າບັນຊີທີ່ທ່ານຊຳລະ."
+		en.Title = fmt.Sprintf("Refund done: booking %s", code)
+		en.Message = fmt.Sprintf("Hi %s, the bank confirmed the refund of %s for booking %s at %s.", name, amount, code, branchName)
+		en.Note = "The money is on its way back to the account you paid from."
+	}
+	return m.send(to, subjectOf(lo.Title, en.Title), emailData{URL: link, Lao: lo, En: en})
+}

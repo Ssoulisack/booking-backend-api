@@ -93,6 +93,16 @@ func (h *Handler) MyBooking(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+// ClaimMine adds a booking made without an account to the logged-in customer's account
+func (h *Handler) ClaimMine(c *fiber.Ctx) error {
+	var req dto.ClaimBookingRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.book.ClaimMine(c.UserContext(), middleware.CurrentUser(c).ID, req)
+	return httpx.OK(c, res, err)
+}
+
 func (h *Handler) CancelMine(c *fiber.Ctx) error {
 	id, err := httpx.ID(c, "id")
 	if err != nil {

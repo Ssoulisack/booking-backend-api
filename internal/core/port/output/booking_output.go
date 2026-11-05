@@ -19,6 +19,10 @@ type BookingRepository interface {
 	GetByGuestToken(ctx context.Context, branchID uint, tokenHash string) (*domain.Booking, error)
 	// GetByCode returns (nil, nil) when no booking of the branch has that code
 	GetByCode(ctx context.Context, branchID uint, code string) (*domain.Booking, error)
+	// GetByCodeAnywhere returns (nil, nil) when no booking at all has that code (codes are unique across branches)
+	GetByCodeAnywhere(ctx context.Context, code string) (*domain.Booking, error)
+	// SetCustomer attaches a booking made without an account to an account; only while it has none (409 otherwise)
+	SetCustomer(ctx context.Context, b *domain.Booking, customerID uint) error
 	ListForCustomer(ctx context.Context, customerID uint, q ListQuery) ([]domain.Booking, int64, error)
 	// Cancel marks the booking cancelled and frees its items, in one transaction
 	Cancel(ctx context.Context, b *domain.Booking, reason string, at time.Time) error

@@ -12,6 +12,10 @@ import (
 const (
 	pollPerMinute  = 60   // one booking's page polls 20 a minute; this leaves room for two tabs and a refresh
 	floodPerMinute = 1200 // all visitors of one IP together: 60 customers on one Wi-Fi, each polling 20 a minute
+
+	startPerBooking = 10 // QRs one booking may ask for in startWindow
+	startPerIP      = 60 // QRs one IP address may ask for in startWindow (a venue's Wi-Fi)
+	startWindow     = 15 * time.Minute
 )
 
 // Routes: the customer pays and checks (by the booking's private link, or logged in), the gateway
@@ -29,14 +33,23 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 		return "user:" + strconv.FormatUint(uint64(middleware.CurrentUser(c).ID), 10)
 	})
 
+	// Making a QR spends a transaction at the gateway. One booking needs only a few (a bank tap, one more after a
+	// QR ran out), so each booking (its token / the logged-in user) gets 10 in 15 minutes; the IP gets a looser 60
+	// for a venue's Wi-Fi, and slows anyone trying random tokens.
+	startIP := middleware.RateLimit(startPerIP, startWindow)
+	startBooking := middleware.RateLimitBy(startPerBooking, startWindow, func(c *fiber.Ctx) string { return "token:" + c.Params("token") })
+	startUser := middleware.RateLimitBy(startPerBooking, startWindow, func(c *fiber.Ctx) string {
+		return "user:" + strconv.FormatUint(uint64(middleware.CurrentUser(c).ID), 10)
+	})
+
 	pub := api.Group("/public/branches/:slug")
 	pub.Get("/payment-options", h.Options)
-	pub.Post("/bookings/:token/pay", middleware.RateLimit(60, 15*time.Minute), h.StartByToken)
+	pub.Post("/bookings/:token/pay", startIP, startBooking, h.StartByToken)
 	pub.Get("/bookings/:token/payment", flood, perBooking, h.OpenByToken)
 	pub.Get("/bookings/:token/payments/:id", flood, perBooking, h.CheckByToken)
 
 	me := api.Group("/me/bookings", auth.RequireUser)
-	me.Post("/:id/pay", middleware.RateLimit(60, 15*time.Minute), h.StartByCustomer)
+	me.Post("/:id/pay", startIP, startUser, h.StartByCustomer)
 	me.Get("/:id/payment", flood, perUser, h.OpenByCustomer)
 	me.Get("/:id/payments/:pid", flood, perUser, h.CheckByCustomer)
 

@@ -102,6 +102,23 @@ func (r *bookingRepository) GetByCode(ctx context.Context, branchID uint, code s
 		Where("branch_id = ? AND code = ?", branchID, code))
 }
 
+func (r *bookingRepository) GetByCodeAnywhere(ctx context.Context, code string) (*domain.Booking, error) {
+	return firstOrNil[domain.Booking](r.withDetails(ctx).Where("code = ?", code))
+}
+
+func (r *bookingRepository) SetCustomer(ctx context.Context, b *domain.Booking, customerID uint) error {
+	res := r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Where("id = ? AND customer_id IS NULL", b.ID).Update("customer_id", customerID)
+	if res.Error != nil {
+		return exception.HandleGormError(res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return response.NewError(http.StatusConflict, "BOOKING_ALREADY_LINKED")
+	}
+	b.CustomerID = &customerID
+	return nil
+}
+
 func (r *bookingRepository) ListForCustomer(ctx context.Context, customerID uint, q output.ListQuery) ([]domain.Booking, int64, error) {
 	tx := applyFilters(r.db.WithContext(ctx).Model(&domain.Booking{}).Where("customer_id = ?", customerID), q.Filters)
 	var total int64

@@ -58,6 +58,11 @@ type CreateBookingRequest struct {
 }
 
 // FindBookingRequest finds a booking without its private link: its code and the phone it was made with
+// ClaimBookingRequest adds a booking made without an account to the logged-in customer's account
+type ClaimBookingRequest struct {
+	Code string `json:"code"`
+}
+
 type FindBookingRequest struct {
 	Code   string `json:"code"`
 	Phone  string `json:"phone"`

@@ -29,7 +29,9 @@ type Deps struct {
 	Media      output.MediaRepository
 	Files      output.FileStorage
 	Booker     port.Booker
-	Now        func() time.Time
+	// Notifier emails the customer when their unpaid booking is released (nil: no email)
+	Notifier port.Notifier
+	Now      func() time.Time
 }
 
 // Module is the events module: its service (for the booking service and the job) and its routes
@@ -42,7 +44,7 @@ type Module struct {
 func New(d Deps) *Module {
 	svc := service.New(service.Deps{
 		Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources,
-		FloorItems: d.FloorItems, Bookings: d.Bookings, Media: d.Media, Files: d.Files, Booker: d.Booker, Now: d.Now,
+		FloorItems: d.FloorItems, Bookings: d.Bookings, Media: d.Media, Files: d.Files, Booker: d.Booker, Notifier: d.Notifier, Now: d.Now,
 	})
 	return &Module{Service: svc, handler: http.New(svc)}
 }

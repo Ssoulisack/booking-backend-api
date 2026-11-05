@@ -46,7 +46,9 @@ type Deps struct {
 	Media      output.MediaRepository
 	Files      output.FileStorage
 	Booker     port.Booker
-	Now        func() time.Time
+	// Notifier emails the customer when their unpaid booking is released (nil: no email)
+	Notifier port.Notifier
+	Now      func() time.Time
 }
 
 // Service holds the events rules (it implements port.Service)
@@ -773,6 +775,10 @@ func (s *Service) ExpireUnpaid(ctx context.Context) error {
 	for i := range list {
 		if err := s.Bookings.Cancel(ctx, &list[i], "Not paid in time", s.Now()); err != nil {
 			log.Printf("⚠️  event booking %d: %v", list[i].ID, err) // the others still go
+			continue
+		}
+		if s.Notifier != nil {
+			s.Notifier.BookingReleased(ctx, list[i].BranchID, list[i].ID)
 		}
 	}
 	return nil

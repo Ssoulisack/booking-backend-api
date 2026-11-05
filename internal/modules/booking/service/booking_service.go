@@ -951,6 +951,40 @@ func (s *Service) MyBooking(ctx context.Context, userID, id uint) (*dto.BookingD
 	return &d, nil
 }
 
+// ClaimMine adds a booking made without an account to the customer's account. The booking must have been made
+// with the phone number that is on the account (the same last 8 digits); a wrong code, another phone and a booking
+// that belongs to someone else all get the same answer, so nobody can learn which codes exist.
+func (s *Service) ClaimMine(ctx context.Context, userID uint, req dto.ClaimBookingRequest) (*dto.BookingDTO, error) {
+	code := strings.ToUpper(strings.TrimSpace(req.Code))
+	if code == "" {
+		return nil, badRequest("CODE_REQUIRED")
+	}
+	u, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(u.Phone) == "" {
+		return nil, badRequest("ADD_PHONE_TO_ADD_BOOKING")
+	}
+	gone := notFound("NO_BOOKING_WITH_CODE_AND_YOUR_PHONE")
+	bk, err := s.bookings.GetByCodeAnywhere(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	if bk == nil || !samePhone(bk.GuestPhone, u.Phone) {
+		return nil, gone
+	}
+	if bk.CustomerID != nil {
+		if *bk.CustomerID != userID {
+			return nil, gone
+		}
+	} else if err := s.bookings.SetCustomer(ctx, bk, userID); err != nil {
+		return nil, err
+	}
+	d := toBookingDTO(*bk)
+	return &d, nil
+}
+
 func (s *Service) CancelMine(ctx context.Context, userID, id uint, req dto.CancelBookingRequest) (*dto.BookingDTO, error) {
 	bk, err := s.bookings.GetForCustomer(ctx, userID, id)
 	if err != nil {

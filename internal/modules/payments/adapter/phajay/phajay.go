@@ -239,7 +239,7 @@ func stateOf(status string, isPaid *bool) domain.State {
 			return domain.Paid
 		}
 		return domain.Waiting
-	case "EXPIRED":
+	case "EXPIRED", "CLOSED": // a payment link that ran out is CLOSED on PhaJay's own page
 		return domain.Expired
 	case "REFUNDED":
 		return domain.Refunded

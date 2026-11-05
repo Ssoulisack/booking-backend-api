@@ -413,6 +413,7 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 	if p.ProviderRef == "" && n.ProviderRef != "" {
 		p.ProviderRef = n.ProviderRef
 	}
+	refundedNow := false // the bank just confirmed the refund: the customer is told once it is saved
 	switch n.State {
 	case domain.Paid:
 		if p.Settled() {
@@ -450,6 +451,7 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 			return nil
 		}
 		p.Status = domain.StatusRefunded
+		refundedNow = true
 	case domain.Disputed:
 		if p.Status == domain.StatusDisputed {
 			return nil
@@ -458,7 +460,13 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 	default:
 		// still waiting: only the gateway's id may be new
 	}
-	return s.repo.Update(ctx, p)
+	if err := s.repo.Update(ctx, p); err != nil {
+		return err
+	}
+	if refundedNow {
+		go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, true)
+	}
+	return nil
 }
 
 // Poll is the fallback for a webhook that never came: payments still waiting are asked about at the
@@ -547,6 +555,7 @@ func (s *Service) Refund(ctx context.Context, branchID, id uint) (*dto.StaffPaym
 	if err := s.repo.Update(ctx, p); err != nil {
 		return nil, err
 	}
+	go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, false)
 	d := toStaffDTO(*p)
 	return &d, nil
 }
