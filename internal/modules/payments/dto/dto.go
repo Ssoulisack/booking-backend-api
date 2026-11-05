@@ -43,3 +43,18 @@ type StaffPaymentDTO struct {
 	Note        string     `json:"note,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
+
+// SettingsDTO: the branch's online payment switch, and whether the server has a gateway to switch on
+type SettingsDTO struct {
+	OnlineEnabled    bool `json:"online_enabled"`
+	GatewayAvailable bool `json:"gateway_available"`
+	// ChargeMinutes is how long a customer has to pay once they chose a bank
+	ChargeMinutes int `json:"charge_minutes"`
+}
+
+// SettingsRequest turns online payment on or off for the branch
+type SettingsRequest struct {
+	OnlineEnabled bool `json:"online_enabled"`
+	// ChargeMinutes: 5 to 120; not sent (0) = the default, 30
+	ChargeMinutes int `json:"charge_minutes"`
+}

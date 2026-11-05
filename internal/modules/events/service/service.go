@@ -459,9 +459,12 @@ func (s *Service) SetPrices(ctx context.Context, branchID, id uint, req dto.Pric
 
 func (s *Service) toPayDTO(p *evdomain.PayInfo) *dto.PayInfoDTO {
 	if p == nil {
-		return &dto.PayInfoDTO{}
+		return &dto.PayInfoDTO{TransferEnabled: true}
 	}
-	return &dto.PayInfoDTO{Whatsapp: p.Whatsapp, QRKey: p.QRKey, QRURL: s.url(p.QRKey), Note: p.Note}
+	return &dto.PayInfoDTO{
+		Whatsapp: p.Whatsapp, QRKey: p.QRKey, QRURL: s.url(p.QRKey), Note: p.Note,
+		AccountName: p.AccountName, AccountNumber: p.AccountNumber, TransferEnabled: !p.TransferOff,
+	}
 }
 
 func (s *Service) Pay(ctx context.Context, branchID uint) (*dto.PayInfoDTO, error) {
@@ -508,7 +511,14 @@ func (s *Service) SavePay(ctx context.Context, branchID uint, req dto.PayInfoReq
 	if err := s.fileKey(ctx, branchID, req.QRKey); err != nil {
 		return nil, err
 	}
-	p := &evdomain.PayInfo{BranchID: branchID, Whatsapp: number, QRKey: req.QRKey, Note: strings.TrimSpace(req.Note)}
+	name, account := strings.TrimSpace(req.AccountName), strings.TrimSpace(req.AccountNumber)
+	if utf8.RuneCountInString(name) > 120 || utf8.RuneCountInString(account) > 60 {
+		return nil, badRequest("ACCOUNT_TOO_LONG")
+	}
+	p := &evdomain.PayInfo{
+		BranchID: branchID, Whatsapp: number, QRKey: req.QRKey, Note: strings.TrimSpace(req.Note),
+		AccountName: name, AccountNumber: account, TransferOff: req.TransferEnabled != nil && !*req.TransferEnabled,
+	}
 	if err := s.Repo.SavePayInfo(ctx, p); err != nil {
 		return nil, err
 	}
@@ -516,6 +526,25 @@ func (s *Service) SavePay(ctx context.Context, branchID uint, req dto.PayInfoReq
 }
 
 // ---------- public ----------
+
+// PublicPay tells a customer how to pay the branch outside the system; nothing secret: it is what they see
+// after buying tables
+func (s *Service) PublicPay(ctx context.Context, slug string) (*dto.PublicPayInfoDTO, error) {
+	b, err := s.publicBranch(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	info, err := s.Repo.PayInfo(ctx, b.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := &dto.PublicPayInfoDTO{TransferEnabled: true}
+	if info != nil {
+		out.Whatsapp, out.QRURL, out.Note = info.Whatsapp, s.url(info.QRKey), info.Note
+		out.AccountName, out.AccountNumber, out.TransferEnabled = info.AccountName, info.AccountNumber, !info.TransferOff
+	}
+	return out, nil
+}
 
 func (s *Service) publicCard(e evdomain.Event, b *domain.Branch, book evdomain.PriceBook, tables []domain.Resource) dto.PublicEventDTO {
 	var from int64
@@ -679,7 +708,7 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 		return nil, err
 	}
 	var sales []coredto.EventTableSale
-	var total int64
+	var total, capacity int64
 	for _, tid := range req.TableIDs {
 		t, ok := byID[tid]
 		if !ok {
@@ -694,6 +723,11 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 		}
 		sales = append(sales, coredto.EventTableSale{ID: tid, Price: price})
 		total += price
+		capacity += int64(t.Seats + t.ExtraChairs)
+	}
+	// the door list cannot hold more people than the tables seat (extra chairs count)
+	if int64(req.Guests) > capacity {
+		return nil, badRequest("TOO_MANY_GUESTS_FOR_TABLES")
 	}
 	hold := e.HoldFor(len(sales))
 	created, err := s.Booker.CreateEventBooking(ctx, coredto.EventBookingInput{
@@ -710,8 +744,10 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 	pay := dto.PayDTO{
 		Total: total, Currency: b.Currency, HoldUntil: created.PayBy, BigBooking: len(sales) > e.BigBookingTables,
 	}
+	pay.TransferEnabled = true
 	if info != nil {
 		pay.Whatsapp, pay.QRURL, pay.Note = info.Whatsapp, s.url(info.QRKey), info.Note
+		pay.AccountName, pay.AccountNumber, pay.TransferEnabled = info.AccountName, info.AccountNumber, !info.TransferOff
 	}
 	return &dto.BookedDTO{CreatedBookingDTO: *created, Pay: pay}, nil
 }

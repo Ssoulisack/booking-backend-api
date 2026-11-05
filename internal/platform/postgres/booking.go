@@ -466,8 +466,11 @@ func (r *bookingRepository) SetSlipSent(ctx context.Context, b *domain.Booking, 
 	return nil
 }
 
-func (r *bookingRepository) ExtendPayBy(ctx context.Context, id uint, until time.Time) error {
+func (r *bookingRepository) SetPayBy(ctx context.Context, id uint, until time.Time) error {
+	// only a booking still waiting for the team's money check (no slip sent): once a slip is sent the hold is the team's
 	err := r.db.WithContext(ctx).Model(&domain.Booking{}).
-		Where("id = ? AND (pay_by IS NULL OR pay_by < ?)", id, until).Update("pay_by", until).Error
+		Where("id = ? AND event_id IS NOT NULL AND status = ? AND payment_status = ? AND slip_sent_at IS NULL",
+			id, domain.BookingPending, domain.PaymentUnpaid).
+		Update("pay_by", until).Error
 	return exception.HandleGormError(err)
 }

@@ -117,6 +117,11 @@ func (h *Handler) PublicList(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+func (h *Handler) PublicPay(c *fiber.Ctx) error {
+	res, err := h.svc.PublicPay(c.UserContext(), c.Params("slug"))
+	return httpx.OK(c, res, err)
+}
+
 func (h *Handler) PublicDetail(c *fiber.Ctx) error {
 	id, err := httpx.ID(c, "id")
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type postgresRepo struct{ db *gorm.DB }
@@ -78,4 +79,20 @@ func (r *postgresRepo) Attention(ctx context.Context, branchID uint, statuses []
 	var out []domain.Payment
 	err := r.db.WithContext(ctx).Where("branch_id = ? AND status IN ?", branchID, statuses).Order("id DESC").Limit(200).Find(&out).Error
 	return out, exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) Setting(ctx context.Context, branchID uint) (*domain.Setting, error) {
+	var st domain.Setting
+	err := r.db.WithContext(ctx).Where("branch_id = ?", branchID).First(&st).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, exception.HandleGormError(err)
+	}
+	return &st, nil
+}
+
+func (r *postgresRepo) SaveSetting(ctx context.Context, st *domain.Setting) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(st).Error)
 }

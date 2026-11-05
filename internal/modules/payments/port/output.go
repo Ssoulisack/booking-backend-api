@@ -22,6 +22,9 @@ type Repository interface {
 	Pending(ctx context.Context, before time.Time) ([]domain.Payment, error)
 	// Attention: the branch's payments in these statuses, newest first
 	Attention(ctx context.Context, branchID uint, statuses []string) ([]domain.Payment, error)
+	// Setting is the branch's choice (nil: never set, online payment on)
+	Setting(ctx context.Context, branchID uint) (*domain.Setting, error)
+	SaveSetting(ctx context.Context, s *domain.Setting) error
 }
 
 // Provider is a payment gateway
@@ -46,7 +49,8 @@ type Bookings interface {
 	PayFactsByToken(ctx context.Context, slug, token string) (*coredomain.PayFacts, error)
 	PayFactsByCustomer(ctx context.Context, userID, id uint) (*coredomain.PayFacts, error)
 	PayFactsByID(ctx context.Context, branchID, id uint) (*coredomain.PayFacts, error)
-	ExtendHold(ctx context.Context, bookingID uint, until time.Time) error
+	// SetHold: an unpaid event booking is held until the customer's online payment runs out, then released
+	SetHold(ctx context.Context, bookingID uint, until time.Time) error
 	// SettlePaid records the booking as paid online once; domain.ErrNotPayable / ErrAlreadyPaid when it cannot
 	SettlePaid(ctx context.Context, branchID, bookingID uint, ref string) error
 }

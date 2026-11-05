@@ -23,6 +23,8 @@ type Service interface {
 
 	// customers
 	Upcoming(ctx context.Context, slug string) ([]dto.PublicEventDTO, error)
+	// PublicPay is the branch's own way to pay (QR, account, WhatsApp) for customers
+	PublicPay(ctx context.Context, slug string) (*dto.PublicPayInfoDTO, error)
 	Detail(ctx context.Context, slug string, id uint, date string) (*dto.PublicEventDetailDTO, error)
 	Book(ctx context.Context, slug string, id uint, actor *domain.User, req dto.BookRequest) (*dto.BookedDTO, error)
 

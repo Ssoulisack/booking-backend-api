@@ -51,11 +51,17 @@ func (Price) TableName() string { return "event_prices" }
 // PayInfo is how customers pay a branch for event tables: its WhatsApp number (they send the slip
 // there), the QR picture and the account text
 type PayInfo struct {
-	BranchID  uint   `gorm:"primaryKey"`
-	Whatsapp  string `gorm:"type:varchar(30)"`
-	QRKey     string `gorm:"column:qr_key;type:varchar(255)"`
-	Note      string `gorm:"type:text"`
-	UpdatedAt time.Time
+	BranchID uint   `gorm:"primaryKey"`
+	Whatsapp string `gorm:"type:varchar(30)"`
+	QRKey    string `gorm:"column:qr_key;type:varchar(255)"`
+	Note     string `gorm:"type:text"`
+	// the account customers transfer to: who it belongs to and its number (each has a copy button)
+	AccountName   string `gorm:"type:varchar(120)"`
+	AccountNumber string `gorm:"type:varchar(60)"`
+	// TransferOff turns the branch's own way to pay (QR, transfer, WhatsApp) off; false = on, so rows
+	// made before this column existed stay on
+	TransferOff bool
+	UpdatedAt   time.Time
 }
 
 func (PayInfo) TableName() string { return "event_pay_info" }

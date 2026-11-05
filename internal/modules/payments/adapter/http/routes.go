@@ -17,10 +17,12 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	pub := api.Group("/public/branches/:slug")
 	pub.Get("/payment-options", h.Options)
 	pub.Post("/bookings/:token/pay", middleware.RateLimit(60, 15*time.Minute), h.StartByToken)
+	pub.Get("/bookings/:token/payment", middleware.RateLimit(240, 15*time.Minute), h.OpenByToken)
 	pub.Get("/bookings/:token/payments/:id", middleware.RateLimit(240, 15*time.Minute), h.CheckByToken)
 
 	me := api.Group("/me/bookings", auth.RequireUser)
 	me.Post("/:id/pay", middleware.RateLimit(60, 15*time.Minute), h.StartByCustomer)
+	me.Get("/:id/payment", middleware.RateLimit(240, 15*time.Minute), h.OpenByCustomer)
 	me.Get("/:id/payments/:pid", middleware.RateLimit(240, 15*time.Minute), h.CheckByCustomer)
 
 	// the gateway: no login, the signature is the proof
@@ -30,4 +32,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	b.Get("/bookings/:id/payments", staff, h.ForBooking)
 	b.Get("/payments/attention", manager, h.Attention)
 	b.Post("/payments/:id/refund", manager, h.Refund)
+	// online payment on / off for the branch
+	b.Get("/payment-settings", manager, h.Settings)
+	b.Put("/payment-settings", manager, h.SaveSettings)
 }

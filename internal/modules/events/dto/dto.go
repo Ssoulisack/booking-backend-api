@@ -98,16 +98,23 @@ type TablePriceDTO struct {
 
 // PayInfoRequest and PayInfoDTO: how customers pay the branch for event tables
 type PayInfoRequest struct {
-	Whatsapp string `json:"whatsapp"`
-	QRKey    string `json:"qr_key"`
-	Note     string `json:"note"`
+	Whatsapp      string `json:"whatsapp"`
+	QRKey         string `json:"qr_key"`
+	Note          string `json:"note"`
+	AccountName   string `json:"account_name"`
+	AccountNumber string `json:"account_number"`
+	// TransferEnabled turns the branch's own way to pay on or off; not sent = on
+	TransferEnabled *bool `json:"transfer_enabled"`
 }
 
 type PayInfoDTO struct {
-	Whatsapp string `json:"whatsapp"`
-	QRKey    string `json:"qr_key"`
-	QRURL    string `json:"qr_url,omitempty"`
-	Note     string `json:"note"`
+	Whatsapp        string `json:"whatsapp"`
+	QRKey           string `json:"qr_key"`
+	QRURL           string `json:"qr_url,omitempty"`
+	Note            string `json:"note"`
+	AccountName     string `json:"account_name"`
+	AccountNumber   string `json:"account_number"`
+	TransferEnabled bool   `json:"transfer_enabled"`
 }
 
 // ---------- public ----------
@@ -170,4 +177,19 @@ type PayDTO struct {
 	Whatsapp   string     `json:"whatsapp"`
 	QRURL      string     `json:"qr_url,omitempty"`
 	Note       string     `json:"note"`
+	// the account to transfer to, and whether the branch takes its own way to pay at all
+	AccountName     string `json:"account_name"`
+	AccountNumber   string `json:"account_number"`
+	TransferEnabled bool   `json:"transfer_enabled"`
+}
+
+// PublicPayInfoDTO is how a customer pays the branch outside the system (QR, account, WhatsApp): the page
+// shows it again to someone who left it and came back, from any device
+type PublicPayInfoDTO struct {
+	Whatsapp        string `json:"whatsapp"`
+	QRURL           string `json:"qr_url,omitempty"`
+	Note            string `json:"note"`
+	AccountName     string `json:"account_name"`
+	AccountNumber   string `json:"account_number"`
+	TransferEnabled bool   `json:"transfer_enabled"`
 }

@@ -52,8 +52,9 @@ type BookingRepository interface {
 	ActiveResourceItems(ctx context.Context, branchID uint, from, to time.Time) ([]domain.BookingItem, error)
 	// EventHoldsExpired lists unpaid event bookings whose pay-by time has passed without a slip sent
 	EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error)
-	// ExtendPayBy moves the pay-by time later (never earlier): a customer who is paying online keeps their hold
-	ExtendPayBy(ctx context.Context, id uint, until time.Time) error
+	// SetPayBy makes the pay-by time of an event booking still waiting for money (no slip sent) the moment the
+	// customer's online payment (its QR) runs out: not paid by then, the tables go back on sale
+	SetPayBy(ctx context.Context, id uint, until time.Time) error
 	// SetSlipSent records when the customer said the slip was sent (only a pending, unpaid event booking)
 	SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time) error
 

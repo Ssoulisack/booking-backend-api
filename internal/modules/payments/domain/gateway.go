@@ -55,6 +55,8 @@ var (
 	ErrBadSignature = errors.New("payments: bad webhook signature")
 	// ErrNotFound: the gateway does not know that payment
 	ErrNotFound = errors.New("payments: payment not found at the gateway")
+	// ErrRateLimited: the gateway refuses more payments for now (a daily limit on a test account)
+	ErrRateLimited = errors.New("payments: the gateway's limit is reached")
 	// ErrUnsupported: this provider cannot do that
 	ErrUnsupported = errors.New("payments: not supported by this provider")
 )

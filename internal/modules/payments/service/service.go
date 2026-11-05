@@ -22,9 +22,10 @@ func conflict(code string) error   { return response.NewError(http.StatusConflic
 func notFound(code string) error   { return response.NewError(http.StatusNotFound, code) }
 
 const (
-	chargeLife = 30 * time.Minute // how long a customer has to pay a QR / page we created
-	holdSlack  = 5 * time.Minute  // the hold lasts a little longer than the charge
-	pollAfter  = time.Minute      // a webhook gets this long before the status check steps in
+	defaultChargeMinutes = 30 // how long a customer has to pay a QR / page we created, unless the branch chose
+	minChargeMinutes     = 5
+	maxChargeMinutes     = 120
+	pollAfter            = time.Minute // a webhook gets this long before the status check steps in
 )
 
 // Deps are what the module is built from
@@ -94,6 +95,12 @@ func (s *Service) Options(ctx context.Context, slug string) ([]dto.OptionDTO, er
 		return nil, notFound("BRANCH_NOT_FOUND")
 	}
 	out := []dto.OptionDTO{}
+	// the branch turned online payment off: customers only see the branch's own way to pay
+	if on, err := s.onlineOn(ctx, b.ID); err != nil {
+		return nil, err
+	} else if !on {
+		return out, nil
+	}
 	for _, name := range s.Enabled() {
 		p := s.providers[name]
 		if m := p.Methods(b.Currency); len(m) > 0 {
@@ -125,6 +132,13 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if !ok {
 		return nil, badRequest("INVALID_PAYMENT_PROVIDER")
 	}
+	on, life, err := s.setting(ctx, f.BranchID)
+	if err != nil {
+		return nil, err
+	}
+	if !on {
+		return nil, conflict("ONLINE_PAYMENT_OFF")
+	}
 	if !f.Payable() {
 		return nil, conflict("NOT_PAYABLE")
 	}
@@ -150,7 +164,7 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	pay := &domain.Payment{
 		BranchID: f.BranchID, BookingID: f.ID, Provider: req.Provider, Method: req.Method,
 		OrderNo: fmt.Sprintf("%s-%d", f.Code, n+1), Amount: f.Total, Currency: f.Currency,
-		Status: domain.StatusPending, ExpiresAt: now.Add(chargeLife),
+		Status: domain.StatusPending, ExpiresAt: now.Add(life),
 	}
 	if err := s.repo.Create(ctx, pay); err != nil {
 		return nil, err
@@ -163,15 +177,20 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 		pay.Status, pay.Note = domain.StatusFailed, shorten(err.Error())
 		_ = s.repo.Update(ctx, pay)
 		log.Printf("⚠️  %s charge for booking %s failed: %v", req.Provider, f.Code, err)
+		// the gateway's own daily limit (a test account): say so, so the customer can pay another way or tomorrow
+		if errors.Is(err, domain.ErrRateLimited) {
+			return nil, response.NewError(http.StatusTooManyRequests, "PAYMENT_LIMIT_REACHED")
+		}
 		return nil, response.NewError(http.StatusBadGateway, "PAYMENT_PROVIDER_ERROR")
 	}
 	pay.ProviderRef, pay.QRCode, pay.Deeplink, pay.RedirectURL = charge.ProviderRef, charge.QRCode, charge.Deeplink, charge.RedirectURL
 	if err := s.repo.Update(ctx, pay); err != nil {
 		return nil, err
 	}
-	// an unpaid event booking would be released at its pay-by time: it waits while the customer pays
+	// an unpaid event booking is held exactly as long as the QR lives: not paid by then, it is released
+	// (the customer may come back to the page until then and carry on paying)
 	if f.PayBy != nil {
-		if err := s.bookings.ExtendHold(ctx, f.ID, pay.ExpiresAt.Add(holdSlack)); err != nil {
+		if err := s.bookings.SetHold(ctx, f.ID, pay.ExpiresAt); err != nil {
 			return nil, err
 		}
 	}
@@ -184,6 +203,50 @@ func shorten(s string) string {
 		return s[:250]
 	}
 	return s
+}
+
+// OpenByToken and OpenByCustomer give the customer's page the payment they can still carry on with: the
+// newest one that is waiting and has time left (the same QR as before), or one that just got paid; nil when none
+func (s *Service) OpenByToken(ctx context.Context, slug, token string) (*dto.PaymentDTO, error) {
+	f, err := s.bookings.PayFactsByToken(ctx, slug, token)
+	if err != nil {
+		return nil, err
+	}
+	return s.open(ctx, f)
+}
+
+func (s *Service) OpenByCustomer(ctx context.Context, userID, id uint) (*dto.PaymentDTO, error) {
+	f, err := s.bookings.PayFactsByCustomer(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.open(ctx, f)
+}
+
+func (s *Service) open(ctx context.Context, f *coredomain.PayFacts) (*dto.PaymentDTO, error) {
+	list, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	for i := range list { // newest first
+		p := &list[i]
+		if p.Status == domain.StatusPending && p.ExpiresAt.After(now) {
+			if p.ProviderRef != "" {
+				s.refresh(ctx, p) // it may have been paid meanwhile
+			}
+			if p.Status == domain.StatusPending || p.Status == domain.StatusPaid {
+				d := toDTO(*p)
+				return &d, nil
+			}
+			continue
+		}
+		if p.Status == domain.StatusPaid {
+			d := toDTO(*p)
+			return &d, nil
+		}
+	}
+	return nil, nil
 }
 
 // CheckByToken and CheckByCustomer give the customer's page the payment's state; a payment still waiting
@@ -399,4 +462,50 @@ func (s *Service) Refund(ctx context.Context, branchID, id uint) (*dto.StaffPaym
 	}
 	d := toStaffDTO(*p)
 	return &d, nil
+}
+
+// setting reads the branch's choice: online payment on (the default until it turns it off) and how long a
+// customer has to pay
+func (s *Service) setting(ctx context.Context, branchID uint) (bool, time.Duration, error) {
+	st, err := s.repo.Setting(ctx, branchID)
+	if err != nil {
+		return false, 0, err
+	}
+	if st == nil {
+		return true, defaultChargeMinutes * time.Minute, nil
+	}
+	minutes := st.ChargeMinutes
+	if minutes <= 0 {
+		minutes = defaultChargeMinutes
+	}
+	return !st.OnlineOff, time.Duration(minutes) * time.Minute, nil
+}
+
+// onlineOn: the branch takes online payment
+func (s *Service) onlineOn(ctx context.Context, branchID uint) (bool, error) {
+	on, _, err := s.setting(ctx, branchID)
+	return on, err
+}
+
+// Settings is what the branch chose, and whether a gateway is switched on at all
+func (s *Service) Settings(ctx context.Context, branchID uint) (*dto.SettingsDTO, error) {
+	on, life, err := s.setting(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.SettingsDTO{OnlineEnabled: on, GatewayAvailable: len(s.providers) > 0, ChargeMinutes: int(life / time.Minute)}, nil
+}
+
+func (s *Service) SaveSettings(ctx context.Context, branchID uint, req dto.SettingsRequest) (*dto.SettingsDTO, error) {
+	minutes := req.ChargeMinutes
+	if minutes == 0 {
+		minutes = defaultChargeMinutes
+	}
+	if minutes < minChargeMinutes || minutes > maxChargeMinutes {
+		return nil, badRequest("INVALID_PAYMENT_WINDOW")
+	}
+	if err := s.repo.SaveSetting(ctx, &domain.Setting{BranchID: branchID, OnlineOff: !req.OnlineEnabled, ChargeMinutes: minutes}); err != nil {
+		return nil, err
+	}
+	return s.Settings(ctx, branchID)
 }

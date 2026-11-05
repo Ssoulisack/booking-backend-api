@@ -43,9 +43,10 @@ func (s *Service) PayFactsByID(ctx context.Context, branchID, id uint) (*domain.
 	return factsOf(bk), nil
 }
 
-// ExtendHold keeps an unpaid event booking's tables while the customer pays; it never shortens the hold
-func (s *Service) ExtendHold(ctx context.Context, bookingID uint, until time.Time) error {
-	return s.bookings.ExtendPayBy(ctx, bookingID, until)
+// SetHold makes an unpaid event booking's hold end when the customer's online payment (its QR) runs out;
+// the 5-minute job then cancels it if it was not paid
+func (s *Service) SetHold(ctx context.Context, bookingID uint, until time.Time) error {
+	return s.bookings.SetPayBy(ctx, bookingID, until)
 }
 
 // SettlePaid records that a booking was paid online. It happens once: a booking that is already paid

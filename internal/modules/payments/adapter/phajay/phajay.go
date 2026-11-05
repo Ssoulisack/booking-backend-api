@@ -173,6 +173,9 @@ func (p *PhaJay) do(ctx context.Context, method, path string, basic bool, body a
 			return domain.ErrNotFound
 		}
 		// the gateway explains a refusal in its body (never the key): keep a short copy for the log
+		if res.StatusCode == http.StatusTooManyRequests {
+			return fmt.Errorf("%w: phajay: %s %s: %s", domain.ErrRateLimited, method, path, bodyHint(raw))
+		}
 		return fmt.Errorf("phajay: %s %s: %d %s %s", method, path, res.StatusCode, msg.Message, bodyHint(raw))
 	}
 	return nil

@@ -103,3 +103,32 @@ func (h *Handler) Refund(c *fiber.Ctx) error {
 	res, err := h.svc.Refund(c.UserContext(), middleware.BranchID(c), id)
 	return httpx.OK(c, res, err)
 }
+
+func (h *Handler) Settings(c *fiber.Ctx) error {
+	res, err := h.svc.Settings(c.UserContext(), middleware.BranchID(c))
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) SaveSettings(c *fiber.Ctx) error {
+	var req dto.SettingsRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.SaveSettings(c.UserContext(), middleware.BranchID(c), req)
+	return httpx.OK(c, res, err)
+}
+
+// OpenByToken answers the payment still open for a booking (the page shows it again), or null
+func (h *Handler) OpenByToken(c *fiber.Ctx) error {
+	res, err := h.svc.OpenByToken(c.UserContext(), c.Params("slug"), c.Params("token"))
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) OpenByCustomer(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.OpenByCustomer(c.UserContext(), middleware.CurrentUser(c).ID, id)
+	return httpx.OK(c, res, err)
+}
