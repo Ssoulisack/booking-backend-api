@@ -109,6 +109,13 @@ type Booking struct {
 	Items []BookingItem `gorm:"foreignKey:BookingID"`
 }
 
+// CanStartOver: an event booking nobody has paid for, with no payment slip sent, may be cancelled by its customer
+// at any time (event bookings otherwise cannot be cancelled online): this is how a customer who chose the wrong
+// bank starts again. Once it is paid or a slip is sent, the team decides.
+func (b Booking) CanStartOver() bool {
+	return b.EventID != nil && b.Status == BookingPending && b.PaymentStatus == PaymentUnpaid && b.SlipSentAt == nil
+}
+
 // IsActive tells whether the booking still holds its time
 func (b Booking) IsActive() bool {
 	return b.Status == BookingPending || b.Status == BookingConfirmed

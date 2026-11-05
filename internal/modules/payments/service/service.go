@@ -189,7 +189,8 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if err != nil {
 		return nil, err
 	}
-	// the booking's payment still being paid (or that ran out of time): another bank is one more charge of it
+	// the booking's payment still being paid (or that ran out of time): a new try after a QR ran out or failed is one
+	// more charge of it
 	var pay *domain.Payment
 	for i := range open { // newest first
 		o := &open[i]
@@ -208,6 +209,11 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 			}
 			d := s.seen(*pay)
 			return &d, nil
+		}
+		// a QR or payment link is open for another way to pay: that choice is final. The customer who chose the
+		// wrong bank cancels the booking and books again; a QR that failed or ran out leaves the choice free.
+		if pay.Status == domain.StatusPending && pay.AnyLive(0, now) {
+			return nil, conflict("PAYMENT_METHOD_LOCKED")
 		}
 	} else {
 		n, err := s.repo.CountByBooking(ctx, f.ID)

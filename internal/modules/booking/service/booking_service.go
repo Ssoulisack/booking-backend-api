@@ -794,13 +794,14 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 	return d
 }
 
-// cancel applies the customer rules: only active bookings, and only until the cancel deadline
+// cancel applies the customer rules: only active bookings, and only until the cancel deadline (an unpaid event
+// booking can always be cancelled by its customer, see Booking.CanStartOver)
 func (s *Service) cancel(ctx context.Context, b *domain.Booking, reason string) (*dto.BookingDTO, error) {
 	if !b.IsActive() {
 		return nil, conflict("BOOKING_NOT_ACTIVE")
 	}
 	now := s.now()
-	if now.After(b.CancellableUntil) {
+	if now.After(b.CancellableUntil) && !b.CanStartOver() {
 		return nil, conflict("CANCELLATION_WINDOW_PASSED")
 	}
 	if len([]rune(reason)) > 255 {
