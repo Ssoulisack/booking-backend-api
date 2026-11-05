@@ -32,8 +32,8 @@ type ChargeRequest struct {
 	Tags        [3]string // our own references, returned in the webhook
 }
 
-// Charge is what the customer needs to pay: a QR text, a bank-app link, or a page to open
-type Charge struct {
+// Issued is what the gateway hands back for a charge: a QR text, a bank-app link, or a page to open
+type Issued struct {
 	ProviderRef string // the gateway's id of the payment ("" until known, e.g. a payment page)
 	QRCode      string
 	Deeplink    string

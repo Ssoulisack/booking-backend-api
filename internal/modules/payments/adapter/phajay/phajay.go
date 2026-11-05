@@ -181,7 +181,7 @@ func (p *PhaJay) do(ctx context.Context, method, path string, basic bool, body a
 	return nil
 }
 
-func (p *PhaJay) Charge(ctx context.Context, r domain.ChargeRequest) (*domain.Charge, error) {
+func (p *PhaJay) Charge(ctx context.Context, r domain.ChargeRequest) (*domain.Issued, error) {
 	if r.Currency != "LAK" {
 		return nil, domain.ErrUnsupported
 	}
@@ -201,7 +201,7 @@ func (p *PhaJay) Charge(ctx context.Context, r domain.ChargeRequest) (*domain.Ch
 			return nil, fmt.Errorf("phajay: no payment page (%s)", res.Message)
 		}
 		// the page's own transaction id arrives with the webhook; until then the order number identifies it
-		return &domain.Charge{RedirectURL: res.RedirectURL}, nil
+		return &domain.Issued{RedirectURL: res.RedirectURL}, nil
 	}
 	if !p.banksByKey[r.Method] {
 		return nil, domain.ErrUnsupported
@@ -218,7 +218,7 @@ func (p *PhaJay) Charge(ctx context.Context, r domain.ChargeRequest) (*domain.Ch
 	if res.TransactionID == "" || res.QRCode == "" {
 		return nil, fmt.Errorf("phajay: no QR (%s)", res.Message)
 	}
-	c := &domain.Charge{ProviderRef: res.TransactionID, QRCode: res.QRCode}
+	c := &domain.Issued{ProviderRef: res.TransactionID, QRCode: res.QRCode}
 	if r.Method != "ib" { // Indochina Bank's link does not open the app: show the QR
 		c.Deeplink = res.Link
 	}

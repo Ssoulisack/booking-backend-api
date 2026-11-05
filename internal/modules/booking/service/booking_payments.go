@@ -12,7 +12,7 @@ import (
 func factsOf(bk *domain.Booking) *domain.PayFacts {
 	return &domain.PayFacts{
 		ID: bk.ID, BranchID: bk.BranchID, BranchSlug: bk.Branch.Slug, Code: bk.Code, Total: bk.TotalPrice, Currency: bk.Currency,
-		Status: bk.Status, PaymentStatus: bk.PaymentStatus, PayBy: bk.PayBy,
+		Status: bk.Status, PaymentStatus: bk.PaymentStatus, PayBy: bk.PayBy, SlipSent: bk.SlipSentAt != nil,
 	}
 }
 

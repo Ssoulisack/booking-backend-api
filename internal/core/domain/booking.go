@@ -153,6 +153,8 @@ type PayFacts struct {
 	Status        string
 	PaymentStatus string
 	PayBy         *time.Time
+	// SlipSent: the customer said they paid outside the system and sent the slip; the team decides now
+	SlipSent bool
 }
 
 // Payable: money can still be taken for it (not paid, not cancelled, something to pay)

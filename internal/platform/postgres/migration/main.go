@@ -3,6 +3,7 @@ package migration
 import (
 	"backend/internal/core/domain"
 	"backend/internal/platform/postgres/numbering"
+	"errors"
 	"log"
 
 	"gorm.io/gorm"
@@ -12,6 +13,9 @@ import (
 // The company and its first owner are created afterwards by the install service (config.yaml).
 // modules are the tables of the modules (each module owns its own; the app lists them).
 func DatabaseMigrations(db *gorm.DB, modules ...any) error {
+	if err := refuseOldPayments(db); err != nil {
+		return err
+	}
 	if len(modules) > 0 {
 		if err := db.AutoMigrate(modules...); err != nil {
 			return err
@@ -88,4 +92,21 @@ func noDoubleBooking(db *gorm.DB) error {
 // people log in with it. Safe to run on every start.
 func onePhonePerAccount(db *gorm.DB) error {
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users (phone) WHERE phone <> '' AND deleted_at IS NULL").Error
+}
+
+// refuseOldPayments stops the migration when `payments` still has the first layout (one row per try, the
+// bank's QR in the same row). Payments are now a payment plus its charges (payment_charges); migrating
+// never deletes data, so the old table, which only ever held test payments, is dropped by hand.
+func refuseOldPayments(db *gorm.DB) error {
+	var old int64
+	err := db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'payments' AND column_name = 'provider_ref'`).Scan(&old).Error
+	if err != nil {
+		return err
+	}
+	if old > 0 {
+		return errors.New("the payments table has the old layout (one row per try to pay). It held test payments only: " +
+			"run  DROP TABLE payments;  in the database, then run the migration again")
+	}
+	return nil
 }
