@@ -44,7 +44,7 @@ func (s *Service) PayFactsByID(ctx context.Context, branchID, id uint) (*domain.
 }
 
 // SetHold makes an unpaid event booking's hold end when the customer's online payment (its QR) runs out;
-// the 5-minute job then cancels it if it was not paid
+// the one-minute job then cancels it if it was not paid
 func (s *Service) SetHold(ctx context.Context, bookingID uint, until time.Time) error {
 	return s.bookings.SetPayBy(ctx, bookingID, until)
 }

@@ -33,6 +33,14 @@ type Config struct {
 // booking pages keep the QR / transfer / WhatsApp way. Keys stay on the server and are never logged.
 type PaymentsConfig struct {
 	PhaJay PhaJayConfig
+	Mock   MockConfig
+}
+
+// MockConfig: the built-in stand-in gateway used when server.env is dev
+type MockConfig struct {
+	// DailyLimit refuses more than this many payments a day, to try the "limit reached" message (the real
+	// test account allows 20); 0 = no limit
+	DailyLimit int
 }
 
 // PhaJayConfig: https://payment-doc.phajay.co/v1 (keys in the portal https://portal.phajay.co).
@@ -69,6 +77,9 @@ type AppConfig struct {
 
 // ServerConfig holds the HTTP server configuration
 type ServerConfig struct {
+	// Env decides which payment gateway is used: dev = the built-in mock (PhaJay is never called), uat =
+	// PhaJay's test account, prod = PhaJay with the production key (after KYC). Empty means dev.
+	Env          string
 	Port         string
 	ReadTimeout  int
 	WriteTimeout int
@@ -76,6 +87,21 @@ type ServerConfig struct {
 	// proxy addresses allowed to set it. Empty = clients connect directly.
 	ProxyHeader    string
 	TrustedProxies []string
+}
+
+// Environments (server.env)
+const (
+	EnvDev  = "dev"
+	EnvUAT  = "uat"
+	EnvProd = "prod"
+)
+
+// Mode is server.env in lower case; dev when it is empty
+func (s ServerConfig) Mode() string {
+	if e := strings.ToLower(strings.TrimSpace(s.Env)); e != "" {
+		return e
+	}
+	return EnvDev
 }
 
 // JWTConfig holds the JWT configuration
@@ -124,6 +150,11 @@ func LoadConfig() (*Config, error) {
 		SSLMode:  viper.GetString("database.postgres.sslmode"),
 		TimeZone: viper.GetString("database.postgres.timezone"),
 	}
+	switch config.Server.Mode() {
+	case EnvDev, EnvUAT, EnvProd:
+	default:
+		return nil, fmt.Errorf("❌ server.env %q is not one of dev, uat, prod", config.Server.Env)
+	}
 	JWTGlobal = config.JWT
 	return &config, nil
 }
@@ -135,6 +166,7 @@ func setDefaults() {
 	viper.SetDefault("app.frontendUrl", "http://localhost:5173")
 
 	// Server defaults
+	viper.SetDefault("server.env", "dev")
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.readTimeout", 10)
 	viper.SetDefault("server.writeTimeout", 10)
@@ -185,6 +217,7 @@ func setDefaults() {
 	viper.SetDefault("payments.phajay.devSecretKey", "")
 	viper.SetDefault("payments.phajay.secretKey", "")
 	viper.SetDefault("payments.phajay.testAmountDivisor", 0)
+	viper.SetDefault("payments.mock.dailyLimit", 0)
 
 	// Mailer defaults
 	viper.SetDefault("mailer.host", "smtp.example.com")

@@ -6,6 +6,12 @@ app:
 
 server:
   port: 3000
+  # Which payment gateway runs (see "payments" below):
+  #   dev  = the built-in mock inside the backend: PhaJay is never called, no key needed. A dev page at
+  #          /api/v1/dev/payments settles payments (Pay / Expire).
+  #   uat  = PhaJay's test account (testKey + devSecretKey; testAmountDivisor works)
+  #   prod = PhaJay for real money (secretKey only, after KYC; test keys and the divisor are ignored)
+  env: dev # dev | uat | prod
   readTimeout: 10
   writeTimeout: 10
   # Behind a load balancer / reverse proxy: trust its client-IP header so rate limits see real users.
@@ -57,9 +63,12 @@ storage:
     bucket: booking-media
     accessKey: ""
     secretKey: ""
-    # TESTING ONLY, before KYC the gateway takes 1 to 999 kip: 100000 sends 100,000 kip as 1 (and reads amounts back
-    # multiplied). Ignored when secretKey is set. Leave 0 for real money.
+    # uat only, before KYC the gateway takes 1 to 999 kip: 100000 sends 100,000 kip as 1 (and reads amounts back
+    # multiplied). Ignored in prod. 0 = off.
     testAmountDivisor: 0
+  # dev only: the built-in mock gateway
+  mock:
+    dailyLimit: 0            # refuse more than this many payments a day, to try the "limit reached" message (0 = no limit)
     publicBaseUrl: https://files.example.com
 
   # Supabase Storage. serviceKey is the server-side service_role key.
@@ -104,7 +113,8 @@ company:
   # leave empty in production: the owner gets an email with a link to choose a password
   ownerPassword: ""
 
-# Online payment (PhaJay). Leave the keys empty to keep the QR / transfer / WhatsApp way only.
+# Online payment. server.env picks the gateway: dev = built-in mock (no key), uat = PhaJay test account,
+# prod = PhaJay for real money. In uat/prod leave the keys empty to keep the QR / transfer / WhatsApp way only.
 # Keys: https://portal.phajay.co (Key Management). Before KYC: testKey (calls) + devSecretKey (webhook
 # signature); after approval: secretKey (both). A key may contain "$": keep the double quotes.
 # Webhook URL to set in the portal: https://<your-domain>/api/v1/payments/webhooks/phajay
@@ -114,3 +124,9 @@ payments:
     testKey: ""
     devSecretKey: ""
     secretKey: ""
+    # uat only, before KYC the gateway takes 1 to 999 kip: 100000 sends 100,000 kip as 1 (and reads amounts back
+    # multiplied). Ignored in prod. 0 = off.
+    testAmountDivisor: 0
+  # dev only: the built-in mock gateway
+  mock:
+    dailyLimit: 0            # refuse more than this many payments a day, to try the "limit reached" message (0 = no limit)

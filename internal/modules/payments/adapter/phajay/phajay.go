@@ -59,10 +59,7 @@ func New(cfg config.PhaJayConfig) *PhaJay {
 	p := &PhaJay{
 		baseURL: strings.TrimRight(cfg.BaseURL, "/"), callKey: call, webhookKeys: keys,
 		http: &http.Client{Timeout: 12 * time.Second}, loc: loc, banksByKey: map[string]bool{},
-		banks: []domain.Method{
-			{Key: "bcel", Label: "BCEL One"}, {Key: "jdb", Label: "JDB"}, {Key: "ldb", Label: "LDB"}, {Key: "ib", Label: "Indochina Bank"},
-			{Key: "stb", Label: "STB"}, {Key: "m-money", Label: "M MoneyX"}, {Key: "apb", Label: "APB"},
-		},
+		banks: banks,
 	}
 	if p.baseURL == "" {
 		p.baseURL = "https://payment-gateway.phajay.co"
@@ -108,13 +105,22 @@ func KeyInfo(cfg config.PhaJayConfig) string {
 func (p *PhaJay) Name() string  { return "phajay" }
 func (p *PhaJay) Label() string { return "PhaJay" }
 
-// Methods: every bank's QR and the hosted payment page; the gateway takes Lao kip
-func (p *PhaJay) Methods(currency string) []domain.Method {
+// banks are the banks whose QR PhaJay makes
+var banks = []domain.Method{
+	{Key: "bcel", Label: "BCEL One"}, {Key: "jdb", Label: "JDB"}, {Key: "ldb", Label: "LDB"}, {Key: "ib", Label: "Indochina Bank"},
+	{Key: "stb", Label: "STB"}, {Key: "m-money", Label: "M MoneyX"}, {Key: "apb", Label: "APB"},
+}
+
+// Methods: every bank's QR and the hosted payment page; the gateway takes Lao kip. The dev mock offers
+// the same list.
+func Methods(currency string) []domain.Method {
 	if currency != "LAK" {
 		return nil
 	}
-	return append(append([]domain.Method{}, p.banks...), domain.Method{Key: "link", Label: "Choose a bank on the payment page"})
+	return append(append([]domain.Method{}, banks...), domain.Method{Key: "link", Label: "Choose a bank on the payment page"})
 }
+
+func (p *PhaJay) Methods(currency string) []domain.Method { return Methods(currency) }
 
 // plain keeps the description short and ASCII: BCEL refuses Lao and Thai letters, APB allows 24 characters
 func plain(s string) string {

@@ -6,6 +6,7 @@ package payments
 import (
 	"backend/internal/core/port/output"
 	"backend/internal/modules/payments/adapter/http"
+	"backend/internal/modules/payments/adapter/mock"
 	"backend/internal/modules/payments/adapter/postgres"
 	"backend/internal/modules/payments/domain"
 	"backend/internal/modules/payments/port"
@@ -25,12 +26,15 @@ type Deps struct {
 	Branches  output.BranchRepository
 	Bookings  port.Bookings
 	Now       func() time.Time
+	// Dev is the in-process stand-in gateway (server.env: dev); its dev routes exist only then
+	Dev *mock.Mock
 }
 
 // Module is the payments module: its service (for the job) and its routes
 type Module struct {
 	Service port.Service
 	handler *http.Handler
+	dev     *mock.Mock
 }
 
 // New builds the module
@@ -38,11 +42,16 @@ func New(d Deps) *Module {
 	svc := service.New(service.Deps{
 		Repo: postgres.New(d.DB), Providers: d.Providers, Branches: d.Branches, Bookings: d.Bookings, Now: d.Now,
 	})
-	return &Module{Service: svc, handler: http.New(svc)}
+	return &Module{Service: svc, handler: http.New(svc), dev: d.Dev}
 }
 
 // Routes registers the module's customer, webhook and staff routes
-func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) { m.handler.Routes(api, auth) }
+func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) {
+	m.handler.Routes(api, auth)
+	if m.dev != nil {
+		m.dev.Routes(api, m.Service)
+	}
+}
 
 // Models are the tables of this module, for the migration
 func Models() []any { return []any{&domain.Payment{}, &domain.Charge{}, &domain.Setting{}} }

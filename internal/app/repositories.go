@@ -25,6 +25,7 @@ type AppRepositories struct {
 	app      config.AppConfig
 	install  config.CompanyConfig
 	payments config.PaymentsConfig
+	server   config.ServerConfig
 	// Domain repositories
 	user           output.UserRepository
 	company        output.CompanyRepository
@@ -81,6 +82,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		app:            cfg.App,
 		install:        cfg.Company,
 		payments:       cfg.Payments,
+		server:         cfg.Server,
 		user:           postgres.NewUserRepository(db),
 		company:        postgres.NewCompanyRepository(db),
 		branches:       postgres.NewBranchRepository(db),

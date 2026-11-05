@@ -1,6 +1,7 @@
 package port
 
 import (
+	"backend/internal/modules/payments/domain"
 	"backend/internal/modules/payments/dto"
 	"context"
 )
@@ -18,6 +19,8 @@ type Service interface {
 	CheckByCustomer(ctx context.Context, userID, bookingID, id uint) (*dto.PaymentDTO, error)
 	// the gateway's callback: ErrBadSignature when it is not from the gateway
 	HandleWebhook(ctx context.Context, provider string, header func(string) string, body []byte) error
+	// Notify applies a notice that is already trusted (the dev mock's Pay button; a webhook is verified first)
+	Notify(ctx context.Context, provider string, n *domain.Notice) error
 	// payments still waiting are asked about at the gateway (the fallback for a webhook that never came)
 	Poll(ctx context.Context) error
 	// the team

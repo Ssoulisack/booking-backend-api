@@ -8,10 +8,12 @@ import (
 	"backend/internal/modules/identity"
 	"backend/internal/modules/media"
 	"backend/internal/modules/payments"
+	"backend/internal/modules/payments/adapter/mock"
 	"backend/internal/modules/payments/adapter/phajay"
 	paymentsport "backend/internal/modules/payments/port"
 	"backend/internal/modules/reports"
 	"backend/internal/modules/restaurant"
+	"backend/internal/platform/config"
 	"context"
 	"log"
 	"time"
@@ -57,20 +59,12 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Files: r.storage, Booker: restaurantModule.Service,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
-	// online payment: a gateway without keys is off (the QR / transfer / WhatsApp way stays)
-	var gateways []paymentsport.Provider
-	if p := phajay.New(r.payments.PhaJay); p != nil {
-		gateways = append(gateways, p)
-		log.Printf("💳 PhaJay payments on (%s)", phajay.KeyInfo(r.payments.PhaJay))
-		if n := p.TestScale(); n > 0 {
-			log.Printf("⚠️  PhaJay TEST AMOUNTS: the gateway is asked for the amount divided by %d (test account, before KYC). Never use this with real money.", n)
-		}
-	} else {
-		log.Printf("💳 online payments off (no gateway keys in config.yaml)")
-	}
+	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,
+	// prod: PhaJay for real money); a PhaJay without its keys is off and the QR / transfer / WhatsApp way stays
+	gateways, devGateway := ChooseGateway(r.server, r.payments)
 	paymentsModule := payments.New(payments.Deps{
 		DB: r.postgres.GetDB(), Providers: gateways,
-		Branches: r.branches, Bookings: bookingImpl,
+		Branches: r.branches, Bookings: bookingImpl, Dev: devGateway,
 	})
 	identityModule := identity.New(identity.Deps{
 		Users: r.user, Cache: r.redis, Memberships: r.memberships, Branches: r.branches, Company: r.company,
@@ -128,21 +122,28 @@ func KeepTimetablesRolling(svc *AppServices) {
 	}()
 }
 
-// KeepTablesSettled runs every 5 minutes: restaurant groups not there by their arrive-by time become
-// no-shows (their tables free at once), evenings that are over get their bills closed, and event
-// tables not paid in time (and without a slip sent) go back on sale
+// KeepTablesSettled runs the background jobs. Every minute: event tables not paid in time (and without a
+// slip sent) are cancelled and go back on sale, so a booking is released within a minute of its countdown.
+// Every 5 minutes: restaurant groups not there by their arrive-by time become no-shows (their tables free at
+// once), evenings that are over get their bills closed, and a payment whose webhook never came is asked about
+// at the gateway.
 func KeepTablesSettled(svc *AppServices) {
 	go func() {
-		for range time.Tick(5 * time.Minute) {
-			if err := svc.restaurant.Service.SettleTables(context.Background()); err != nil {
-				log.Printf("⚠️  settling tables: %v", err)
-			}
-			if err := svc.events.Service.ExpireUnpaid(context.Background()); err != nil {
-				log.Printf("⚠️  event holds: %v", err)
-			}
-			// a payment whose webhook never came is asked about at the gateway
-			if err := svc.payments.Service.Poll(context.Background()); err != nil {
-				log.Printf("⚠️  payment status check: %v", err)
+		holds := time.NewTicker(time.Minute)
+		settle := time.NewTicker(5 * time.Minute)
+		for {
+			select {
+			case <-holds.C:
+				if err := svc.events.Service.ExpireUnpaid(context.Background()); err != nil {
+					log.Printf("⚠️  event holds: %v", err)
+				}
+			case <-settle.C:
+				if err := svc.restaurant.Service.SettleTables(context.Background()); err != nil {
+					log.Printf("⚠️  settling tables: %v", err)
+				}
+				if err := svc.payments.Service.Poll(context.Background()); err != nil {
+					log.Printf("⚠️  payment status check: %v", err)
+				}
 			}
 		}
 	}()
@@ -153,7 +154,7 @@ func Models() []any {
 	return append(append(events.Models(), payments.Models()...), identity.Models()...)
 }
 
-// SettleEventHolds cancels event bookings not paid in time (KeepTablesSettled runs it every 5 minutes)
+// SettleEventHolds cancels event bookings not paid in time (KeepTablesSettled runs it every minute)
 func SettleEventHolds(svc *AppServices) error {
 	return svc.events.Service.ExpireUnpaid(context.Background())
 }
@@ -161,4 +162,35 @@ func SettleEventHolds(svc *AppServices) error {
 // PollPayments asks the gateways about payments still waiting (KeepTablesSettled runs it every 5 minutes)
 func PollPayments(svc *AppServices) error {
 	return svc.payments.Service.Poll(context.Background())
+}
+
+// ChooseGateway turns server.env into the payment gateways of this run. Each environment uses only its own
+// keys, so a key left in config.yaml can never be used by the wrong one: dev never calls PhaJay.
+func ChooseGateway(srv config.ServerConfig, pay config.PaymentsConfig) ([]paymentsport.Provider, *mock.Mock) {
+	phajayCfg := pay.PhaJay
+	switch env := srv.Mode(); env {
+	case config.EnvDev:
+		m := mock.New(mock.Config{BaseURL: "http://localhost:" + srv.Port, DailyLimit: pay.Mock.DailyLimit})
+		log.Printf("💳 payments: dev, built-in mock gateway (PhaJay is never called); dev page at /api/v1/dev/payments")
+		return []paymentsport.Provider{m}, m
+	case config.EnvUAT:
+		phajayCfg.SecretKey = "" // the production key is not for the test account
+		if phajayCfg.TestKey == "" {
+			log.Printf("⚠️  payments: uat needs payments.phajay.testKey: online payment is off")
+			return nil, nil
+		}
+		log.Printf("💳 payments: uat, PhaJay test account (%s)", phajay.KeyInfo(phajayCfg))
+	default: // prod
+		phajayCfg.TestKey, phajayCfg.DevSecretKey, phajayCfg.TestAmountDivisor = "", "", 0 // real money is always the real amount
+		if phajayCfg.SecretKey == "" {
+			log.Printf("⚠️  payments: prod has no payments.phajay.secretKey (needs KYC): online payment is off")
+			return nil, nil
+		}
+		log.Printf("💳 payments: prod, PhaJay with real money (%s)", phajay.KeyInfo(phajayCfg))
+	}
+	p := phajay.New(phajayCfg)
+	if n := p.TestScale(); n > 0 {
+		log.Printf("⚠️  PhaJay TEST AMOUNTS: the gateway is asked for the amount divided by %d (test account, before KYC). Never use this with real money.", n)
+	}
+	return []paymentsport.Provider{p}, nil
 }

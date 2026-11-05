@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,11 +23,12 @@ func conflict(code string) error   { return response.NewError(http.StatusConflic
 func notFound(code string) error   { return response.NewError(http.StatusNotFound, code) }
 
 const (
-	defaultChargeMinutes = 30 // how long a customer has to pay a QR / page we created, unless the branch chose
+	defaultChargeMinutes = 15 // how long a customer has to pay a QR / page we created, unless the branch chose
 	minChargeMinutes     = 5
-	maxChargeMinutes     = 120
-	pollAfter            = time.Minute    // a webhook gets this long before the status check steps in
-	pollWindow           = 24 * time.Hour // a charge is asked about until a day after its time ran out
+	maxChargeMinutes     = 30
+	pollAfter            = time.Minute      // a webhook gets this long before the status check steps in
+	pollWindow           = 24 * time.Hour   // a charge is asked about until a day after its time ran out
+	askEvery             = 10 * time.Second // the customer's page asks the gateway about one charge at most this often
 )
 
 // Deps are what the module is built from
@@ -45,6 +47,11 @@ type Service struct {
 	branches  output.BranchRepository
 	bookings  port.Bookings
 	now       func() time.Time
+
+	// asked remembers when the gateway was last asked about a charge for a customer's page, so the page's
+	// frequent checks are answered from our own data in between (the webhook keeps it current)
+	askMu sync.Mutex
+	asked map[uint]time.Time
 }
 
 var _ port.Service = (*Service)(nil)
@@ -54,7 +61,7 @@ func New(d Deps) *Service {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
-	s := &Service{repo: d.Repo, providers: map[string]port.Provider{}, branches: d.Branches, bookings: d.Bookings, now: d.Now}
+	s := &Service{repo: d.Repo, providers: map[string]port.Provider{}, branches: d.Branches, bookings: d.Bookings, now: d.Now, asked: map[uint]time.Time{}}
 	for _, p := range d.Providers {
 		if p != nil {
 			s.providers[p.Name()] = p
@@ -80,6 +87,19 @@ func toDTO(p domain.Payment) dto.PaymentDTO {
 		ID: p.ID, Provider: c.Provider, Method: c.Method, Status: p.Status, Amount: p.Amount, Currency: p.Currency,
 		QRCode: c.QRCode, Deeplink: c.Deeplink, RedirectURL: c.RedirectURL, ExpiresAt: c.ExpiresAt,
 	}
+}
+
+// seen is a payment as the customer's page gets it. Once our time for the charge is up the page is told it ran
+// out and gets no QR or link, so a code is not paid for a booking we are about to release, even though the
+// gateway keeps the code alive for a while longer (PhaJay: 30 minutes). The team's list shows the real state.
+func (s *Service) seen(p domain.Payment) dto.PaymentDTO {
+	d := toDTO(p)
+	if p.Status == domain.StatusPending {
+		if c := p.Current(); c.Status == domain.ChargePending && !c.ExpiresAt.After(s.now()) {
+			d.Status, d.QRCode, d.Deeplink, d.RedirectURL = domain.StatusExpired, "", "", ""
+		}
+	}
+	return d
 }
 
 func toStaffDTO(p domain.Payment) dto.StaffPaymentDTO {
@@ -160,6 +180,11 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 		return nil, badRequest("INVALID_PAYMENT_METHOD")
 	}
 	now := s.now()
+	// the hold ran out (the countdown of the last QR, or the event's own hold): the booking is about to be
+	// released, so no new QR is made for it, even before the job has cancelled it
+	if f.PayBy != nil && !f.PayBy.After(now) {
+		return nil, conflict("PAY_TIME_UP")
+	}
 	open, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
 	if err != nil {
 		return nil, err
@@ -181,7 +206,7 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 			if err := s.use(ctx, pay, c, f); err != nil {
 				return nil, err
 			}
-			d := toDTO(*pay)
+			d := s.seen(*pay)
 			return &d, nil
 		}
 	} else {
@@ -237,7 +262,7 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if err := s.use(ctx, pay, c, f); err != nil {
 		return nil, err
 	}
-	d := toDTO(*pay)
+	d := s.seen(*pay)
 	return &d, nil
 }
 
@@ -293,14 +318,14 @@ func (s *Service) open(ctx context.Context, f *coredomain.PayFacts) (*dto.Paymen
 					p = s.refresh(ctx, p, c) // it may have been paid meanwhile
 				}
 				if p.Status == domain.StatusPending || p.Status == domain.StatusPaid {
-					d := toDTO(*p)
+					d := s.seen(*p)
 					return &d, nil
 				}
 				continue
 			}
 		}
 		if p.Status == domain.StatusPaid {
-			d := toDTO(*p)
+			d := s.seen(*p)
 			return &d, nil
 		}
 	}
@@ -336,7 +361,7 @@ func (s *Service) check(ctx context.Context, f *coredomain.PayFacts, id uint) (*
 	if c := p.Current(); p.Status == domain.StatusPending && c.Status == domain.ChargePending && c.ProviderRef != "" {
 		p = s.refresh(ctx, p, c)
 	}
-	d := toDTO(*p)
+	d := s.seen(*p)
 	return &d, nil
 }
 
@@ -344,7 +369,7 @@ func (s *Service) check(ctx context.Context, f *coredomain.PayFacts, id uint) (*
 // now; a gateway that cannot be reached changes nothing
 func (s *Service) refresh(ctx context.Context, p *domain.Payment, c domain.Charge) *domain.Payment {
 	prov, ok := s.providers[c.Provider]
-	if !ok {
+	if !ok || !s.mayAsk(c.ID) {
 		return p
 	}
 	n, err := prov.Status(ctx, c.ProviderRef)
@@ -362,6 +387,25 @@ func (s *Service) refresh(ctx context.Context, p *domain.Payment, c domain.Charg
 		return fresh
 	}
 	return p
+}
+
+// mayAsk says whether the gateway may be asked about this charge now: not if it was asked less than askEvery ago
+func (s *Service) mayAsk(chargeID uint) bool {
+	s.askMu.Lock()
+	defer s.askMu.Unlock()
+	now := s.now()
+	if last, ok := s.asked[chargeID]; ok && now.Sub(last) < askEvery {
+		return false
+	}
+	if len(s.asked) > 1000 { // forget the old ones
+		for id, at := range s.asked {
+			if now.Sub(at) >= askEvery {
+				delete(s.asked, id)
+			}
+		}
+	}
+	s.asked[chargeID] = now
+	return true
 }
 
 // ---------- the gateway ----------
@@ -382,6 +426,12 @@ func (s *Service) HandleWebhook(ctx context.Context, provider string, header fun
 		log.Printf("⚠️  %s webhook unreadable: %v", provider, err)
 		return nil
 	}
+	return s.Notify(ctx, provider, n)
+}
+
+// Notify applies what a gateway says about a payment (a verified webhook, or the dev mock's Pay button):
+// the charge is found by the gateway's id, or by the order number we sent
+func (s *Service) Notify(ctx context.Context, provider string, n *domain.Notice) error {
 	c, err := s.repo.ChargeByRef(ctx, provider, n.ProviderRef)
 	if err != nil {
 		return err
