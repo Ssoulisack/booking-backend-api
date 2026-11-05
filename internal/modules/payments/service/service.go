@@ -27,8 +27,8 @@ const (
 	minChargeMinutes     = 5
 	maxChargeMinutes     = 30
 	pollAfter            = time.Minute      // a webhook gets this long before the status check steps in
-	pollWindow           = 24 * time.Hour   // a charge is asked about until a day after its time ran out
-	askEvery             = 10 * time.Second // the customer's page asks the gateway about one charge at most this often
+	pollWindow           = 24 * time.Hour   // a payment is asked about until a day after its time ran out
+	askEvery             = 10 * time.Second // the customer's page asks the gateway about one payment at most this often
 )
 
 // Deps are what the module is built from
@@ -48,7 +48,7 @@ type Service struct {
 	bookings  port.Bookings
 	now       func() time.Time
 
-	// asked remembers when the gateway was last asked about a charge for a customer's page, so the page's
+	// asked remembers when the gateway was last asked about a payment for a customer's page, so the page's
 	// frequent checks are answered from our own data in between (the webhook keeps it current)
 	askMu sync.Mutex
 	asked map[uint]time.Time
@@ -80,39 +80,29 @@ func (s *Service) Enabled() []string {
 	return names
 }
 
-// toDTO shows a payment through its current charge: the QR or page to pay with, and when it runs out
+// toDTO shows a payment as the customer's page needs it: the QR or page to pay with, and when it runs out
 func toDTO(p domain.Payment) dto.PaymentDTO {
-	c := p.Current()
 	return dto.PaymentDTO{
-		ID: p.ID, Provider: c.Provider, Method: c.Method, Status: p.Status, Amount: p.Amount, Currency: p.Currency,
-		QRCode: c.QRCode, Deeplink: c.Deeplink, RedirectURL: c.RedirectURL, ExpiresAt: c.ExpiresAt,
+		ID: p.ID, Provider: p.Provider, Method: p.Method, Status: p.Status, Amount: p.Amount, Currency: p.Currency,
+		QRCode: p.QRCode, Deeplink: p.Deeplink, RedirectURL: p.RedirectURL, ExpiresAt: p.ExpiresAt,
 	}
 }
 
-// seen is a payment as the customer's page gets it. Once our time for the charge is up the page is told it ran
-// out and gets no QR or link, so a code is not paid for a booking we are about to release, even though the
-// gateway keeps the code alive for a while longer (PhaJay: 30 minutes). The team's list shows the real state.
+// seen is a payment as the customer's page gets it. Once our time for the QR is up the page is told it ran out
+// and gets no QR or link, so a code is not paid for a booking we are about to release, even though the gateway
+// keeps the code alive for a while longer (PhaJay: 30 minutes). The team's list shows the real state.
 func (s *Service) seen(p domain.Payment) dto.PaymentDTO {
 	d := toDTO(p)
-	if p.Status == domain.StatusPending {
-		if c := p.Current(); c.Status == domain.ChargePending && !c.ExpiresAt.After(s.now()) {
-			d.Status, d.QRCode, d.Deeplink, d.RedirectURL = domain.StatusExpired, "", "", ""
-		}
+	if p.Status == domain.StatusPending && !p.ExpiresAt.After(s.now()) {
+		d.Status, d.QRCode, d.Deeplink, d.RedirectURL = domain.StatusExpired, "", "", ""
 	}
 	return d
 }
 
 func toStaffDTO(p domain.Payment) dto.StaffPaymentDTO {
-	charges := make([]dto.ChargeDTO, 0, len(p.Charges))
-	for _, c := range p.Charges {
-		charges = append(charges, dto.ChargeDTO{
-			ID: c.ID, Provider: c.Provider, Method: c.Method, Status: c.Status, ProviderRef: c.ProviderRef,
-			ExpiresAt: c.ExpiresAt, CreatedAt: c.CreatedAt,
-		})
-	}
 	return dto.StaffPaymentDTO{
-		PaymentDTO: toDTO(p), BookingID: p.BookingID, OrderNo: p.OrderNo, ProviderRef: p.Current().ProviderRef,
-		PaidAt: p.PaidAt, RefundRef: p.RefundRef, Note: p.Note, CreatedAt: p.CreatedAt, Charges: charges,
+		PaymentDTO: toDTO(p), BookingID: p.BookingID, OrderNo: p.OrderNo, ProviderRef: p.ProviderRef,
+		PaidAt: p.PaidAt, RefundRef: p.RefundRef, Note: p.Note, CreatedAt: p.CreatedAt,
 	}
 }
 
@@ -140,7 +130,7 @@ func (s *Service) Options(ctx context.Context, slug string) ([]dto.OptionDTO, er
 	return out, nil
 }
 
-// StartByToken and StartByCustomer create (or return the open) online payment of a booking
+// StartByToken and StartByCustomer make the QR or payment link of a booking (or return the open one)
 func (s *Service) StartByToken(ctx context.Context, slug, token string, req dto.StartRequest) (*dto.PaymentDTO, error) {
 	f, err := s.bookings.PayFactsByToken(ctx, slug, token)
 	if err != nil {
@@ -185,73 +175,47 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if f.PayBy != nil && !f.PayBy.After(now) {
 		return nil, conflict("PAY_TIME_UP")
 	}
-	open, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
+	tries, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
 	if err != nil {
 		return nil, err
 	}
-	// the booking's payment still being paid (or that ran out of time): a new try after a QR ran out or failed is one
-	// more charge of it
-	var pay *domain.Payment
-	for i := range open { // newest first
-		o := &open[i]
-		if (o.Status == domain.StatusPending || o.Status == domain.StatusExpired || o.Status == domain.StatusFailed) &&
-			o.Amount == f.Total && o.Currency == f.Currency {
-			pay = o
-			break
+	// a QR or payment link is open: the same bank gives the same one (pressing Pay twice, coming back to the
+	// page: no new transaction at the gateway); any other way to pay is refused, the choice is final. The
+	// customer who chose the wrong bank cancels the booking and books again. A try that ran out or failed
+	// leaves the choice free.
+	for i := range tries { // newest first
+		o := &tries[i]
+		if !o.Open(now) {
+			continue
 		}
-	}
-	if pay != nil {
-		// the customer pressed Pay twice, came back to the page, or went back to a bank they already chose:
-		// that charge is still good, so no new one is made at the gateway
-		if c := pay.Live(req.Provider, req.Method, now); c != nil && pay.Status == domain.StatusPending {
-			if err := s.use(ctx, pay, c, f); err != nil {
-				return nil, err
-			}
-			d := s.seen(*pay)
-			return &d, nil
-		}
-		// a QR or payment link is open for another way to pay: that choice is final. The customer who chose the
-		// wrong bank cancels the booking and books again; a QR that failed or ran out leaves the choice free.
-		if pay.Status == domain.StatusPending && pay.AnyLive(0, now) {
+		if o.Provider != req.Provider || o.Method != req.Method {
 			return nil, conflict("PAYMENT_METHOD_LOCKED")
 		}
-	} else {
-		n, err := s.repo.CountByBooking(ctx, f.ID)
-		if err != nil {
+		if err := s.hold(ctx, o, f); err != nil {
 			return nil, err
 		}
-		pay = &domain.Payment{
-			BranchID: f.BranchID, BookingID: f.ID, OrderNo: fmt.Sprintf("%s-%d", f.Code, n+1),
-			Amount: f.Total, Currency: f.Currency, Status: domain.StatusPending,
-		}
-		if err := s.repo.CreatePayment(ctx, pay); err != nil {
-			return nil, err
-		}
+		d := s.seen(*o)
+		return &d, nil
 	}
-	// the gateway sees a unique order number for every charge: ours, then ours-2, ours-3…
-	gatewayOrder := pay.OrderNo
-	if len(pay.Charges) > 0 {
-		gatewayOrder = fmt.Sprintf("%s-%d", pay.OrderNo, len(pay.Charges)+1)
+	n, err := s.repo.CountByBooking(ctx, f.ID)
+	if err != nil {
+		return nil, err
 	}
-	c := &domain.Charge{
-		PaymentID: pay.ID, Provider: req.Provider, Method: req.Method, GatewayOrderNo: gatewayOrder,
-		Status: domain.ChargePending, ExpiresAt: now.Add(life),
+	pay := &domain.Payment{
+		BranchID: f.BranchID, BookingID: f.ID, Provider: req.Provider, Method: req.Method,
+		OrderNo: fmt.Sprintf("%s-%d", f.Code, n+1), Amount: f.Total, Currency: f.Currency,
+		Status: domain.StatusPending, ExpiresAt: now.Add(life),
 	}
-	if err := s.repo.CreateCharge(ctx, c); err != nil {
+	if err := s.repo.Create(ctx, pay); err != nil {
 		return nil, err
 	}
 	issued, err := p.Charge(ctx, domain.ChargeRequest{
-		OrderNo: gatewayOrder, Amount: pay.Amount, Currency: pay.Currency, Method: req.Method,
+		OrderNo: pay.OrderNo, Amount: pay.Amount, Currency: pay.Currency, Method: req.Method,
 		Description: "Booking " + f.Code, Tags: [3]string{f.BranchSlug, fmt.Sprint(f.ID), fmt.Sprint(pay.ID)},
 	})
 	if err != nil {
-		c.Status = domain.ChargeFailed
-		_ = s.repo.SaveCharge(ctx, c)
-		// a charge still open keeps the payment as it was; with none, the payment itself failed
-		if !pay.AnyLive(c.ID, now) {
-			pay.Status, pay.Note = domain.StatusFailed, shorten(err.Error())
-			_ = s.repo.SavePayment(ctx, pay)
-		}
+		pay.Status, pay.Note = domain.StatusFailed, shorten(err.Error())
+		_ = s.repo.Update(ctx, pay)
 		log.Printf("⚠️  %s charge for booking %s failed: %v", req.Provider, f.Code, err)
 		// the gateway's own daily limit (a test account): say so, so the customer can pay another way or tomorrow
 		if errors.Is(err, domain.ErrRateLimited) {
@@ -259,28 +223,22 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 		}
 		return nil, response.NewError(http.StatusBadGateway, "PAYMENT_PROVIDER_ERROR")
 	}
-	c.ProviderRef, c.QRCode, c.Deeplink, c.RedirectURL = issued.ProviderRef, issued.QRCode, issued.Deeplink, issued.RedirectURL
-	if err := s.repo.SaveCharge(ctx, c); err != nil {
+	pay.ProviderRef, pay.QRCode, pay.Deeplink, pay.RedirectURL = issued.ProviderRef, issued.QRCode, issued.Deeplink, issued.RedirectURL
+	if err := s.repo.Update(ctx, pay); err != nil {
 		return nil, err
 	}
-	pay.Charges = append(pay.Charges, *c)
-	pay.Status, pay.Note = domain.StatusPending, ""
-	if err := s.use(ctx, pay, c, f); err != nil {
+	if err := s.hold(ctx, pay, f); err != nil {
 		return nil, err
 	}
 	d := s.seen(*pay)
 	return &d, nil
 }
 
-// use makes the charge the one the customer is paying now. An unpaid event booking is held exactly as long
-// as that charge lives: not paid by then, it is released (the customer may come back until then).
-func (s *Service) use(ctx context.Context, pay *domain.Payment, c *domain.Charge, f *coredomain.PayFacts) error {
-	pay.ChargeID = &c.ID
-	if err := s.repo.SavePayment(ctx, pay); err != nil {
-		return err
-	}
+// hold: an unpaid event booking is held exactly as long as its open QR lives: not paid by then, it is released
+// (the customer may come back to the page until then)
+func (s *Service) hold(ctx context.Context, pay *domain.Payment, f *coredomain.PayFacts) error {
 	if f.PayBy != nil {
-		return s.bookings.SetHold(ctx, f.ID, c.ExpiresAt)
+		return s.bookings.SetHold(ctx, f.ID, pay.ExpiresAt)
 	}
 	return nil
 }
@@ -318,17 +276,15 @@ func (s *Service) open(ctx context.Context, f *coredomain.PayFacts) (*dto.Paymen
 	now := s.now()
 	for i := range list { // newest first
 		p := &list[i]
-		if p.Status == domain.StatusPending {
-			if c := p.Current(); c.Status == domain.ChargePending && c.ExpiresAt.After(now) {
-				if c.ProviderRef != "" {
-					p = s.refresh(ctx, p, c) // it may have been paid meanwhile
-				}
-				if p.Status == domain.StatusPending || p.Status == domain.StatusPaid {
-					d := s.seen(*p)
-					return &d, nil
-				}
-				continue
+		if p.Open(now) {
+			if p.ProviderRef != "" {
+				p = s.refresh(ctx, p) // it may have been paid meanwhile
 			}
+			if p.Status == domain.StatusPending || p.Status == domain.StatusPaid {
+				d := s.seen(*p)
+				return &d, nil
+			}
+			continue
 		}
 		if p.Status == domain.StatusPaid {
 			d := s.seen(*p)
@@ -364,43 +320,39 @@ func (s *Service) check(ctx context.Context, f *coredomain.PayFacts, id uint) (*
 	if p == nil || p.BookingID != f.ID {
 		return nil, notFound("PAYMENT_NOT_FOUND")
 	}
-	if c := p.Current(); p.Status == domain.StatusPending && c.Status == domain.ChargePending && c.ProviderRef != "" {
-		p = s.refresh(ctx, p, c)
+	if p.Status == domain.StatusPending && p.ProviderRef != "" {
+		p = s.refresh(ctx, p)
 	}
 	d := s.seen(*p)
 	return &d, nil
 }
 
-// refresh asks the gateway about a charge and applies the answer, and gives back the payment as it is
-// now; a gateway that cannot be reached changes nothing
-func (s *Service) refresh(ctx context.Context, p *domain.Payment, c domain.Charge) *domain.Payment {
-	prov, ok := s.providers[c.Provider]
-	if !ok || !s.mayAsk(c.ID) {
+// refresh asks the gateway about a payment and applies the answer; a gateway that cannot be reached changes
+// nothing. The customer's page asks often, so the gateway is asked at most every askEvery per payment.
+func (s *Service) refresh(ctx context.Context, p *domain.Payment) *domain.Payment {
+	prov, ok := s.providers[p.Provider]
+	if !ok || !s.mayAsk(p.ID) {
 		return p
 	}
-	n, err := prov.Status(ctx, c.ProviderRef)
+	n, err := prov.Status(ctx, p.ProviderRef)
 	if err != nil {
 		if !errors.Is(err, domain.ErrNotFound) {
-			log.Printf("⚠️  %s status of %s: %v", c.Provider, c.GatewayOrderNo, err)
+			log.Printf("⚠️  %s status of %s: %v", p.Provider, p.OrderNo, err)
 		}
 		return p
 	}
-	if err := s.apply(ctx, &c, n); err != nil {
-		log.Printf("⚠️  %s payment %s: %v", c.Provider, c.GatewayOrderNo, err)
-		return p
-	}
-	if fresh, err := s.repo.Find(ctx, p.ID); err == nil && fresh != nil {
-		return fresh
+	if err := s.apply(ctx, p, n); err != nil {
+		log.Printf("⚠️  %s payment %s: %v", p.Provider, p.OrderNo, err)
 	}
 	return p
 }
 
-// mayAsk says whether the gateway may be asked about this charge now: not if it was asked less than askEvery ago
-func (s *Service) mayAsk(chargeID uint) bool {
+// mayAsk says whether the gateway may be asked about this payment now: not if it was asked less than askEvery ago
+func (s *Service) mayAsk(paymentID uint) bool {
 	s.askMu.Lock()
 	defer s.askMu.Unlock()
 	now := s.now()
-	if last, ok := s.asked[chargeID]; ok && now.Sub(last) < askEvery {
+	if last, ok := s.asked[paymentID]; ok && now.Sub(last) < askEvery {
 		return false
 	}
 	if len(s.asked) > 1000 { // forget the old ones
@@ -410,7 +362,7 @@ func (s *Service) mayAsk(chargeID uint) bool {
 			}
 		}
 	}
-	s.asked[chargeID] = now
+	s.asked[paymentID] = now
 	return true
 }
 
@@ -435,58 +387,48 @@ func (s *Service) HandleWebhook(ctx context.Context, provider string, header fun
 	return s.Notify(ctx, provider, n)
 }
 
-// Notify applies what a gateway says about a payment (a verified webhook, or the dev mock's Pay button):
-// the charge is found by the gateway's id, or by the order number we sent
+// Notify applies what a gateway says about a payment (a verified webhook, or the dev mock's Pay button): the
+// payment is found by the gateway's id, or by the order number we sent
 func (s *Service) Notify(ctx context.Context, provider string, n *domain.Notice) error {
-	c, err := s.repo.ChargeByRef(ctx, provider, n.ProviderRef)
+	p, err := s.repo.ByRef(ctx, provider, n.ProviderRef)
 	if err != nil {
 		return err
 	}
-	if c == nil { // a payment page: first seen by the order number, now we learn the gateway's id
-		if c, err = s.repo.ChargeByOrderNo(ctx, provider, n.OrderNo); err != nil {
+	if p == nil { // a payment page: first seen by the order number, now we learn the gateway's id
+		if p, err = s.repo.ByOrderNo(ctx, provider, n.OrderNo); err != nil {
 			return err
 		}
 	}
-	if c == nil {
+	if p == nil {
 		log.Printf("⚠️  %s webhook for an unknown payment (%s / %s)", provider, n.ProviderRef, n.OrderNo)
 		return nil
 	}
-	return s.apply(ctx, c, n)
+	return s.apply(ctx, p, n)
 }
 
-// apply moves a charge, and the payment it belongs to, to what the gateway says. It is safe to apply the
-// same event twice: money is never settled twice, and an amount that does not match the booking settles
-// nothing.
-func (s *Service) apply(ctx context.Context, c *domain.Charge, n *domain.Notice) error {
-	if c.ProviderRef == "" && n.ProviderRef != "" {
-		c.ProviderRef = n.ProviderRef
-		if err := s.repo.SaveCharge(ctx, c); err != nil {
-			return err
-		}
-	}
-	p, err := s.repo.Find(ctx, c.PaymentID)
-	if err != nil || p == nil {
-		return err
+// apply moves a payment to what the gateway says. It is safe to apply the same event twice: money is never
+// settled twice, and an amount that does not match the booking settles nothing. Money that arrives for a
+// booking that is already paid (the customer paid an older QR too) or cancelled is marked to be given back.
+func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice) error {
+	if p.ProviderRef == "" && n.ProviderRef != "" {
+		p.ProviderRef = n.ProviderRef
 	}
 	switch n.State {
 	case domain.Paid:
-		if c.Status == domain.ChargePaid {
+		if p.Settled() {
 			return nil
-		}
-		if p.Settled() { // another charge of this payment already took the money: this one is to give back
-			return s.paidTwice(ctx, p, c, n)
 		}
 		if n.Amount != p.Amount {
 			p.Status = domain.StatusMismatch
 			p.Note = shorten(fmt.Sprintf("gateway says %d, booking is %d", n.Amount, p.Amount))
-			return s.repo.SavePayment(ctx, p)
+			break
 		}
 		now := s.now()
 		paidAt := now
 		if !n.PaidAt.IsZero() {
 			paidAt = n.PaidAt
 		}
-		p.PaidAt, p.ChargeID = &paidAt, &c.ID
+		p.PaidAt = &paidAt
 		err := s.bookings.SettlePaid(ctx, p.BranchID, p.BookingID, p.OrderNo)
 		switch {
 		case err == nil:
@@ -498,57 +440,25 @@ func (s *Service) apply(ctx context.Context, c *domain.Charge, n *domain.Notice)
 		default:
 			return err // try again at the next event or status check
 		}
-		c.Status = domain.ChargePaid
-		if err := s.repo.SaveCharge(ctx, c); err != nil {
-			return err
-		}
-		return s.repo.SavePayment(ctx, p)
 	case domain.Expired:
-		if c.Status != domain.ChargePending {
-			return nil
-		}
-		c.Status = domain.ChargeExpired
-		if err := s.repo.SaveCharge(ctx, c); err != nil {
-			return err
-		}
-		// the payment runs out only when no other bank's charge can still be paid
-		if p.Status != domain.StatusPending || p.AnyLive(c.ID, s.now()) {
+		if p.Status != domain.StatusPending {
 			return nil
 		}
 		p.Status = domain.StatusExpired
 	case domain.Refunded:
-		if p.ChargeID == nil || *p.ChargeID != c.ID || p.Status == domain.StatusRefunded {
+		if p.Status == domain.StatusRefunded {
 			return nil
 		}
 		p.Status = domain.StatusRefunded
 	case domain.Disputed:
-		if p.ChargeID == nil || *p.ChargeID != c.ID || p.Status == domain.StatusDisputed {
+		if p.Status == domain.StatusDisputed {
 			return nil
 		}
 		p.Status = domain.StatusDisputed
 	default:
-		return nil // still waiting: only the gateway's id may be new
+		// still waiting: only the gateway's id may be new
 	}
-	return s.repo.SavePayment(ctx, p)
-}
-
-// paidTwice: money arrived on a charge after another charge of the payment was paid (or the payment was
-// already given back). That money becomes a payment of its own, waiting to be given back.
-func (s *Service) paidTwice(ctx context.Context, p *domain.Payment, c *domain.Charge, n *domain.Notice) error {
-	paidAt := s.now()
-	if !n.PaidAt.IsZero() {
-		paidAt = n.PaidAt
-	}
-	amount := n.Amount
-	if amount <= 0 {
-		amount = p.Amount
-	}
-	c.Status = domain.ChargePaid
-	return s.repo.SplitOff(ctx, c, &domain.Payment{
-		BranchID: p.BranchID, BookingID: p.BookingID, OrderNo: fmt.Sprintf("%s-R%d", p.OrderNo, c.ID),
-		Amount: amount, Currency: p.Currency, Status: domain.StatusRefundDue, PaidAt: &paidAt, ChargeID: &c.ID,
-		Note: "paid a second time",
-	})
+	return s.repo.Update(ctx, p)
 }
 
 // Poll is the fallback for a webhook that never came: payments still waiting are asked about at the
@@ -560,15 +470,20 @@ func (s *Service) Poll(ctx context.Context) error {
 		return err
 	}
 	for i := range list {
-		c := list[i]
-		if prov, ok := s.providers[c.Provider]; ok {
-			if n, err := prov.Status(ctx, c.ProviderRef); err == nil {
-				if err := s.apply(ctx, &c, n); err != nil {
-					log.Printf("⚠️  %s payment %s: %v", c.Provider, c.GatewayOrderNo, err)
-				}
-			} else if !errors.Is(err, domain.ErrNotFound) {
-				log.Printf("⚠️  %s status of %s: %v", c.Provider, c.GatewayOrderNo, err)
+		p := list[i]
+		prov, ok := s.providers[p.Provider]
+		if !ok {
+			continue
+		}
+		n, err := prov.Status(ctx, p.ProviderRef)
+		if err != nil {
+			if !errors.Is(err, domain.ErrNotFound) {
+				log.Printf("⚠️  %s status of %s: %v", p.Provider, p.OrderNo, err)
 			}
+			continue
+		}
+		if err := s.apply(ctx, &p, n); err != nil {
+			log.Printf("⚠️  %s payment %s: %v", p.Provider, p.OrderNo, err)
 		}
 	}
 	return nil
@@ -616,21 +531,20 @@ func (s *Service) Refund(ctx context.Context, branchID, id uint) (*dto.StaffPaym
 	if p.Status != domain.StatusPaid && p.Status != domain.StatusRefundDue {
 		return nil, conflict("NOT_REFUNDABLE")
 	}
-	paid := p.Current() // the charge that took the money
-	prov, ok := s.providers[paid.Provider]
+	prov, ok := s.providers[p.Provider]
 	if !ok {
 		return nil, conflict("PAYMENT_PROVIDER_OFF")
 	}
-	ref, err := prov.Refund(ctx, paid.ProviderRef)
+	ref, err := prov.Refund(ctx, p.ProviderRef)
 	if err != nil {
 		if errors.Is(err, domain.ErrUnsupported) {
 			return nil, conflict("REFUND_NOT_SUPPORTED")
 		}
-		log.Printf("⚠️  %s refund of %s: %v", paid.Provider, p.OrderNo, err)
+		log.Printf("⚠️  %s refund of %s: %v", p.Provider, p.OrderNo, err)
 		return nil, response.NewError(http.StatusBadGateway, "PAYMENT_PROVIDER_ERROR")
 	}
 	p.Status, p.RefundRef = domain.StatusRefundRequested, strings.TrimSpace(ref)
-	if err := s.repo.SavePayment(ctx, p); err != nil {
+	if err := s.repo.Update(ctx, p); err != nil {
 		return nil, err
 	}
 	d := toStaffDTO(*p)

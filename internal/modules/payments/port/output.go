@@ -8,26 +8,19 @@ import (
 	"time"
 )
 
-// Repository stores the payments and their charges. A payment comes back with its charges (newest first).
+// Repository stores the payments
 type Repository interface {
-	CreatePayment(ctx context.Context, p *domain.Payment) error
-	// SavePayment saves the payment itself, not its charges
-	SavePayment(ctx context.Context, p *domain.Payment) error
-	CreateCharge(ctx context.Context, c *domain.Charge) error
-	SaveCharge(ctx context.Context, c *domain.Charge) error
-	// SplitOff gives the charge a payment of its own (money that arrived a second time), all or nothing
-	SplitOff(ctx context.Context, c *domain.Charge, p *domain.Payment) error
+	Create(ctx context.Context, p *domain.Payment) error
+	Update(ctx context.Context, p *domain.Payment) error
 	Get(ctx context.Context, branchID, id uint) (*domain.Payment, error)
-	// Find is Get for the module's own work (a webhook knows no branch)
-	Find(ctx context.Context, id uint) (*domain.Payment, error)
-	// ChargeByRef finds a charge by the gateway's id; ChargeByOrderNo by the order number we sent
-	ChargeByRef(ctx context.Context, provider, ref string) (*domain.Charge, error)
-	ChargeByOrderNo(ctx context.Context, provider, orderNo string) (*domain.Charge, error)
+	// ByRef finds a payment by the gateway's id; ByOrderNo by the order number we sent
+	ByRef(ctx context.Context, provider, ref string) (*domain.Payment, error)
+	ByOrderNo(ctx context.Context, provider, orderNo string) (*domain.Payment, error)
 	ByBooking(ctx context.Context, branchID, bookingID uint) ([]domain.Payment, error)
 	CountByBooking(ctx context.Context, bookingID uint) (int64, error)
-	// Pending: charges to ask the gateway about (created before `before`): those still waiting whose time
-	// ran out after `since`, and the paid charge of a refund in progress
-	Pending(ctx context.Context, before, since time.Time) ([]domain.Charge, error)
+	// Pending: payments to ask the gateway about (created before `before`): those still waiting whose time ran
+	// out after `since`, and refunds in progress
+	Pending(ctx context.Context, before, since time.Time) ([]domain.Payment, error)
 	// Attention: the branch's payments in these statuses, newest first
 	Attention(ctx context.Context, branchID uint, statuses []string) ([]domain.Payment, error)
 	// Setting is the branch's choice (nil: never set, online payment on)

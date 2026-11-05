@@ -94,19 +94,19 @@ func onePhonePerAccount(db *gorm.DB) error {
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users (phone) WHERE phone <> '' AND deleted_at IS NULL").Error
 }
 
-// refuseOldPayments stops the migration when `payments` still has the first layout (one row per try, the
-// bank's QR in the same row). Payments are now a payment plus its charges (payment_charges); migrating
-// never deletes data, so the old table, which only ever held test payments, is dropped by hand.
+// refuseOldPayments stops the migration when the database still has `payment_charges`: the short-lived two-table
+// layout (a payment plus its charges). Payments are one row per try again; migrating never deletes data, so the
+// two old tables, which only ever held test payments, are dropped by hand.
 func refuseOldPayments(db *gorm.DB) error {
 	var old int64
-	err := db.Raw(`SELECT COUNT(*) FROM information_schema.columns
-		WHERE table_schema = current_schema() AND table_name = 'payments' AND column_name = 'provider_ref'`).Scan(&old).Error
+	err := db.Raw(`SELECT COUNT(*) FROM information_schema.tables
+		WHERE table_schema = current_schema() AND table_name = 'payment_charges'`).Scan(&old).Error
 	if err != nil {
 		return err
 	}
 	if old > 0 {
-		return errors.New("the payments table has the old layout (one row per try to pay). It held test payments only: " +
-			"run  DROP TABLE payments;  in the database, then run the migration again")
+		return errors.New("the payments tables have the old two-table layout (payments + payment_charges). They held test payments only: " +
+			"run  DROP TABLE payment_charges; DROP TABLE payments;  in the database, then run the migration again")
 	}
 	return nil
 }

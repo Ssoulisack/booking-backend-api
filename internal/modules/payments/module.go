@@ -54,4 +54,4 @@ func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) {
 }
 
 // Models are the tables of this module, for the migration
-func Models() []any { return []any{&domain.Payment{}, &domain.Charge{}, &domain.Setting{}} }
+func Models() []any { return []any{&domain.Payment{}, &domain.Setting{}} }

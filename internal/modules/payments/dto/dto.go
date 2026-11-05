@@ -32,29 +32,16 @@ type PaymentDTO struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
-// ChargeDTO is one try at the gateway (one bank the customer picked), for the team
-type ChargeDTO struct {
-	ID          uint      `json:"id"`
-	Provider    string    `json:"provider"`
-	Method      string    `json:"method"`
-	Status      string    `json:"status"`
-	ProviderRef string    `json:"provider_ref"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-// StaffPaymentDTO adds what the team needs to follow the money; Charges lists every bank the customer
-// tried, newest first
+// StaffPaymentDTO adds what the team needs to follow the money: every try is its own payment
 type StaffPaymentDTO struct {
 	PaymentDTO
-	BookingID   uint        `json:"booking_id"`
-	OrderNo     string      `json:"order_no"`
-	ProviderRef string      `json:"provider_ref"`
-	PaidAt      *time.Time  `json:"paid_at,omitempty"`
-	RefundRef   string      `json:"refund_ref,omitempty"`
-	Note        string      `json:"note,omitempty"`
-	CreatedAt   time.Time   `json:"created_at"`
-	Charges     []ChargeDTO `json:"charges"`
+	BookingID   uint       `json:"booking_id"`
+	OrderNo     string     `json:"order_no"`
+	ProviderRef string     `json:"provider_ref"`
+	PaidAt      *time.Time `json:"paid_at,omitempty"`
+	RefundRef   string     `json:"refund_ref,omitempty"`
+	Note        string     `json:"note,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // SettingsDTO: the branch's online payment switch, and whether the server has a gateway to switch on
