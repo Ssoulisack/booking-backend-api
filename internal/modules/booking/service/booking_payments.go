@@ -68,6 +68,9 @@ func (s *Service) SettlePaid(ctx context.Context, branchID, bookingID uint, ref 
 	if err := s.bookings.SetPayment(ctx, bk); err != nil {
 		return err
 	}
+	if s.team != nil {
+		s.team.PaymentReceived(ctx, branchID, bookingID)
+	}
 	return s.afterPaid(ctx, bk)
 }
 
@@ -83,6 +86,9 @@ func customerOf(bk *domain.Booking) (to, name string) {
 // BookingReleased emails the customer that their unpaid event booking was released (the events job calls it
 // after cancelling it). No email on file: nothing to send. A failed email is logged and changes nothing.
 func (s *Service) BookingReleased(ctx context.Context, branchID, bookingID uint) {
+	if s.team != nil {
+		s.team.Cancelled(ctx, branchID, bookingID, "unpaid")
+	}
 	bk, err := s.bookings.GetByID(ctx, branchID, bookingID)
 	if err != nil || bk == nil {
 		return

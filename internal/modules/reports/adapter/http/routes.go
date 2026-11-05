@@ -19,6 +19,8 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	b.Get("/reports/utilisation", manager, h.Utilisation)
 	b.Get("/reports/finance", manager, h.Finance)
 	b.Get("/reports/unpaid", manager, h.Unpaid)
+	b.Get("/reports/table-bookings", manager, h.TableBookings)
+	b.Get("/reports/event-bookings", manager, h.EventBookings)
 
 	api.Get("/company/report", auth.RequireUser, auth.RequireCompany, h.Company)
 }

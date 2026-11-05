@@ -114,3 +114,31 @@ func (h *Handler) Company(c *fiber.Ctx) error {
 	res, err := h.svc.Company(c.UserContext(), q)
 	return httpx.OK(c, res, err)
 }
+
+func bookingRowsQuery(c *fiber.Ctx) (dto.BookingRowsQuery, error) {
+	var q dto.BookingRowsQuery
+	if err := c.QueryParser(&q); err != nil {
+		return q, response.ErrorBadRequest("INVALID_QUERY")
+	}
+	return q, nil
+}
+
+// TableBookings: ?from=&to=&status=&sort_by=created_at&order=&page=&limit= (cards are for the first day)
+func (h *Handler) TableBookings(c *fiber.Ctx) error {
+	q, err := bookingRowsQuery(c)
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.TableBookings(c.UserContext(), middleware.BranchID(c), q)
+	return httpx.OK(c, res, err)
+}
+
+// EventBookings: ?event_id=&bank=&status=&payment_status=&sort_by=created_at&order=&page=&limit=
+func (h *Handler) EventBookings(c *fiber.Ctx) error {
+	q, err := bookingRowsQuery(c)
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.EventBookings(c.UserContext(), middleware.BranchID(c), q)
+	return httpx.OK(c, res, err)
+}

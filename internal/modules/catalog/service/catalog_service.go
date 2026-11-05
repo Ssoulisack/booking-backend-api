@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"gorm.io/gorm"
 )
 
 type CatalogServiceImpl struct {
@@ -504,7 +506,7 @@ func floorItemsOf(branchID, areaID uint, in []dto.FloorItemDTO) ([]domain.FloorI
 			}
 			target = it.TargetFloor
 		}
-		out = append(out, domain.FloorItem{BranchID: branchID, AreaID: areaID, Kind: it.Kind, Label: label, Color: color,
+		out = append(out, domain.FloorItem{Model: gorm.Model{ID: it.ID}, BranchID: branchID, AreaID: areaID, Kind: it.Kind, Label: label, Color: color,
 			PlanX: it.PlanX, PlanY: it.PlanY, PlanW: it.PlanW, PlanH: it.PlanH, Rotation: it.Rotation, TargetFloor: target,
 			Shape: shape, CutW: cutW, CutH: cutH, CutCorner: corner})
 	}
@@ -674,14 +676,32 @@ func (s *CatalogServiceImpl) replaceItems(ctx context.Context, branchID, areaID 
 	if err != nil {
 		return err
 	}
+	// an object that is already on the plan keeps its id (event prices point at zone ids); the rest are new,
+	// and the ones left out are deleted
+	byID := map[uint]domain.FloorItem{}
 	for _, o := range old {
-		if err := s.items.Delete(ctx, branchID, o.ID); err != nil {
+		byID[o.ID] = o
+	}
+	kept := map[uint]bool{}
+	for i := range items {
+		if o, ok := byID[items[i].ID]; ok && items[i].ID != 0 && !kept[items[i].ID] {
+			kept[o.ID] = true
+			items[i].CreatedAt = o.CreatedAt
+			if err := s.items.Update(ctx, &items[i]); err != nil {
+				return err
+			}
+			continue
+		}
+		items[i].ID = 0
+		if err := s.items.Create(ctx, &items[i]); err != nil {
 			return err
 		}
 	}
-	for i := range items {
-		if err := s.items.Create(ctx, &items[i]); err != nil {
-			return err
+	for _, o := range old {
+		if !kept[o.ID] {
+			if err := s.items.Delete(ctx, branchID, o.ID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

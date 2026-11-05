@@ -73,22 +73,12 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req iddto.RegisterDTO) (
 	return issueTokens(user)
 }
 
-// identity checks the contact details of an account (new, or exceptID when changing one) and
-// returns them normalized. With needNationality the nationality must be chosen; "LA" needs a phone
-// and gets a stand-in email when none is given, any other nationality needs a real email.
-// An account phone is always a Lao mobile number, stored as 20xxxxxxxx, whatever the nationality:
-// foreigners add one if they have a Lao number, otherwise they leave it empty.
-func identity(ctx context.Context, repo output.UserRepository, exceptID uint, needNationality bool,
-	nationality, phoneIn, emailIn string) (email, phone string, generated bool, err error) {
-	nationality = strings.ToUpper(strings.TrimSpace(nationality))
-	switch {
-	case nationality == "" && needNationality:
-		return "", "", false, badRequest("NATIONALITY_REQUIRED")
-	case nationality != "" && !domain.ValidNationality(nationality):
-		return "", "", false, badRequest("INVALID_NATIONALITY")
-	}
-	lao := nationality == domain.NationalityLaos
-
+// identity checks the contact details of an account (new, or exceptID when changing one) and returns them
+// normalized. An account phone is always a Lao mobile number, stored as 20xxxxxxxx. With requirePhone (a new
+// registration) a phone is required; without a phone the account needs a real email. Without a real email an
+// account gets a stand-in one made from its phone (it can log in by phone, but never reset by email).
+func identity(ctx context.Context, repo output.UserRepository, exceptID uint, requirePhone bool,
+	phoneIn, emailIn string) (email, phone string, generated bool, err error) {
 	if strings.TrimSpace(phoneIn) != "" {
 		var ok bool
 		if phone, ok = domain.NormalizePhone(phoneIn); !ok || !domain.IsLaoPhone(phone) {
@@ -101,14 +91,14 @@ func identity(ctx context.Context, repo output.UserRepository, exceptID uint, ne
 		if taken {
 			return "", "", false, conflict("PHONE_ALREADY_REGISTERED")
 		}
-	} else if lao {
-		return "", "", false, badRequest("PHONE_REQUIRED")
+	} else if requirePhone {
+		return "", "", false, badRequest("PHONE_REQUIRED") // the team reaches a customer by phone
 	}
 
 	email = kit.NormalizeEmail(emailIn)
 	if email == "" || domain.IsGeneratedEmail(email) {
-		if !lao {
-			return "", "", false, badRequest("EMAIL_REQUIRED")
+		if phone == "" {
+			return "", "", false, badRequest("EMAIL_REQUIRED") // neither a phone nor an email: no way to reach or find them
 		}
 		return domain.GeneratedEmail(phone), phone, true, nil
 	}
@@ -126,15 +116,15 @@ func identity(ctx context.Context, repo output.UserRepository, exceptID uint, ne
 }
 
 // createUser validates a registration and stores a plain account (no company role).
-// Accounts made from an invitation (needNationality false) choose their nationality on first login.
-func createUser(ctx context.Context, repo output.UserRepository, req iddto.RegisterDTO, needNationality bool) (*domain.User, error) {
+// A public registration (requirePhone) must give a phone; an account made from an invitation may add it later.
+func createUser(ctx context.Context, repo output.UserRepository, req iddto.RegisterDTO, requirePhone bool) (*domain.User, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, badRequest("NAME_IS_REQUIRED")
 	}
 	if err := kit.ValidPassword(req.Password); err != nil {
 		return nil, err
 	}
-	email, phone, generated, err := identity(ctx, repo, 0, needNationality, req.Nationality, req.Phone, req.Email)
+	email, phone, generated, err := identity(ctx, repo, 0, requirePhone, req.Phone, req.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +138,6 @@ func createUser(ctx context.Context, repo output.UserRepository, req iddto.Regis
 		Username:       email, // username is unique but accounts are identified by email or phone
 		Name:           strings.TrimSpace(req.Name),
 		Phone:          phone,
-		Nationality:    strings.ToUpper(strings.TrimSpace(req.Nationality)),
 		EmailGenerated: generated,
 		PasswordHash:   hash,
 		Status:         true,
@@ -169,12 +158,12 @@ func (s *AuthServiceImpl) UpdateProfile(ctx context.Context, userID uint, req id
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, badRequest("NAME_IS_REQUIRED")
 	}
-	email, phone, generated, err := identity(ctx, s.userRepo, user.ID, true, req.Nationality, req.Phone, req.Email)
+	email, phone, generated, err := identity(ctx, s.userRepo, user.ID, false, req.Phone, req.Email)
 	if err != nil {
 		return nil, err
 	}
 	user.Name, user.Email, user.Username, user.Phone = strings.TrimSpace(req.Name), email, email, phone
-	user.Nationality, user.EmailGenerated = strings.ToUpper(strings.TrimSpace(req.Nationality)), generated
+	user.EmailGenerated = generated
 	if err := s.userRepo.UpdateProfile(ctx, user); err != nil {
 		return nil, err
 	}

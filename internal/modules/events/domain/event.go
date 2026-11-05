@@ -18,6 +18,10 @@ type Event struct {
 	// the days it runs, YYYY-MM-DD in the branch's time zone, both included (one day: the same date)
 	StartsOn string `gorm:"type:varchar(10);not null;index"`
 	EndsOn   string `gorm:"type:varchar(10);not null"`
+	// the time of day it runs, HH:MM in the branch time zone, each day; "" = not said. An end earlier than the
+	// start means after midnight (19:00 – 01:00).
+	StartTime string `gorm:"type:varchar(5);not null;default:''"`
+	EndTime   string `gorm:"type:varchar(5);not null;default:''"`
 	// pictures from the media library: the day's page background, and the small ad (falls back to the background)
 	BackgroundKey string `gorm:"type:varchar(255)"`
 	AdKey         string `gorm:"type:varchar(255)"`
@@ -29,7 +33,31 @@ type Event struct {
 	// price of a table that is in no priced zone and has no price of its own; 0 = not for sale
 	DefaultPrice int64 `gorm:"not null;default:0"`
 	Published    bool  `gorm:"not null;default:false"`
+	// GuestsOff: only customers with an account may buy tables (false = guests may too, as the branch allows)
+	GuestsOff bool `gorm:"not null;default:false"`
 }
+
+// Area ties an event to one area (a floor, a hall) of the branch. An event with no areas covers every area.
+type Area struct {
+	EventID uint `gorm:"primaryKey"`
+	AreaID  uint `gorm:"primaryKey"`
+}
+
+func (Area) TableName() string { return "event_areas" }
+
+// LineupRow is one line of the event's program: "19:00 – 20:30 Brand show". EndTime "" = until the end.
+// Day "" = every day of the event; a date = that day only.
+type LineupRow struct {
+	ID        uint   `gorm:"primaryKey"`
+	EventID   uint   `gorm:"not null;index"`
+	Day       string `gorm:"type:varchar(10);not null;default:''"`
+	StartTime string `gorm:"type:varchar(5);not null"`
+	EndTime   string `gorm:"type:varchar(5);not null;default:''"`
+	Title     string `gorm:"type:varchar(120);not null"`
+	Position  int    `gorm:"not null;default:0"`
+}
+
+func (LineupRow) TableName() string { return "event_lineup" }
 
 // Price kinds
 const (

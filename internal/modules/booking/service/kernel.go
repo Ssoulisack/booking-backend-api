@@ -3,6 +3,7 @@ package service
 import (
 	"backend/internal/core/domain"
 	"backend/internal/core/dto"
+	"backend/internal/core/port/output"
 	"backend/internal/modules/booking/port"
 	"context"
 	"time"
@@ -11,6 +12,9 @@ import (
 // What the restaurant module borrows (port.Kernel): the booking module's own helpers, exported.
 
 var _ port.Kernel = (*Service)(nil)
+
+// SetTeamNotifier gives the service a way to tell the branch's team about new bookings, payments and cancellations
+func (s *Service) SetTeamNotifier(t output.TeamNotifier) { s.team = t }
 
 // SetTables gives the service the module that books restaurant tables
 func (s *Service) SetTables(t port.TableBooker) { s.tables = t }

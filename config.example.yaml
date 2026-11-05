@@ -118,6 +118,13 @@ company:
 # Keys: https://portal.phajay.co (Key Management). Before KYC: testKey (calls) + devSecretKey (webhook
 # signature); after approval: secretKey (both). A key may contain "$": keep the double quotes.
 # Webhook URL to set in the portal: https://<your-domain>/api/v1/payments/webhooks/phajay
+# Telegram: a branch's bot token and group are connected by the owner on the website (Settings → Telegram), not here.
+# apiBase is Telegram's address. encryptionKey is the secret stored bot tokens are encrypted with; empty = the jwt secret.
+# Changing it later means the owners connect their bots again.
+telegram:
+  apiBase: "https://api.telegram.org"
+  encryptionKey: ""
+
 payments:
   phajay:
     baseUrl: "https://payment-gateway.phajay.co"

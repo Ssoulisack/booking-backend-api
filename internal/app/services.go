@@ -13,9 +13,11 @@ import (
 	paymentsport "backend/internal/modules/payments/port"
 	"backend/internal/modules/reports"
 	"backend/internal/modules/restaurant"
+	"backend/internal/modules/telegram"
 	"backend/internal/platform/config"
 	"context"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -31,6 +33,7 @@ type AppServices struct {
 	restaurant *restaurant.Module
 	events     *events.Module
 	payments   *payments.Module
+	telegram   *telegram.Module // nil when the server secret is too short to encrypt with
 }
 
 // SetupServices initializes all core services
@@ -66,6 +69,18 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		DB: r.postgres.GetDB(), Providers: gateways,
 		Branches: r.branches, Bookings: bookingImpl, Dev: devGateway,
 	})
+	// Telegram: bots and groups are connected on the website; what is stored is encrypted with a key made from the
+	// server's secret. Too short a secret switches the feature off (the booking flows then tell nobody).
+	telegramModule, err := telegram.New(telegram.Deps{
+		DB: r.postgres.GetDB(), Bookings: r.bookings, APIBase: r.telegram.APIBase,
+		Secret: firstNonEmpty(r.telegram.EncryptionKey, r.jwtSecret),
+	})
+	if err != nil {
+		log.Printf("⚠️  Telegram notifications are off: %v", err)
+		telegramModule = nil
+	} else {
+		bookingImpl.SetTeamNotifier(telegramModule.Service)
+	}
 	identityModule := identity.New(identity.Deps{
 		Users: r.user, Cache: r.redis, Memberships: r.memberships, Branches: r.branches, Company: r.company,
 		PasswordResets: r.passwordResets, Social: r.social, DB: r.postgres.GetDB(),
@@ -86,14 +101,24 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		restaurant: restaurantModule,
 		events:     eventsModule,
 		payments:   paymentsModule,
+		telegram:   telegramModule,
 		filesDir:   r.filesDir,
 		identity:   identityModule,
 		company:    companyModule,
 		catalog:    catalogModule,
 		media:      media.New(media.Deps{Storage: r.storage, Media: r.media}),
 		booking:    bookingModule,
-		reports:    reports.New(reports.Deps{Branches: r.branches, Bookings: r.bookings, Resources: r.resources, Sports: r.sports, Hours: r.openingHours, Closures: r.closures}),
+		reports:    reports.New(reports.Deps{Branches: r.branches, Bookings: r.bookings, Resources: r.resources, Sports: r.sports, Hours: r.openingHours, Closures: r.closures, Rows: r.bookingReports}),
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // Install prepares a fresh install (company, its booking rule, the first owner); safe on every start
@@ -151,7 +176,7 @@ func KeepTablesSettled(svc *AppServices) {
 
 // Models are the tables the modules own, for the migration (make migrate)
 func Models() []any {
-	return append(append(events.Models(), payments.Models()...), identity.Models()...)
+	return append(append(append(events.Models(), payments.Models()...), identity.Models()...), telegram.Models()...)
 }
 
 // SettleEventHolds cancels event bookings not paid in time (KeepTablesSettled runs it every minute)

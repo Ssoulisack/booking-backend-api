@@ -53,4 +53,6 @@ func New(d Deps) *Module {
 func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) { m.handler.Routes(api, auth) }
 
 // Models are the tables of this module, for the migration
-func Models() []any { return []any{&domain.Event{}, &domain.Price{}, &domain.PayInfo{}} }
+func Models() []any {
+	return []any{&domain.Event{}, &domain.Price{}, &domain.PayInfo{}, &domain.Area{}, &domain.LineupRow{}}
+}

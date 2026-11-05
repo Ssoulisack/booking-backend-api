@@ -25,7 +25,7 @@ func (r *bookingRepository) Create(ctx context.Context, b *domain.Booking) error
 	if b.BranchID == 0 {
 		return errNoScope
 	}
-	return exception.HandleGormError(r.db.WithContext(ctx).Omit("Branch", "Customer", "PaidBy", "Sport").Create(b).Error)
+	return exception.HandleGormError(r.db.WithContext(ctx).Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error)
 }
 
 func (r *bookingRepository) CreateClassBooking(ctx context.Context, b *domain.Booking, classID uint, seats int) error {
@@ -48,7 +48,7 @@ func (r *bookingRepository) CreateClassBooking(ctx context.Context, b *domain.Bo
 		if taken+int64(seats) > int64(class.Capacity) {
 			return response.NewError(http.StatusConflict, "CLASS_FULL")
 		}
-		return tx.Omit("Branch", "Customer", "PaidBy", "Sport").Create(b).Error
+		return tx.Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error
 	})
 	return keepAppError(err)
 }
@@ -62,6 +62,7 @@ func (r *bookingRepository) withDetails(ctx context.Context) *gorm.DB {
 func withNames(tx *gorm.DB) *gorm.DB {
 	unscoped := func(db *gorm.DB) *gorm.DB { return db.Unscoped() }
 	return tx.Preload("Sport", unscoped).
+		Preload("Event", unscoped).
 		Preload("Items.Resource", unscoped).
 		Preload("Items.Coach", unscoped).
 		Preload("Items.ClassSession", unscoped)

@@ -24,6 +24,16 @@ type Repository interface {
 	// Upcoming: published events not over yet (ends_on >= today), soonest first
 	Upcoming(ctx context.Context, branchID uint, today string) ([]domain.Event, error)
 
+	// OnDay: every published event running on day (more than one when they are in different areas)
+	OnDay(ctx context.Context, branchID uint, day string) ([]domain.Event, error)
+
+	// AreaIDs: the areas the event is held in (none = every area)
+	AreaIDs(ctx context.Context, eventID uint) ([]uint, error)
+	ReplaceAreas(ctx context.Context, eventID uint, areaIDs []uint) error
+	// Lineup: the event's program, in order
+	Lineup(ctx context.Context, eventID uint) ([]domain.LineupRow, error)
+	ReplaceLineup(ctx context.Context, eventID uint, rows []domain.LineupRow) error
+
 	Prices(ctx context.Context, eventID uint) ([]domain.Price, error)
 	ReplacePrices(ctx context.Context, eventID uint, prices []domain.Price) error
 

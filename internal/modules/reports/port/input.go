@@ -13,6 +13,10 @@ type ReportService interface {
 	Finance(ctx context.Context, branchID uint, q dto.ReportQuery) (*dto.FinanceDTO, error)
 	Unpaid(ctx context.Context, branchID uint, q dto.ReportQuery) ([]dto.UnpaidRow, error)
 	CashUp(ctx context.Context, branchID uint, date string) (*dto.CashUpDTO, error)
+	// TableBookings lists the table bookings of a range (one row per booking) with the tables' cards for its first day
+	TableBookings(ctx context.Context, branchID uint, q dto.BookingRowsQuery) (*dto.TableReportDTO, error)
+	// EventBookings lists the event bookings with the value of successful and of cancelled ones
+	EventBookings(ctx context.Context, branchID uint, q dto.BookingRowsQuery) (*dto.EventReportDTO, error)
 	// Company adds up every branch (closed ones included) for the period, with one row per branch
 	Company(ctx context.Context, q dto.ReportQuery) (*dto.CompanyReportDTO, error)
 }

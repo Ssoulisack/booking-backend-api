@@ -168,6 +168,14 @@ func (s *Service) toDTO(ctx context.Context, b *domain.Branch, e evdomain.Event)
 		HoldMinutes: e.HoldMinutes, BigBookingTables: e.BigBookingTables, BigHoldMinutes: e.BigHoldMinutes,
 		DefaultPrice: e.DefaultPrice, Published: e.Published, Currency: b.Currency,
 	}
+	d.StartTime, d.EndTime, d.AcceptGuests = e.StartTime, e.EndTime, !e.GuestsOff
+	d.AreaIDs, d.Lineup = []uint{}, []dto.LineupItem{}
+	if ids, err := s.Repo.AreaIDs(ctx, e.ID); err == nil && ids != nil {
+		d.AreaIDs = ids
+	}
+	if rows, err := s.Repo.Lineup(ctx, e.ID); err == nil {
+		d.Lineup = lineupItems(rows)
+	}
 	if counts, err := s.Repo.BookingCounts(ctx, e.ID); err == nil {
 		d.Waiting, d.Paid, d.Cancelled = counts[domain.BookingPending], counts[domain.BookingConfirmed]+counts[domain.BookingCompleted], counts[domain.BookingCancelled]
 	}
@@ -204,15 +212,15 @@ func (s *Service) Get(ctx context.Context, branchID, id uint) (*dto.EventDTO, er
 }
 
 // apply checks a request and copies it onto the event
-func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event, req dto.EventRequest, creating bool) error {
+func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event, req dto.EventRequest, creating bool) (*extras, error) {
 	name := strings.TrimSpace(req.Name)
 	switch {
 	case name == "" || utf8.RuneCountInString(name) > 120:
-		return badRequest("INVALID_NAME")
+		return nil, badRequest("INVALID_NAME")
 	case utf8.RuneCountInString(req.Description) > 2000:
-		return badRequest("DESCRIPTION_TOO_LONG")
+		return nil, badRequest("DESCRIPTION_TOO_LONG")
 	case !validDate(req.StartsOn):
-		return badRequest("INVALID_START_DATE")
+		return nil, badRequest("INVALID_START_DATE")
 	}
 	if req.EndsOn == "" {
 		req.EndsOn = req.StartsOn // one day unless the owner asks for more
@@ -221,13 +229,13 @@ func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event
 	to, err := time.Parse("2006-01-02", req.EndsOn)
 	switch {
 	case err != nil:
-		return badRequest("INVALID_END_DATE")
+		return nil, badRequest("INVALID_END_DATE")
 	case to.Before(from):
-		return badRequest("END_BEFORE_START")
+		return nil, badRequest("END_BEFORE_START")
 	case to.Sub(from) > (maxSpanDays-1)*24*time.Hour:
-		return badRequest("EVENT_TOO_LONG")
+		return nil, badRequest("EVENT_TOO_LONG")
 	case creating && req.EndsOn < s.today(b):
-		return badRequest("EVENT_IN_THE_PAST")
+		return nil, badRequest("EVENT_IN_THE_PAST")
 	}
 	if req.HoldMinutes == 0 {
 		req.HoldMinutes = defaultHold
@@ -240,26 +248,67 @@ func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event
 	}
 	switch {
 	case req.HoldMinutes < 15 || req.HoldMinutes > 7*24*60:
-		return badRequest("INVALID_HOLD_MINUTES")
+		return nil, badRequest("INVALID_HOLD_MINUTES")
 	case req.BigBookingTables < 1 || req.BigBookingTables > 50:
-		return badRequest("INVALID_BIG_BOOKING_TABLES")
+		return nil, badRequest("INVALID_BIG_BOOKING_TABLES")
 	case req.BigHoldMinutes < 5 || req.BigHoldMinutes > 7*24*60:
-		return badRequest("INVALID_BIG_HOLD_MINUTES")
+		return nil, badRequest("INVALID_BIG_HOLD_MINUTES")
 	case req.DefaultPrice < 0 || req.DefaultPrice > maxPrice:
-		return badRequest("INVALID_PRICE")
+		return nil, badRequest("INVALID_PRICE")
 	}
 	for _, key := range []string{req.BackgroundKey, req.AdKey} {
 		if err := s.fileKey(ctx, b.ID, key); err != nil {
-			return err
+			return nil, err
 		}
+	}
+	// the time of day
+	for _, clock := range []string{req.StartTime, req.EndTime} {
+		if clock != "" && !validClock(clock) {
+			return nil, badRequest("INVALID_EVENT_TIME")
+		}
+	}
+	if req.StartTime != "" && req.StartTime == req.EndTime {
+		return nil, badRequest("INVALID_EVENT_TIME")
+	}
+	if req.StartTime == "" && req.EndTime != "" {
+		return nil, badRequest("EVENT_START_TIME_REQUIRED")
+	}
+	ex := &extras{}
+	// the areas: not sent = unchanged; none = every area
+	if req.AreaIDs != nil {
+		ids, err := s.checkAreas(ctx, b.ID, *req.AreaIDs)
+		if err != nil {
+			return nil, err
+		}
+		ex.areas, ex.setAreas = ids, true
+	}
+	if req.Lineup != nil {
+		rows, err := checkLineup(*req.Lineup, req.StartsOn, req.EndsOn)
+		if err != nil {
+			return nil, err
+		}
+		ex.lineup, ex.setLineup = rows, true
 	}
 	if req.Published {
 		clash, err := s.Repo.PublishedOverlapping(ctx, b.ID, req.StartsOn, req.EndsOn, e.ID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if len(clash) > 0 {
-			return conflict("EVENT_DATES_OVERLAP") // one event a day: it takes the day over
+		// events may share a day only when they are held in different areas
+		mine := ex.areas
+		if !ex.setAreas && e.ID != 0 {
+			if mine, err = s.Repo.AreaIDs(ctx, e.ID); err != nil {
+				return nil, err
+			}
+		}
+		for _, other := range clash {
+			theirs, err := s.Repo.AreaIDs(ctx, other.ID)
+			if err != nil {
+				return nil, err
+			}
+			if len(mine) == 0 || len(theirs) == 0 || slices.ContainsFunc(mine, func(id uint) bool { return slices.Contains(theirs, id) }) {
+				return nil, conflict("EVENT_DATES_OVERLAP") // the same area cannot hold two events on a day
+			}
 		}
 	}
 	e.BranchID, e.Name, e.Description = b.ID, name, strings.TrimSpace(req.Description)
@@ -267,7 +316,11 @@ func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event
 	e.BackgroundKey, e.AdKey = req.BackgroundKey, req.AdKey
 	e.HoldMinutes, e.BigBookingTables, e.BigHoldMinutes = req.HoldMinutes, req.BigBookingTables, req.BigHoldMinutes
 	e.DefaultPrice, e.Published = req.DefaultPrice, req.Published
-	return nil
+	e.StartTime, e.EndTime = req.StartTime, req.EndTime
+	if req.AcceptGuests != nil {
+		e.GuestsOff = !*req.AcceptGuests
+	}
+	return ex, nil
 }
 
 func (s *Service) Create(ctx context.Context, branchID uint, req dto.EventRequest) (*dto.EventDTO, error) {
@@ -276,10 +329,14 @@ func (s *Service) Create(ctx context.Context, branchID uint, req dto.EventReques
 		return nil, err
 	}
 	e := &evdomain.Event{}
-	if err := s.apply(ctx, b, e, req, true); err != nil {
+	ex, err := s.apply(ctx, b, e, req, true)
+	if err != nil {
 		return nil, err
 	}
 	if err := s.Repo.Create(ctx, e); err != nil {
+		return nil, err
+	}
+	if err := s.saveExtras(ctx, e.ID, ex); err != nil {
 		return nil, err
 	}
 	d := s.toDTO(ctx, b, *e)
@@ -295,10 +352,14 @@ func (s *Service) Update(ctx context.Context, branchID, id uint, req dto.EventRe
 	if err != nil {
 		return nil, mapNotFound(err, "EVENT_NOT_FOUND")
 	}
-	if err := s.apply(ctx, b, e, req, false); err != nil {
+	ex, err := s.apply(ctx, b, e, req, false)
+	if err != nil {
 		return nil, err
 	}
 	if err := s.Repo.Update(ctx, e); err != nil {
+		return nil, err
+	}
+	if err := s.saveExtras(ctx, e.ID, ex); err != nil {
 		return nil, err
 	}
 	d := s.toDTO(ctx, b, *e)
@@ -342,15 +403,33 @@ func (s *Service) Copy(ctx context.Context, branchID, id uint, req dto.CopyReque
 		req.StartsOn, req.EndsOn = old.StartsOn, old.EndsOn
 	}
 	e := &evdomain.Event{}
-	err = s.apply(ctx, b, e, dto.EventRequest{
+	oldAreas, err := s.Repo.AreaIDs(ctx, old.ID)
+	if err != nil {
+		return nil, err
+	}
+	oldLineup, err := s.Repo.Lineup(ctx, old.ID)
+	if err != nil {
+		return nil, err
+	}
+	items := lineupItems(oldLineup)
+	if old.StartsOn != req.StartsOn { // dated rows belong to the old days: they become "every day" rows
+		for i := range items {
+			items[i].Day = ""
+		}
+	}
+	ex, err := s.apply(ctx, b, e, dto.EventRequest{
 		Name: req.Name, Description: old.Description, StartsOn: req.StartsOn, EndsOn: req.EndsOn,
 		BackgroundKey: old.BackgroundKey, AdKey: old.AdKey, HoldMinutes: old.HoldMinutes,
 		BigBookingTables: old.BigBookingTables, BigHoldMinutes: old.BigHoldMinutes, DefaultPrice: old.DefaultPrice,
+		StartTime: old.StartTime, EndTime: old.EndTime, AreaIDs: &oldAreas, Lineup: &items, AcceptGuests: ptr(!old.GuestsOff),
 	}, true)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.Repo.Create(ctx, e); err != nil {
+		return nil, err
+	}
+	if err := s.saveExtras(ctx, e.ID, ex); err != nil {
 		return nil, err
 	}
 	prices, err := s.Repo.Prices(ctx, old.ID)
@@ -548,7 +627,9 @@ func (s *Service) PublicPay(ctx context.Context, slug string) (*dto.PublicPayInf
 	return out, nil
 }
 
-func (s *Service) publicCard(e evdomain.Event, b *domain.Branch, book evdomain.PriceBook, tables []domain.Resource) dto.PublicEventDTO {
+func (s *Service) publicCard(ctx context.Context, e evdomain.Event, b *domain.Branch, book evdomain.PriceBook, allTables []domain.Resource) dto.PublicEventDTO {
+	areaIDs, _ := s.Repo.AreaIDs(ctx, e.ID)
+	tables := tablesOf(allTables, areaIDs)
 	var from int64
 	for _, t := range tables {
 		if p := book.Of(t); p > 0 && (from == 0 || p < from) {
@@ -562,7 +643,16 @@ func (s *Service) publicCard(e evdomain.Event, b *domain.Branch, book evdomain.P
 	return dto.PublicEventDTO{
 		ID: e.ID, Name: e.Name, Description: e.Description, StartsOn: e.StartsOn, EndsOn: e.EndsOn,
 		BackgroundURL: s.url(e.BackgroundKey), AdURL: s.url(ad), FromPrice: from, Currency: b.Currency,
+		StartTime: e.StartTime, EndTime: e.EndTime, AcceptGuests: !e.GuestsOff, Areas: s.areaRefs(ctx, b.ID, areaIDs), Lineup: s.lineupOf(ctx, e.ID),
 	}
+}
+
+func (s *Service) lineupOf(ctx context.Context, eventID uint) []dto.LineupItem {
+	rows, err := s.Repo.Lineup(ctx, eventID)
+	if err != nil {
+		return []dto.LineupItem{}
+	}
+	return lineupItems(rows)
 }
 
 // Upcoming lists the published events not over yet: the small ads on the home and branch pages
@@ -588,7 +678,7 @@ func (s *Service) Upcoming(ctx context.Context, slug string) ([]dto.PublicEventD
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, s.publicCard(e, b, evdomain.NewPriceBook(e, rows, zones), tables))
+		out = append(out, s.publicCard(ctx, e, b, evdomain.NewPriceBook(e, rows, zones), tables))
 	}
 	return out, nil
 }
@@ -647,7 +737,7 @@ func (s *Service) Detail(ctx context.Context, slug string, id uint, date string)
 	}
 	book := evdomain.NewPriceBook(*e, rows, zones)
 	out := &dto.PublicEventDetailDTO{
-		PublicEventDTO: s.publicCard(*e, b, book, tables), Days: e.Days(), Date: date, Tables: []dto.SaleTableDTO{},
+		PublicEventDTO: s.publicCard(ctx, *e, b, book, tables), Days: e.Days(), Date: date, Tables: []dto.SaleTableDTO{},
 		HoldMinutes: e.HoldMinutes, BigBookingTables: e.BigBookingTables, BigHoldMinutes: e.BigHoldMinutes,
 	}
 	start, end, open, err := s.Booker.OpenOn(ctx, b.ID, date)
@@ -661,7 +751,11 @@ func (s *Service) Detail(ctx context.Context, slug string, id uint, date string)
 			return nil, err
 		}
 	}
-	for _, t := range tables {
+	areaIDs, err := s.Repo.AreaIDs(ctx, e.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tablesOf(tables, areaIDs) {
 		// closed that day: nothing can be bought
 		out.Tables = append(out.Tables, dto.SaleTableDTO{ID: t.ID, Price: book.Of(t), Sold: !open || taken[t.ID]})
 	}
@@ -679,6 +773,14 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 	if err != nil {
 		return nil, err
 	}
+	// the team must be able to call the customer: an account buys event tables only with a phone number saved
+	// (a guest's phone is always required with their details)
+	if actor != nil && strings.TrimSpace(actor.Phone) == "" {
+		return nil, badRequest("PHONE_REQUIRED_FOR_EVENT")
+	}
+	if e.GuestsOff && actor == nil {
+		return nil, response.NewError(http.StatusUnauthorized, "LOGIN_REQUIRED") // this event is for customers with an account
+	}
 	if len(req.TableIDs) == 0 {
 		return nil, badRequest("TABLE_REQUIRED")
 	}
@@ -694,8 +796,12 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 		return nil, err
 	}
 	book := evdomain.NewPriceBook(*e, rows, zones)
+	areaIDs, err := s.Repo.AreaIDs(ctx, e.ID)
+	if err != nil {
+		return nil, err
+	}
 	byID := map[uint]domain.Resource{}
-	for _, t := range tables {
+	for _, t := range tablesOf(tables, areaIDs) { // only the event's areas are sold
 		byID[t.ID] = t
 	}
 	start, end, open, err := s.Booker.OpenOn(ctx, b.ID, date)
@@ -735,6 +841,7 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 	created, err := s.Booker.CreateEventBooking(ctx, coredto.EventBookingInput{
 		Slug: slug, Actor: actor, Guest: req.Guest, Notes: req.Notes, EventID: e.ID, Date: date,
 		Guests: req.Guests, HoldMinutes: int(hold / time.Minute), Tables: sales,
+		EventName: e.Name, EventStartTime: e.StartTime, EventEndTime: e.EndTime,
 	})
 	if err != nil {
 		return nil, err
@@ -758,11 +865,38 @@ func (s *Service) Book(ctx context.Context, slug string, id uint, actor *domain.
 
 // EventOn tells the booking service that an event takes over a day (normal table booking is off)
 func (s *Service) EventOn(ctx context.Context, branchID uint, day string) (*domain.EventDay, error) {
-	e, err := s.Repo.On(ctx, branchID, day)
-	if err != nil || e == nil {
+	events, err := s.Repo.OnDay(ctx, branchID, day)
+	if err != nil || len(events) == 0 {
 		return nil, err
 	}
-	return &domain.EventDay{ID: e.ID, Name: e.Name}, nil
+	// several events may share a day in different areas: the first one is named, the areas are all of them,
+	// and one held everywhere covers the whole branch
+	first := events[0]
+	out := &domain.EventDay{ID: first.ID, Name: first.Name, StartTime: first.StartTime, EndTime: first.EndTime}
+	whole := false
+	for _, e := range events {
+		ids, err := s.Repo.AreaIDs(ctx, e.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			whole = true
+		}
+		for _, id := range ids {
+			if !slices.Contains(out.AreaIDs, id) {
+				out.AreaIDs = append(out.AreaIDs, id)
+			}
+		}
+	}
+	if whole {
+		out.AreaIDs = nil
+	}
+	for _, id := range out.AreaIDs {
+		if a, err := s.Sports.GetByID(ctx, branchID, id); err == nil {
+			out.AreaNames = append(out.AreaNames, a.Name)
+		}
+	}
+	return out, nil
 }
 
 // ExpireUnpaid cancels event bookings that were not paid in time and have no slip sent: their

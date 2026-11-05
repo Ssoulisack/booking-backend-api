@@ -121,11 +121,15 @@ type BookingDTO struct {
 	// restaurant tables: the group size, and the time the group loses its table if not there
 	Guests int `json:"guests,omitempty"`
 	// event days: the event bought, pay by (hold ends), and when the customer said the slip was sent
-	EventID    *uint      `json:"event_id,omitempty"`
-	PayBy      *time.Time `json:"pay_by,omitempty"`
-	SlipSentAt *time.Time `json:"slip_sent_at,omitempty"`
-	ArriveBy   *time.Time `json:"arrive_by,omitempty"`
-	ArrivedAt  *time.Time `json:"arrived_at,omitempty"`
+	EventID *uint `json:"event_id,omitempty"`
+	// the event's name and its time of day (HH:MM; "" = not said)
+	EventName      string     `json:"event_name,omitempty"`
+	EventStartTime string     `json:"event_start_time,omitempty"`
+	EventEndTime   string     `json:"event_end_time,omitempty"`
+	PayBy          *time.Time `json:"pay_by,omitempty"`
+	SlipSentAt     *time.Time `json:"slip_sent_at,omitempty"`
+	ArriveBy       *time.Time `json:"arrive_by,omitempty"`
+	ArrivedAt      *time.Time `json:"arrived_at,omitempty"`
 	// arrive_by: a bar booking for the evening (its start is only "from opening"); time: a start time
 	BookingStyle string `json:"booking_style,omitempty"`
 	// restaurant tables: the floor of the area (sport_name) the tables are in; 0 = ground floor
@@ -301,6 +305,17 @@ type PublicTableDTO struct {
 type EventRefDTO struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
+	// the time of day it runs (HH:MM, "" = not said) and the areas it is held in (none = the whole branch).
+	// With areas, the other areas can still be booked the normal way that day.
+	StartTime string         `json:"start_time"`
+	EndTime   string         `json:"end_time"`
+	Areas     []EventAreaRef `json:"areas"`
+}
+
+// EventAreaRef names an area (a floor, a hall) an event is held in
+type EventAreaRef struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
 }
 
 // EventBookingInput is what the events module hands the booking service to store: who, which tables
@@ -315,6 +330,8 @@ type EventBookingInput struct {
 	Guests      int
 	HoldMinutes int
 	Tables      []EventTableSale
+	// the event's name and time of day, for the booking's answer and emails
+	EventName, EventStartTime, EventEndTime string
 }
 
 // EventTableSale is one table sold, with its price

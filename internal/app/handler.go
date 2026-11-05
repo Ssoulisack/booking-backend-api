@@ -10,6 +10,7 @@ import (
 	"backend/internal/modules/payments"
 	"backend/internal/modules/reports"
 	"backend/internal/modules/restaurant"
+	"backend/internal/modules/telegram"
 	"backend/internal/platform/middleware"
 )
 
@@ -24,6 +25,7 @@ type AppHandler struct {
 	restaurant     *restaurant.Module
 	events         *events.Module
 	payments       *payments.Module
+	telegram       *telegram.Module
 	filesDir       string // local storage folder served at /files
 }
 
@@ -40,5 +42,6 @@ func SetupHandlers(svc *AppServices) *AppHandler {
 		restaurant:     svc.restaurant,
 		events:         svc.events,
 		payments:       svc.payments,
+		telegram:       svc.telegram,
 	}
 }

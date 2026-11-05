@@ -37,6 +37,9 @@ func (s *Service) markSlipSent(ctx context.Context, bk *domain.Booking) (*dto.Bo
 		if err := s.bookings.SetSlipSent(ctx, bk, s.now()); err != nil {
 			return nil, err
 		}
+		if s.team != nil { // the team has a slip to check
+			s.team.SlipSent(ctx, bk.BranchID, bk.ID)
+		}
 	}
 	d := toBookingDTO(*bk)
 	return &d, nil

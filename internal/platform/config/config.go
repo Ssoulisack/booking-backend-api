@@ -27,6 +27,15 @@ type Config struct {
 	Payments PaymentsConfig
 	Mailer   mailer.Config
 	Company  CompanyConfig
+	Telegram TelegramConfig
+}
+
+// TelegramConfig: how the server reaches Telegram and seals what branches store. A branch's own bot token and group
+// are NOT here: owners connect them on the website. EncryptionKey is the secret the stored token is encrypted with;
+// left empty, the jwt.secret is used. Changing it later makes stored tokens unreadable (they are entered again).
+type TelegramConfig struct {
+	APIBase       string // default https://api.telegram.org (a stand-in address in tests)
+	EncryptionKey string
 }
 
 // PaymentsConfig: online payment gateways (config.yaml "payments"). A gateway with no keys is off and the
@@ -218,6 +227,10 @@ func setDefaults() {
 	viper.SetDefault("payments.phajay.secretKey", "")
 	viper.SetDefault("payments.phajay.testAmountDivisor", 0)
 	viper.SetDefault("payments.mock.dailyLimit", 0)
+
+	// Telegram: the address, and the key stored bot tokens are sealed with (empty: the jwt secret)
+	viper.SetDefault("telegram.apiBase", "https://api.telegram.org")
+	viper.SetDefault("telegram.encryptionKey", "")
 
 	// Mailer defaults
 	viper.SetDefault("mailer.host", "smtp.example.com")

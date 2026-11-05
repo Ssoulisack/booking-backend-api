@@ -221,17 +221,19 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 	if err != nil {
 		return nil, badRequest("INVALID_DATE")
 	}
-	// an event takes the day over: its tables are sold, not booked free
+	// an event holds the tables of its areas: they are sold, not booked free. Held everywhere, it takes the whole
+	// day over; held in some areas, the other areas are booked as usual (and the answer names the event)
+	var ev *domain.EventDay
 	if !staff {
-		ev, err := s.eventOn(ctx, b.ID, q.Date)
-		if err != nil {
+		var err error
+		if ev, err = s.eventOn(ctx, b.ID, q.Date); err != nil {
 			return nil, err
 		}
-		if ev != nil {
+		if ev != nil && ev.WholeBranch() {
 			return &dto.TableAvailabilityDTO{
 				Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
 				LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{},
-				Event: &dto.EventRefDTO{ID: ev.ID, Name: ev.Name},
+				Event: eventRef(ev),
 			}, nil
 		}
 	}
@@ -243,7 +245,11 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 		Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
 		LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{},
 	}
+	if ev != nil {
+		out.Event = eventRef(ev)
+	}
 	for _, tt := range times {
+		tt.free = outsideEvent(ev, tt.free)
 		if !domain.AnyChoice(tt.free, q.Guests) {
 			continue
 		}
@@ -255,6 +261,27 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 		})
 	}
 	return out, nil
+}
+
+// eventRef tells a customer about the event of the day: its name, time and areas
+func eventRef(ev *domain.EventDay) *dto.EventRefDTO {
+	ref := &dto.EventRefDTO{ID: ev.ID, Name: ev.Name, StartTime: ev.StartTime, EndTime: ev.EndTime, Areas: []dto.EventAreaRef{}}
+	for i, id := range ev.AreaIDs {
+		name := ""
+		if i < len(ev.AreaNames) {
+			name = ev.AreaNames[i]
+		}
+		ref.Areas = append(ref.Areas, dto.EventAreaRef{ID: id, Name: name})
+	}
+	return ref
+}
+
+// outsideEvent keeps the free tables the event does not hold (all of them when there is no event)
+func outsideEvent(ev *domain.EventDay, free []domain.Resource) []domain.Resource {
+	if ev == nil {
+		return free
+	}
+	return slices.DeleteFunc(slices.Clone(free), func(r domain.Resource) bool { return ev.Holds(r.SportID) })
 }
 
 // zonesOf names the zones the tables stand in, in plan order ("Smoking, VIP"); "" when none
@@ -294,13 +321,14 @@ func (s *Service) createTableBooking(ctx context.Context, b *domain.Branch, who 
 	}
 	loc := locationOf(b)
 	start := req.StartsAt.In(loc)
+	var ev *domain.EventDay // an event of the day that holds some areas: those tables are not booked free
 	if who.Staff == nil {
-		ev, err := s.eventOn(ctx, b.ID, start.Format("2006-01-02"))
-		if err != nil {
+		var err error
+		if ev, err = s.eventOn(ctx, b.ID, start.Format("2006-01-02")); err != nil {
 			return nil, "", err
 		}
-		if ev != nil {
-			return nil, "", conflict("EVENT_DAY") // that day tables are sold for the event
+		if ev != nil && ev.WholeBranch() {
+			return nil, "", conflict("EVENT_DAY") // that day every table is sold for the event
 		}
 	}
 	times, rule, err := s.tableTimes(ctx, b, startOfDay(start, loc), who.Staff != nil)
@@ -315,6 +343,7 @@ func (s *Service) createTableBooking(ctx context.Context, b *domain.Branch, who 
 		return nil, "", conflict("SLOT_NOT_AVAILABLE")
 	}
 	tt := times[i]
+	tt.free = outsideEvent(ev, tt.free)
 	var chosen []domain.Resource
 	for _, id := range req.TableIDs {
 		k := slices.IndexFunc(tt.free, func(r domain.Resource) bool { return r.ID == id })

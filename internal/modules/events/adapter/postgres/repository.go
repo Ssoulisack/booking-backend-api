@@ -49,7 +49,12 @@ func (r *postgresRepo) Delete(ctx context.Context, branchID, id uint) error {
 		if res.RowsAffected != 1 {
 			return exception.HandleGormError(gorm.ErrRecordNotFound)
 		}
-		return tx.Where("event_id = ?", id).Delete(&evdomain.Price{}).Error
+		for _, m := range []any{&evdomain.Price{}, &evdomain.Area{}, &evdomain.LineupRow{}} {
+			if err := tx.Where("event_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -74,6 +79,54 @@ func (r *postgresRepo) On(ctx context.Context, branchID uint, day string) (*evdo
 		return nil, exception.HandleGormError(err)
 	}
 	return &e, nil
+}
+
+func (r *postgresRepo) OnDay(ctx context.Context, branchID uint, day string) ([]evdomain.Event, error) {
+	var out []evdomain.Event
+	err := r.db.WithContext(ctx).
+		Where("branch_id = ? AND published AND starts_on <= ? AND ends_on >= ?", branchID, day, day).
+		Order("id").Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) AreaIDs(ctx context.Context, eventID uint) ([]uint, error) {
+	var out []uint
+	err := r.db.WithContext(ctx).Model(&evdomain.Area{}).Where("event_id = ?", eventID).Order("area_id").Pluck("area_id", &out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) ReplaceAreas(ctx context.Context, eventID uint, areaIDs []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("event_id = ?", eventID).Delete(&evdomain.Area{}).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		if len(areaIDs) == 0 {
+			return nil
+		}
+		rows := make([]evdomain.Area, len(areaIDs))
+		for i, id := range areaIDs {
+			rows[i] = evdomain.Area{EventID: eventID, AreaID: id}
+		}
+		return exception.HandleGormError(tx.Create(&rows).Error)
+	})
+}
+
+func (r *postgresRepo) Lineup(ctx context.Context, eventID uint) ([]evdomain.LineupRow, error) {
+	var out []evdomain.LineupRow
+	err := r.db.WithContext(ctx).Where("event_id = ?", eventID).Order("position, id").Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) ReplaceLineup(ctx context.Context, eventID uint, rows []evdomain.LineupRow) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("event_id = ?", eventID).Delete(&evdomain.LineupRow{}).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return exception.HandleGormError(tx.Create(&rows).Error)
+	})
 }
 
 func (r *postgresRepo) Upcoming(ctx context.Context, branchID uint, today string) ([]evdomain.Event, error) {

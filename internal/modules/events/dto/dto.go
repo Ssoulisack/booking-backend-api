@@ -20,6 +20,22 @@ type EventRequest struct {
 	BigHoldMinutes   int    `json:"big_hold_minutes"`   // 0: 60
 	DefaultPrice     int64  `json:"default_price"`
 	Published        bool   `json:"published"`
+	// the time of day each day ("" = not said); the areas it is held in (not sent = unchanged, [] = every
+	// area); the program (not sent = unchanged)
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	// AcceptGuests: customers without an account may buy tables (not sent: yes on a new event, unchanged otherwise)
+	AcceptGuests *bool         `json:"accept_guests"`
+	AreaIDs      *[]uint       `json:"area_ids"`
+	Lineup       *[]LineupItem `json:"lineup"`
+}
+
+// LineupItem is one line of an event's program: "19:00 – 20:30 Brand show"
+type LineupItem struct {
+	Day       string `json:"day"`        // "" = every day of the event, or one date (YYYY-MM-DD)
+	StartTime string `json:"start_time"` // HH:MM
+	EndTime   string `json:"end_time"`   // HH:MM, "" = until the end
+	Title     string `json:"title"`
 }
 
 // EventDTO is an event as the team sees it
@@ -39,6 +55,12 @@ type EventDTO struct {
 	DefaultPrice     int64  `json:"default_price"`
 	Published        bool   `json:"published"`
 	Currency         string `json:"currency"`
+	StartTime        string `json:"start_time"`
+	EndTime          string `json:"end_time"`
+	AcceptGuests     bool   `json:"accept_guests"`
+	// the areas it is held in (none = every area) and the program
+	AreaIDs []uint       `json:"area_ids"`
+	Lineup  []LineupItem `json:"lineup"`
 	// counts of the event's bookings: waiting for payment, paid (confirmed) and cancelled
 	Waiting   int64 `json:"waiting"`
 	Paid      int64 `json:"paid"`
@@ -130,6 +152,12 @@ type PublicEventDTO struct {
 	AdURL         string `json:"ad_url,omitempty"`
 	FromPrice     int64  `json:"from_price"` // the cheapest table (0: none for sale)
 	Currency      string `json:"currency"`
+	StartTime     string `json:"start_time"`
+	EndTime       string `json:"end_time"`
+	AcceptGuests  bool   `json:"accept_guests"` // false: only customers with an account can buy tables
+	// the areas it is held in (empty: the whole branch) and the program, for the details dialog
+	Areas  []coredto.EventAreaRef `json:"areas"`
+	Lineup []LineupItem           `json:"lineup"`
 }
 
 // SaleTableDTO is one table of the event day: its price, and whether it is already taken

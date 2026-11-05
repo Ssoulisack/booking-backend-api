@@ -22,10 +22,12 @@ type AppRepositories struct {
 	filesDir string // local storage folder served at /files, "" when files live elsewhere
 	social   output.SocialVerifier
 	// app settings the services need (links in emails) and the company to create on a fresh install
-	app      config.AppConfig
-	install  config.CompanyConfig
-	payments config.PaymentsConfig
-	server   config.ServerConfig
+	app       config.AppConfig
+	install   config.CompanyConfig
+	payments  config.PaymentsConfig
+	server    config.ServerConfig
+	telegram  config.TelegramConfig
+	jwtSecret string
 	// Domain repositories
 	user           output.UserRepository
 	company        output.CompanyRepository
@@ -45,6 +47,7 @@ type AppRepositories struct {
 	timetables     output.ClassTimetableRepository
 	rules          output.RuleRepository
 	bookings       output.BookingRepository
+	bookingReports output.BookingReportRepository
 }
 
 // setupRepositories initializes all data storage connections
@@ -83,6 +86,8 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		install:        cfg.Company,
 		payments:       cfg.Payments,
 		server:         cfg.Server,
+		telegram:       cfg.Telegram,
+		jwtSecret:      cfg.JWT.Secret,
 		user:           postgres.NewUserRepository(db),
 		company:        postgres.NewCompanyRepository(db),
 		branches:       postgres.NewBranchRepository(db),
@@ -101,6 +106,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		timetables:     postgres.NewClassTimetableRepository(db),
 		rules:          postgres.NewRuleRepository(db),
 		bookings:       postgres.NewBookingRepository(db),
+		bookingReports: postgres.NewBookingReportRepository(db),
 	}
 }
 

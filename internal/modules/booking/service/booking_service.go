@@ -65,7 +65,8 @@ type Service struct {
 	mailer      output.Mailer
 	frontendURL string
 	floorItems  output.FloorItemRepository
-	tables      port.TableBooker // restaurant branches book tables through the restaurant module (SetTables)
+	tables      port.TableBooker    // restaurant branches book tables through the restaurant module (SetTables)
+	team        output.TeamNotifier // tells the branch's team (Telegram) what happens; nil = nobody (SetTeamNotifier)
 	now         func() time.Time
 }
 
@@ -513,6 +514,9 @@ func (s *Service) created(ctx context.Context, b *domain.Branch, bk *domain.Book
 // their private link) and, for a booking the customer made themselves, ONE email to the branch's
 // active managers and staff. A failed email is logged and never undoes the booking.
 func (s *Service) notifyNewBooking(ctx context.Context, b *domain.Branch, out *dto.CreatedBookingDTO, actor *domain.User, byStaff, guest bool) {
+	if s.team != nil && !byStaff { // the team already knows about a booking one of them made
+		s.team.NewBooking(ctx, b.ID, out.ID)
+	}
 	loc := locationOf(b)
 	var what []string
 	if out.SportName != "" {
@@ -546,6 +550,17 @@ func (s *Service) notifyNewBooking(ctx context.Context, b *domain.Branch, out *d
 			info.When += ", please arrive by " + out.ArriveBy.In(loc).Format("15:04")
 		}
 		info.Price = "free to book"
+	}
+	if out.EventName != "" { // an event day: its name and its time of day (the booking itself runs from opening to closing)
+		info.What = "Event " + out.EventName + " · " + info.What
+		info.When = out.StartsAt.In(loc).Format("Mon 2 Jan 2006")
+		if out.EventStartTime != "" {
+			info.When += ", " + out.EventStartTime
+			if out.EventEndTime != "" {
+				info.When += "–" + out.EventEndTime
+			}
+		}
+		info.Price = moneyText(out.TotalPrice, out.Currency)
 	}
 
 	// who booked, as the team should read it
@@ -779,6 +794,9 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 		d.SportName = b.Sport.Name
 	}
 	d.EventID, d.PayBy, d.SlipSentAt = b.EventID, b.PayBy, b.SlipSentAt
+	if b.Event != nil {
+		d.EventName, d.EventStartTime, d.EventEndTime = b.Event.Name, b.Event.StartTime, b.Event.EndTime
+	}
 	if b.Guests > 0 {
 		d.Guests, d.ArrivedAt, d.ArriveBy, d.BookingStyle = b.Guests, b.ArrivedAt, b.ArriveBy, b.Branch.BookingStyle
 		if b.Sport != nil {
@@ -809,6 +827,9 @@ func (s *Service) cancel(ctx context.Context, b *domain.Booking, reason string) 
 	}
 	if err := s.bookings.Cancel(ctx, b, strings.TrimSpace(reason), now); err != nil {
 		return nil, err
+	}
+	if s.team != nil {
+		s.team.Cancelled(ctx, b.BranchID, b.ID, "customer")
 	}
 	d := toBookingDTO(*b)
 	return &d, nil

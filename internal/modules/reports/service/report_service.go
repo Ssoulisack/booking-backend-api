@@ -23,6 +23,7 @@ type ReportServiceImpl struct {
 	sports    output.SportRepository
 	hours     output.OpeningHourRepository
 	closures  output.ClosureRepository
+	rows      output.BookingReportRepository
 	now       func() time.Time
 }
 
@@ -33,10 +34,11 @@ func NewReportService(
 	sports output.SportRepository,
 	hours output.OpeningHourRepository,
 	closures output.ClosureRepository,
+	rows output.BookingReportRepository,
 ) port.ReportService {
 	return &ReportServiceImpl{
 		branches: branches, bookings: bookings, resources: resources, sports: sports,
-		hours: hours, closures: closures, now: time.Now,
+		hours: hours, closures: closures, rows: rows, now: time.Now,
 	}
 }
 

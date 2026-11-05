@@ -114,6 +114,7 @@ func (s *Service) CreateEventBooking(ctx context.Context, in dto.EventBookingInp
 	bk.Status = domain.BookingPending // waits for the money, then staff confirm it paid
 	bk.Guests, bk.Currency, bk.TotalPrice = in.Guests, b.Currency, total
 	bk.EventID, bk.PayBy = &eventID, &payBy
+	bk.Event = &domain.EventBrief{ID: eventID, Name: in.EventName, StartTime: in.EventStartTime, EndTime: in.EventEndTime}
 	bk.CancellableUntil = now // a customer cannot cancel online: they talk to the team, who can cancel any time
 	bk.Zones = s.zonesOf(ctx, b.ID, chosen)
 	for i, t := range chosen {

@@ -20,6 +20,7 @@ type Deps struct {
 	Sports    output.SportRepository
 	Hours     output.OpeningHourRepository
 	Closures  output.ClosureRepository
+	Rows      output.BookingReportRepository
 }
 
 // Module is the reports module
@@ -30,7 +31,7 @@ type Module struct {
 
 // New builds the module
 func New(d Deps) *Module {
-	svc := service.NewReportService(d.Branches, d.Bookings, d.Resources, d.Sports, d.Hours, d.Closures)
+	svc := service.NewReportService(d.Branches, d.Bookings, d.Resources, d.Sports, d.Hours, d.Closures, d.Rows)
 	return &Module{Service: svc, handler: http.New(svc)}
 }
 

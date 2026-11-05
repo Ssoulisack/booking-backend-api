@@ -106,8 +106,21 @@ type Booking struct {
 	// Zones the tables stood in when booked (e.g. "Smoking"), joined by ", "; a snapshot
 	Zones string `gorm:"type:varchar(120);not null;default:''"`
 
+	// the event the booking bought, for names and the time of day in answers and emails (read-only)
+	Event *EventBrief `gorm:"foreignKey:EventID;-:migration"`
+
 	Items []BookingItem `gorm:"foreignKey:BookingID"`
 }
+
+// EventBrief is what a booking says about its event: the name and the time of day it runs (HH:MM, "" = not said)
+type EventBrief struct {
+	ID        uint
+	Name      string
+	StartTime string
+	EndTime   string
+}
+
+func (EventBrief) TableName() string { return "events" }
 
 // CanStartOver: an event booking nobody has paid for, with no payment slip sent, may be cancelled by its customer
 // at any time (event bookings otherwise cannot be cancelled online): this is how a customer who chose the wrong
@@ -147,6 +160,28 @@ type BookingItem struct {
 type EventDay struct {
 	ID   uint
 	Name string
+	// the time of day (HH:MM, "" = not said)
+	StartTime, EndTime string
+	// the areas it is held in; none = the whole branch (normal booking is off for every area that day)
+	AreaIDs []uint
+	// AreaNames names those areas, in the same order
+	AreaNames []string
+}
+
+// WholeBranch: the event covers every area, so normal table booking is off that day
+func (d EventDay) WholeBranch() bool { return len(d.AreaIDs) == 0 }
+
+// Holds reports whether the area is one the event is held in (a whole-branch event holds all of them)
+func (d EventDay) Holds(areaID uint) bool {
+	if d.WholeBranch() {
+		return true
+	}
+	for _, id := range d.AreaIDs {
+		if id == areaID {
+			return true
+		}
+	}
+	return false
 }
 
 // PayFacts is what the payments module needs to know about a booking
