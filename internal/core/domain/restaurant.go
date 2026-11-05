@@ -90,6 +90,47 @@ type FloorItem struct {
 	Rotation int    `gorm:"not null;default:0"`
 	// stairs only: the floor they lead to (nil: not set)
 	TargetFloor *int
+	// zones only: Shape is "square" or "long" (the whole box), "round" (an ellipse in the box) or "l" (the box with
+	// one corner cut out: CutW × CutH squares at CutCorner "tl", "tr", "bl" or "br")
+	Shape     string `gorm:"type:varchar(6);not null;default:'square'"`
+	CutW      int    `gorm:"not null;default:0"`
+	CutH      int    `gorm:"not null;default:0"`
+	CutCorner string `gorm:"type:varchar(2);not null;default:'tr'"`
+}
+
+// Zone shapes (the first three are the table shapes: a zone is shaped like a table, or is an L)
+const (
+	ShapeSquare = "square"
+	ShapeRound  = "round"
+	ShapeLong   = "long"
+	ShapeL      = "l"
+)
+
+// ZoneShapes are the shapes a zone can have
+var ZoneShapes = []string{ShapeSquare, ShapeRound, ShapeLong, ShapeL}
+
+// CutCorners are the corners of its box an L zone can have cut out
+var CutCorners = []string{"tl", "tr", "bl", "br"}
+
+// IsL reports whether the item is an L-shaped zone (its box with one corner cut out)
+func (f FloorItem) IsL() bool {
+	return f.Kind == FloorItemZone && f.Shape == ShapeL && f.CutW > 0 && f.CutH > 0
+}
+
+// Cut is the part of an L zone's box that is cut out, in plan squares (nothing for a rectangle)
+func (f FloorItem) Cut() (x, y, w, h int) {
+	if !f.IsL() {
+		return 0, 0, 0, 0
+	}
+	zx, zy, zw, zh := f.Footprint()
+	x, y = zx, zy
+	if f.CutCorner == "tr" || f.CutCorner == "br" {
+		x = zx + zw - f.CutW
+	}
+	if f.CutCorner == "bl" || f.CutCorner == "br" {
+		y = zy + zh - f.CutH
+	}
+	return x, y, f.CutW, f.CutH
 }
 
 // Floors an area can be on
@@ -100,20 +141,23 @@ const (
 
 // Floor item kinds
 const (
-	FloorItemBar    = "bar"
-	FloorItemPole   = "pole"
-	FloorItemStage  = "stage"
-	FloorItemToilet = "toilet"
-	FloorItemEntry  = "entry"
-	FloorItemLabel  = "label"
-	FloorItemZone   = "zone"
-	FloorItemStairs = "stairs"
+	FloorItemBar     = "bar"
+	FloorItemPole    = "pole"
+	FloorItemStage   = "stage"
+	FloorItemToilet  = "toilet"
+	FloorItemEntry   = "entry"
+	FloorItemLabel   = "label"
+	FloorItemZone    = "zone"
+	FloorItemStairs  = "stairs"
+	FloorItemCashier = "cashier"
+	FloorItemDJ      = "dj"
 )
 
 // floorItemBlocks: the kinds that take floor space, so no table can stand on them
 var floorItemBlocks = map[string]bool{
 	FloorItemBar: true, FloorItemPole: true, FloorItemStage: true, FloorItemToilet: true,
 	FloorItemStairs: true, FloorItemEntry: false, FloorItemLabel: false, FloorItemZone: false,
+	FloorItemCashier: true, FloorItemDJ: true,
 }
 
 // ValidFloorItemKind reports whether k is a known floor item kind
@@ -123,7 +167,10 @@ func ValidFloorItemKind(k string) bool {
 }
 
 // ZoneColors are the colours a zone can have (the website draws them)
-var ZoneColors = []string{"green", "blue", "amber", "rose", "violet", "slate"}
+var ZoneColors = []string{
+	"green", "blue", "amber", "rose", "violet", "slate",
+	"orange", "black", "teal", "lime", "brown",
+}
 
 // Blocks reports whether tables may not stand on the item (zones, labels and the entrance do not block)
 func (f FloorItem) Blocks() bool { return floorItemBlocks[f.Kind] }
@@ -152,7 +199,17 @@ func (f FloorItem) Holds(t Resource) bool {
 	tx, ty, tw, th := t.Footprint()
 	// doubled to stay in whole numbers: centre = x + w/2
 	cx, cy := 2*tx+tw, 2*ty+th
-	return cx > 2*zx && cx < 2*(zx+zw) && cy > 2*zy && cy < 2*(zy+zh)
+	if !(cx > 2*zx && cx < 2*(zx+zw) && cy > 2*zy && cy < 2*(zy+zh)) {
+		return false
+	}
+	if f.Shape == ShapeRound {
+		// the table's centre must lie inside the ellipse, not only inside its box (centre and half sides doubled)
+		dx, dy := cx-(2*zx+zw), cy-(2*zy+zh)
+		return dx*dx*zh*zh+dy*dy*zw*zw < zw*zw*zh*zh
+	}
+	// an L zone does not hold what stands in its cut-out corner
+	kx, ky, kw, kh := f.Cut()
+	return !(kw > 0 && cx > 2*kx && cx < 2*(kx+kw) && cy > 2*ky && cy < 2*(ky+kh))
 }
 
 // Covers reports whether a blocking item stands on any square of the table

@@ -107,6 +107,11 @@ type FloorItemDTO struct {
 	Rotation int    `json:"rotation"`
 	// stairs only: the floor they lead to
 	TargetFloor *int `json:"target_floor"`
+	// zones only: "rect" (the whole box) or "l" (the box with one corner cut out: cut_w × cut_h squares at cut_corner)
+	Shape     string `json:"shape"`
+	CutW      int    `json:"cut_w"`
+	CutH      int    `json:"cut_h"`
+	CutCorner string `json:"cut_corner"`
 }
 
 // NewTableDTO is a table to create on the plan: its name, seats and place

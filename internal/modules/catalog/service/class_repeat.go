@@ -25,6 +25,7 @@ func (s *ScheduleServiceImpl) RepeatClassSessions(ctx context.Context, branchID 
 	if err != nil {
 		return nil, err
 	}
+	endMin = endClock(startMin, endMin)
 	if endMin <= startMin {
 		return nil, badRequest("END_TIME_MUST_BE_AFTER_START_TIME")
 	}

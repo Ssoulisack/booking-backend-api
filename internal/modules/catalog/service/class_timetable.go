@@ -63,9 +63,11 @@ func (s *ScheduleServiceImpl) checkTimetable(ctx context.Context, branchID uint,
 	if err != nil {
 		return nil, err
 	}
+	endMin = endClock(startMin, endMin)
 	if endMin <= startMin {
 		return nil, badRequest("END_TIME_MUST_BE_AFTER_START_TIME")
 	}
+	req.EndTime = clockString(endMin) // stored as 24:00 for midnight, which the weekly fill reads
 	plan := &timetablePlan{weekdays: map[time.Weekday]bool{}, startMin: startMin, endMin: endMin}
 	for _, d := range req.Weekdays {
 		if d < 0 || d > 6 {

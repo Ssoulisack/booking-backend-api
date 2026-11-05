@@ -94,6 +94,7 @@ func buildOpeningHours(branchID uint, ownerType string, ownerID uint, in []dto.O
 		if err != nil {
 			return nil, err
 		}
+		closeAt = endClock(open, closeAt)
 		if closeAt <= open {
 			return nil, badRequest("CLOSE_MUST_BE_AFTER_OPEN")
 		}

@@ -32,6 +32,17 @@ func parseDay(date string, loc *time.Location) (time.Time, error) { return kit.P
 func parseClock(s string, allowMidnightEnd bool) (int, error) {
 	return kit.ParseClock(s, allowMidnightEnd)
 }
+
+// endClock reads a closing or end time as minutes since midnight: "00:00" after a later start means midnight at the
+// END of that day (24:00), which is what a time field gives for 12 am. "00:00" with a start at 00:00 stays 0, so it
+// is refused like any end that is not after its start (a whole day is written "24:00").
+func endClock(start, end int) int {
+	if end == 0 && start > 0 {
+		return 24 * 60
+	}
+	return end
+}
+
 func minTime(a, b time.Time) time.Time { return kit.MinTime(a, b) }
 func openIntervalsOn(rows []domain.OpeningHour, day time.Time) []domain.Interval {
 	return kit.OpenIntervalsOn(rows, day)

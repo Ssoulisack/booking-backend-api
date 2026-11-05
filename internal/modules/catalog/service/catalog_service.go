@@ -459,7 +459,8 @@ func (s *CatalogServiceImpl) GetFloorPlan(ctx context.Context, branchID, areaID 
 
 func toFloorItemDTO(f domain.FloorItem) dto.FloorItemDTO {
 	return dto.FloorItemDTO{ID: f.ID, Kind: f.Kind, Label: f.Label, Color: f.Color,
-		PlanX: f.PlanX, PlanY: f.PlanY, PlanW: f.PlanW, PlanH: f.PlanH, Rotation: f.Rotation, TargetFloor: f.TargetFloor}
+		PlanX: f.PlanX, PlanY: f.PlanY, PlanW: f.PlanW, PlanH: f.PlanH, Rotation: f.Rotation, TargetFloor: f.TargetFloor,
+		Shape: f.Shape, CutW: f.CutW, CutH: f.CutH, CutCorner: f.CutCorner}
 }
 
 const maxFloorItems = 100
@@ -492,6 +493,10 @@ func floorItemsOf(branchID, areaID uint, in []dto.FloorItemDTO) ([]domain.FloorI
 				return nil, badRequest("INVALID_ZONE_COLOR")
 			}
 		}
+		shape, cutW, cutH, corner, err := zoneShapeOf(it)
+		if err != nil {
+			return nil, err
+		}
 		var target *int
 		if it.Kind == domain.FloorItemStairs && it.TargetFloor != nil {
 			if *it.TargetFloor < domain.MinFloor || *it.TargetFloor > domain.MaxFloor {
@@ -500,9 +505,30 @@ func floorItemsOf(branchID, areaID uint, in []dto.FloorItemDTO) ([]domain.FloorI
 			target = it.TargetFloor
 		}
 		out = append(out, domain.FloorItem{BranchID: branchID, AreaID: areaID, Kind: it.Kind, Label: label, Color: color,
-			PlanX: it.PlanX, PlanY: it.PlanY, PlanW: it.PlanW, PlanH: it.PlanH, Rotation: it.Rotation, TargetFloor: target})
+			PlanX: it.PlanX, PlanY: it.PlanY, PlanW: it.PlanW, PlanH: it.PlanH, Rotation: it.Rotation, TargetFloor: target,
+			Shape: shape, CutW: cutW, CutH: cutH, CutCorner: corner})
 	}
 	return out, nil
+}
+
+// zoneShapeOf checks the shape of a zone: square, round or long (like a table), or an L (its box with one corner
+// cut out, a cut smaller than the box on both sides, so a real L is left). A zone that says nothing is a square;
+// everything that is not a zone is a plain square.
+func zoneShapeOf(it dto.FloorItemDTO) (shape string, cutW, cutH int, corner string, err error) {
+	if it.Kind != domain.FloorItemZone || it.Shape == "" {
+		return domain.ShapeSquare, 0, 0, "tr", nil
+	}
+	if !slices.Contains(domain.ZoneShapes, it.Shape) {
+		return "", 0, 0, "", badRequest("INVALID_ZONE_SHAPE")
+	}
+	if it.Shape != domain.ShapeL {
+		return it.Shape, 0, 0, "tr", nil
+	}
+	if it.Rotation != 0 || !slices.Contains(domain.CutCorners, it.CutCorner) ||
+		it.CutW < 1 || it.CutH < 1 || it.CutW >= it.PlanW || it.CutH >= it.PlanH {
+		return "", 0, 0, "", badRequest("INVALID_ZONE_SHAPE")
+	}
+	return domain.ShapeL, it.CutW, it.CutH, it.CutCorner, nil
 }
 
 const maxNewTables = 200 // made by one plan save (copies)

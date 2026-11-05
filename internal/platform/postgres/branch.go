@@ -118,7 +118,8 @@ func copySetup(tx *gorm.DB, from, to uint) error {
 	for _, o := range oldItems {
 		if area, ok := sports[o.AreaID]; ok {
 			n := domain.FloorItem{BranchID: to, AreaID: area, Kind: o.Kind, Label: o.Label, Color: o.Color,
-				PlanX: o.PlanX, PlanY: o.PlanY, PlanW: o.PlanW, PlanH: o.PlanH, Rotation: o.Rotation, TargetFloor: o.TargetFloor}
+				PlanX: o.PlanX, PlanY: o.PlanY, PlanW: o.PlanW, PlanH: o.PlanH, Rotation: o.Rotation, TargetFloor: o.TargetFloor,
+				Shape: o.Shape, CutW: o.CutW, CutH: o.CutH, CutCorner: o.CutCorner}
 			if err := tx.Create(&n).Error; err != nil {
 				return err
 			}

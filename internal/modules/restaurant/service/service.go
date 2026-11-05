@@ -79,5 +79,6 @@ func minTime(a, b time.Time) time.Time { return kit.MinTime(a, b) }
 
 func floorItemDTO(f domain.FloorItem) dto.FloorItemDTO {
 	return dto.FloorItemDTO{ID: f.ID, Kind: f.Kind, Label: f.Label, Color: f.Color,
-		PlanX: f.PlanX, PlanY: f.PlanY, PlanW: f.PlanW, PlanH: f.PlanH, Rotation: f.Rotation, TargetFloor: f.TargetFloor}
+		PlanX: f.PlanX, PlanY: f.PlanY, PlanW: f.PlanW, PlanH: f.PlanH, Rotation: f.Rotation, TargetFloor: f.TargetFloor,
+		Shape: f.Shape, CutW: f.CutW, CutH: f.CutH, CutCorner: f.CutCorner}
 }
