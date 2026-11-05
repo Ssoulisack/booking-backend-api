@@ -3,6 +3,7 @@ package app
 import (
 	"backend/internal/core/domain"
 	"backend/internal/core/port/output"
+	"backend/internal/platform/cache"
 	"backend/internal/platform/config"
 	"backend/internal/platform/mailer"
 	"backend/internal/platform/postgres"
@@ -27,6 +28,7 @@ type AppRepositories struct {
 	payments  config.PaymentsConfig
 	server    config.ServerConfig
 	telegram  config.TelegramConfig
+	cache     *cache.Cache // Redis cache of rarely-changing reads; off unless redis.enabled
 	jwtSecret string
 	// Domain repositories
 	user           output.UserRepository
@@ -66,6 +68,9 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 	// 	log.Fatalf("❌ Failed to initialize Redis repository: %v", err)
 	// }
 
+	// Cache of rarely-changing reads (off unless redis.enabled): cleared now, and a Redis error means "read the database"
+	reads := cache.New(cfg.Redis)
+
 	// File storage (local folder or Supabase Storage)
 	fileStorage, err := storage.New(cfg.Storage)
 	if err != nil {
@@ -87,24 +92,29 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		payments:       cfg.Payments,
 		server:         cfg.Server,
 		telegram:       cfg.Telegram,
+		cache:          reads,
 		jwtSecret:      cfg.JWT.Secret,
 		user:           postgres.NewUserRepository(db),
-		company:        postgres.NewCompanyRepository(db),
-		branches:       postgres.NewBranchRepository(db),
-		directory:      postgres.NewDirectoryRepository(db),
+		company:        cache.WrapCompany(postgres.NewCompanyRepository(db), reads),
+		branches:       cache.WrapBranches(postgres.NewBranchRepository(db), reads),
+		directory:      cache.WrapDirectory(postgres.NewDirectoryRepository(db), reads),
 		memberships:    postgres.NewMembershipRepository(db),
 		passwordResets: postgres.NewPasswordResetRepository(db),
 		media:          postgres.NewMediaRepository(db),
-		sports:         postgres.NewScopedRepository[domain.Sport](db, "name"),
-		resources:      postgres.NewScopedRepository[domain.Resource](db, "name"),
-		floorItems:     postgres.NewScopedRepository[domain.FloorItem](db, "label"),
-		coaches:        postgres.NewCoachRepository(db),
-		openingHours:   postgres.NewOpeningHourRepository(db),
-		closures:       postgres.NewClosureRepository(db),
-		prices:         postgres.NewPriceRepository(db),
+		// a sport change also changes the public list of places, which shows each branch's sports
+		sports: cache.WrapScoped(postgres.NewScopedRepository[domain.Sport](db, "name"), reads, "sports",
+			func(m *domain.Sport) uint { return m.BranchID }, cache.ScopeDirectory),
+		resources: cache.WrapScoped(postgres.NewScopedRepository[domain.Resource](db, "name"), reads, "resources",
+			func(m *domain.Resource) uint { return m.BranchID }),
+		floorItems: cache.WrapScoped(postgres.NewScopedRepository[domain.FloorItem](db, "label"), reads, "floor",
+			func(m *domain.FloorItem) uint { return m.BranchID }),
+		coaches:        cache.WrapCoaches(postgres.NewCoachRepository(db), reads),
+		openingHours:   cache.WrapHours(postgres.NewOpeningHourRepository(db), reads),
+		closures:       cache.WrapClosures(postgres.NewClosureRepository(db), reads),
+		prices:         cache.WrapPrices(postgres.NewPriceRepository(db), reads),
 		classSessions:  postgres.NewClassSessionRepository(db),
 		timetables:     postgres.NewClassTimetableRepository(db),
-		rules:          postgres.NewRuleRepository(db),
+		rules:          cache.WrapRules(postgres.NewRuleRepository(db), reads),
 		bookings:       postgres.NewBookingRepository(db),
 		bookingReports: postgres.NewBookingReportRepository(db),
 	}
@@ -112,6 +122,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 
 // closeRepositories gracefully closes all connections
 func CloseRepositories(repos *AppRepositories) {
+	repos.cache.Close()
 	if repos.redis != nil {
 		repos.redis.Close()
 	}

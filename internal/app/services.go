@@ -59,7 +59,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	eventsModule := events.New(events.Deps{
 		DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports,
 		Resources: r.resources, FloorItems: r.floorItems, Bookings: r.bookings, Media: r.media,
-		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl,
+		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl, Cache: r.cache,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
 	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,
@@ -67,7 +67,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	gateways, devGateway := ChooseGateway(r.server, r.payments)
 	paymentsModule := payments.New(payments.Deps{
 		DB: r.postgres.GetDB(), Providers: gateways,
-		Branches: r.branches, Bookings: bookingImpl, Dev: devGateway,
+		Branches: r.branches, Bookings: bookingImpl, Dev: devGateway, Cache: r.cache,
 	})
 	// Telegram: bots and groups are connected on the website; what is stored is encrypted with a key made from the
 	// server's secret. Too short a secret switches the feature off (the booking flows then tell nobody).

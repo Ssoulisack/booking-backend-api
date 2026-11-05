@@ -5,11 +5,13 @@ package events
 
 import (
 	"backend/internal/core/port/output"
+	eventscache "backend/internal/modules/events/adapter/cache"
 	"backend/internal/modules/events/adapter/http"
 	"backend/internal/modules/events/adapter/postgres"
 	"backend/internal/modules/events/domain"
 	"backend/internal/modules/events/port"
 	"backend/internal/modules/events/service"
+	"backend/internal/platform/cache"
 	"backend/internal/platform/middleware"
 	"time"
 
@@ -32,6 +34,8 @@ type Deps struct {
 	// Notifier emails the customer when their unpaid booking is released (nil: no email)
 	Notifier port.Notifier
 	Now      func() time.Time
+	// Cache keeps the fixed part of events in Redis (nil or off: every read goes to the database)
+	Cache *cache.Cache
 }
 
 // Module is the events module: its service (for the booking service and the job) and its routes
@@ -43,7 +47,7 @@ type Module struct {
 // New builds the module
 func New(d Deps) *Module {
 	svc := service.New(service.Deps{
-		Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources,
+		Repo: eventscache.Wrap(postgres.New(d.DB), d.Cache), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources,
 		FloorItems: d.FloorItems, Bookings: d.Bookings, Media: d.Media, Files: d.Files, Booker: d.Booker, Notifier: d.Notifier, Now: d.Now,
 	})
 	return &Module{Service: svc, handler: http.New(svc)}

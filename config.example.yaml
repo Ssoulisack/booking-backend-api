@@ -29,11 +29,17 @@ database:
     sslmode: disable
     timezone: Asia/Vientiane
 
+# Redis: the cache of rarely-changing reads (branches, rules, prices, floor plans, events). It is off unless
+# enabled is true (or APP_REDIS_ENABLED=true). Everything it stored is cleared at every start of the app, and if Redis
+# fails the app simply reads the database. ttlSeconds is a safety expiry: a change made in the app clears the old
+# values at once, the expiry only cleans up what nobody asked for.
 redis:
   host: localhost
   port: 6379
   password: ""
   db: 0
+  enabled: false
+  ttlSeconds: 600
 
 # secret and refreshSecret must each be exactly 32 characters (AES-256 key)
 jwt:

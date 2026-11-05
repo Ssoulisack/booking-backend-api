@@ -194,6 +194,8 @@ func setDefaults() {
 	viper.SetDefault("redis.port", "6379")
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.enabled", false) // the Redis cache of rarely-changing reads: off unless switched on
+	viper.SetDefault("redis.ttlSeconds", 600)
 
 	// JWT defaults
 	viper.SetDefault("jwt.secret", "your-secret-key")

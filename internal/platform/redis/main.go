@@ -14,6 +14,11 @@ type Config struct {
 	Port     string
 	Password string
 	DB       int
+	// Enabled switches the Redis cache of rarely-changing reads on (off by default; APP_REDIS_ENABLED=true). With it
+	// off the app does not connect to Redis at all.
+	Enabled bool
+	// TTLSeconds is the longest a cached value lives (a safety expiry: changes made in the app clear values sooner)
+	TTLSeconds int
 }
 
 type CacheRepository interface {
