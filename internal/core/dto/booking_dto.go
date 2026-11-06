@@ -306,6 +306,8 @@ type PublicAreaDTO struct {
 type PublicTableDTO struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
+	// WalkInOnly: kept for walk-ins; the booking page says so instead of drawing it as taken
+	WalkInOnly bool `json:"walk_in_only"`
 	TableFields
 }
 

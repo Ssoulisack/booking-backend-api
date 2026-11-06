@@ -58,7 +58,7 @@ func (s *Service) FloorPlans(ctx context.Context, slug string) ([]dto.PublicArea
 			Tables: []dto.PublicTableDTO{}, Items: []dto.FloorItemDTO{}}
 		for _, t := range tables {
 			if t.SportID == a.ID {
-				area.Tables = append(area.Tables, dto.PublicTableDTO{ID: t.ID, Name: t.Name, TableFields: dto.TableFields{
+				area.Tables = append(area.Tables, dto.PublicTableDTO{ID: t.ID, Name: t.Name, WalkInOnly: t.WalkInOnly, TableFields: dto.TableFields{
 					Seats: t.Seats, ExtraChairs: t.ExtraChairs, Shape: t.Shape,
 					PlanX: t.PlanX, PlanY: t.PlanY, PlanW: t.PlanW, PlanH: t.PlanH, Rotation: t.Rotation,
 				}})
