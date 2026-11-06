@@ -251,9 +251,11 @@ type TransactionKindTotal struct {
 
 // TransactionsDTO is every payment of a period as a table, with totals
 type TransactionsDTO struct {
-	From     string                 `json:"from"`
-	To       string                 `json:"to"`
-	Rows     []TransactionRow       `json:"rows"`
+	From string           `json:"from"`
+	To   string           `json:"to"`
+	Rows []TransactionRow `json:"rows"`
+	// RowsMeta: set when one page of Rows was asked for (?page=&limit=); the totals below always cover the whole period
+	RowsMeta *Meta                  `json:"rows_meta,omitempty"`
 	Totals   []Money                `json:"totals"`
 	ByKind   []TransactionKindTotal `json:"by_kind"`
 	ByMethod []CashUpMethod         `json:"by_method"`

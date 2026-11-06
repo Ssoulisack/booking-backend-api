@@ -38,6 +38,10 @@ type Repository interface {
 	// ---- packages customers own ----
 	CreatePurchase(ctx context.Context, cp *domain.CustomerPackage) error
 	SavePurchase(ctx context.Context, cp *domain.CustomerPackage) error
+	// AdjustPurchase changes one package in a single transaction with its row locked, so two people adjusting at the
+	// same moment both count. change edits the package it is given and returns the log line to write (or an error to
+	// stop: nothing is saved then)
+	AdjustPurchase(ctx context.Context, branchID, id uint, change func(cp *domain.CustomerPackage) (*domain.Visit, error)) (*domain.CustomerPackage, error)
 	// Purchase / PurchaseForCustomer return one, or a not-found error
 	Purchase(ctx context.Context, branchID, id uint) (*domain.CustomerPackage, error)
 	PurchaseForCustomer(ctx context.Context, userID, id uint) (*domain.CustomerPackage, error)

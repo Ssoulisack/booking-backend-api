@@ -55,6 +55,11 @@ type Service struct {
 	// frequent checks are answered from our own data in between (the webhook keeps it current)
 	askMu sync.Mutex
 	asked map[uint]time.Time
+
+	// startLocks: one start at a time for the same booking or package (striped by its key), so pressing Pay many
+	// times at once finds the first one's open payment and does not make another. They live in this process: with
+	// several API instances the same single-instance limit as the rate limiter applies.
+	startLocks [256]sync.Mutex
 }
 
 var _ port.Service = (*Service)(nil)
@@ -112,7 +117,7 @@ func toStaffDTO(p domain.Payment) dto.StaffPaymentDTO {
 // ---------- customers ----------
 
 // Options lists the gateways (and ways to pay) a branch's customers can use in the branch's currency
-func (s *Service) Options(ctx context.Context, slug string) ([]dto.OptionDTO, error) {
+func (s *Service) Options(ctx context.Context, slug string, forPackage bool) ([]dto.OptionDTO, error) {
 	b, err := s.branches.GetBySlug(ctx, slug)
 	if err != nil || !b.IsPublic() {
 		return nil, notFound("BRANCH_NOT_FOUND")
@@ -122,6 +127,18 @@ func (s *Service) Options(ctx context.Context, slug string) ([]dto.OptionDTO, er
 	if on, err := s.onlineOn(ctx, b.ID); err != nil {
 		return nil, err
 	} else if !on {
+		return out, nil
+	}
+	// a sport branch can keep its bookings pay-at-the-venue while still selling packages online
+	if forPackage {
+		if ok, err := s.packagesOnline(ctx, b.ID); err != nil {
+			return nil, err
+		} else if !ok {
+			return out, nil
+		}
+	} else if ok, err := s.bookingsOnline(ctx, b); err != nil {
+		return nil, err
+	} else if !ok {
 		return out, nil
 	}
 	for _, name := range s.Enabled() {
@@ -162,6 +179,23 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if !on {
 		return nil, conflict("ONLINE_PAYMENT_OFF")
 	}
+	if f.Purchase { // a package: it has its own switch
+		if ok, err := s.packagesOnline(ctx, f.BranchID); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, conflict("ONLINE_PAYMENT_OFF")
+		}
+	} else { // a booking
+		b, err := s.branches.GetByID(ctx, f.BranchID)
+		if err != nil {
+			return nil, err
+		}
+		if ok, err := s.bookingsOnline(ctx, b); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, conflict("ONLINE_PAYMENT_OFF")
+		}
+	}
 	// the customer already sent a slip for this booking: they do not pay a second way, the team checks the slip
 	if f.SlipSent {
 		return nil, conflict("SLIP_ALREADY_SENT")
@@ -178,6 +212,10 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if f.PayBy != nil && !f.PayBy.After(now) {
 		return nil, conflict("PAY_TIME_UP")
 	}
+	// from here to the end the same booking starts one payment at a time: the first creates the QR, the next ones
+	// that were waiting here then see it open and get the same one
+	unlock := s.lockStart(f)
+	defer unlock()
 	tries, err := s.triesOf(ctx, f)
 	if err != nil {
 		return nil, err
@@ -240,6 +278,17 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	}
 	d := s.seen(*pay)
 	return &d, nil
+}
+
+// lockStart takes the start lock of the booking (or package) in f and returns how to let it go
+func (s *Service) lockStart(f *coredomain.PayFacts) func() {
+	kind := byte('b')
+	if f.Purchase {
+		kind = 'p'
+	}
+	m := &s.startLocks[(uint(f.ID)*31+uint(kind))%uint(len(s.startLocks))]
+	m.Lock()
+	return m.Unlock
 }
 
 // hold: an unpaid event booking is held exactly as long as its open QR lives: not paid by then, it is released
@@ -675,6 +724,28 @@ func (s *Service) setting(ctx context.Context, branchID uint) (bool, time.Durati
 	return !st.OnlineOff, time.Duration(minutes) * time.Minute, nil
 }
 
+// bookingsOnline: a sport branch that closed online payment for bookings (the setting is only read for sport
+// branches; restaurant events always follow the main switch)
+func (s *Service) bookingsOnline(ctx context.Context, b *coredomain.Branch) (bool, error) {
+	if b.Type != coredomain.BranchTypeSport {
+		return true, nil
+	}
+	st, err := s.repo.Setting(ctx, b.ID)
+	if err != nil {
+		return false, err
+	}
+	return st == nil || !st.OnlineBookingsOff, nil
+}
+
+// packagesOnline: the branch sells packages with online payment
+func (s *Service) packagesOnline(ctx context.Context, branchID uint) (bool, error) {
+	st, err := s.repo.Setting(ctx, branchID)
+	if err != nil {
+		return false, err
+	}
+	return st == nil || !st.OnlinePackagesOff, nil
+}
+
 // onlineOn: the branch takes online payment
 func (s *Service) onlineOn(ctx context.Context, branchID uint) (bool, error) {
 	on, _, err := s.setting(ctx, branchID)
@@ -687,7 +758,11 @@ func (s *Service) Settings(ctx context.Context, branchID uint) (*dto.SettingsDTO
 	if err != nil {
 		return nil, err
 	}
-	return &dto.SettingsDTO{OnlineEnabled: on, GatewayAvailable: len(s.providers) > 0, ChargeMinutes: int(life / time.Minute)}, nil
+	st, err := s.repo.Setting(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.SettingsDTO{OnlineEnabled: on, OnlineBookings: st == nil || !st.OnlineBookingsOff, OnlinePackages: st == nil || !st.OnlinePackagesOff, GatewayAvailable: len(s.providers) > 0, ChargeMinutes: int(life / time.Minute)}, nil
 }
 
 func (s *Service) SaveSettings(ctx context.Context, branchID uint, req dto.SettingsRequest) (*dto.SettingsDTO, error) {
@@ -698,7 +773,20 @@ func (s *Service) SaveSettings(ctx context.Context, branchID uint, req dto.Setti
 	if minutes < minChargeMinutes || minutes > maxChargeMinutes {
 		return nil, badRequest("INVALID_PAYMENT_WINDOW")
 	}
-	if err := s.repo.SaveSetting(ctx, &domain.Setting{BranchID: branchID, OnlineOff: !req.OnlineEnabled, ChargeMinutes: minutes}); err != nil {
+	// a switch that is not sent keeps what the branch chose before
+	bookingsOff, packagesOff := false, false
+	if prev, err := s.repo.Setting(ctx, branchID); err != nil {
+		return nil, err
+	} else if prev != nil {
+		bookingsOff, packagesOff = prev.OnlineBookingsOff, prev.OnlinePackagesOff
+	}
+	if req.OnlineBookings != nil {
+		bookingsOff = !*req.OnlineBookings
+	}
+	if req.OnlinePackages != nil {
+		packagesOff = !*req.OnlinePackages
+	}
+	if err := s.repo.SaveSetting(ctx, &domain.Setting{BranchID: branchID, OnlineOff: !req.OnlineEnabled, OnlineBookingsOff: bookingsOff, OnlinePackagesOff: packagesOff, ChargeMinutes: minutes}); err != nil {
 		return nil, err
 	}
 	return s.Settings(ctx, branchID)

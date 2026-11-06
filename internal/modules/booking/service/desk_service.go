@@ -177,6 +177,11 @@ func (s *Service) SetPayment(ctx context.Context, branchID uint, actor *domain.U
 	if bk.CustomerPackageID != nil {
 		return nil, conflict("PAID_BY_PACKAGE")
 	}
+	// money that came through the bank's gateway is not the desk's to undo (or to take twice): the way back is a
+	// refund of that online payment
+	if bk.PaymentMethod == domain.MethodOnline && bk.PaymentStatus == domain.PaymentPaid {
+		return nil, conflict("PAID_ONLINE")
+	}
 	switch req.Status {
 	case domain.PaymentPaid:
 		if !paymentMethods[req.Method] {

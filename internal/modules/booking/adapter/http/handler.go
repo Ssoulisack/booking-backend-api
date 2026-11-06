@@ -16,6 +16,14 @@ import (
 type Handler struct {
 	book port.BookingService
 	desk port.DeskService
+	// perHour: new public bookings one IP address may make per hour (0: 10)
+	perHour int
+}
+
+// WithPublicBookingsPerHour sets the hourly limit per IP address on the public booking route
+func (h *Handler) WithPublicBookingsPerHour(n int) *Handler {
+	h.perHour = n
+	return h
 }
 
 // New builds the handler

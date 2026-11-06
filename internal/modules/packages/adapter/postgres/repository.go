@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type postgresRepo struct{ db *gorm.DB }
@@ -123,6 +124,32 @@ func (r *postgresRepo) CreatePurchase(ctx context.Context, cp *domain.CustomerPa
 
 func (r *postgresRepo) SavePurchase(ctx context.Context, cp *domain.CustomerPackage) error {
 	return exception.HandleGormError(r.db.WithContext(ctx).Save(cp).Error)
+}
+
+// AdjustPurchase reads the package with FOR UPDATE, lets change edit it, then saves it and its log line together
+func (r *postgresRepo) AdjustPurchase(ctx context.Context, branchID, id uint, change func(cp *domain.CustomerPackage) (*domain.Visit, error)) (*domain.CustomerPackage, error) {
+	var out domain.CustomerPackage
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("branch_id = ? AND id = ?", branchID, id).First(&out).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		line, err := change(&out)
+		if err != nil {
+			return err
+		}
+		if err := tx.Save(&out).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		if line != nil {
+			line.CustomerPackageID = out.ID
+			return exception.HandleGormError(tx.Create(line).Error)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (r *postgresRepo) Purchase(ctx context.Context, branchID, id uint) (*domain.CustomerPackage, error) {

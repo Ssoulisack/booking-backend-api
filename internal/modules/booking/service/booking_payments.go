@@ -53,25 +53,19 @@ func (s *Service) SetHold(ctx context.Context, bookingID uint, until time.Time) 
 // SettlePaid records that a booking was paid online. It happens once: a booking that is already paid
 // (or was cancelled) is refused, and the payments module marks the money to be given back.
 func (s *Service) SettlePaid(ctx context.Context, branchID, bookingID uint, ref string) error {
-	bk, err := s.bookings.GetByID(ctx, branchID, bookingID)
+	_, confirmed, err := s.bookings.SettlePaidOnline(ctx, branchID, bookingID, s.now())
 	if err != nil {
-		return err
-	}
-	switch {
-	case bk.Status == domain.BookingCancelled:
-		return domain.ErrNotPayable
-	case bk.PaymentStatus == domain.PaymentPaid:
-		return domain.ErrAlreadyPaid
-	}
-	now := s.now()
-	bk.PaymentStatus, bk.PaymentMethod, bk.PaidAt, bk.PaidByID = domain.PaymentPaid, domain.MethodOnline, &now, nil
-	if err := s.bookings.SetPayment(ctx, bk); err != nil {
 		return err
 	}
 	if s.team != nil {
 		s.team.PaymentReceived(ctx, branchID, bookingID)
 	}
-	return s.afterPaid(ctx, bk)
+	if confirmed { // the email needs the branch and the customer, so read the saved booking again
+		if bk, err := s.bookings.GetByID(ctx, branchID, bookingID); err == nil {
+			s.notifyStatusChange(bk, domain.BookingConfirmed, "")
+		}
+	}
+	return nil
 }
 
 // customerOf gives where a booking's emails to the customer go: the account's email, or the one a guest gave

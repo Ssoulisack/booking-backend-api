@@ -44,33 +44,38 @@ type Deps struct {
 	Mailer      output.Mailer
 	FrontendURL string
 	FloorItems  output.FloorItemRepository
+	// OpenWaitingPerPhone: unpaid bookings waiting for approval one phone may hold (0: 3). PublicBookingsPerHour is
+	// for the HTTP layer (new public bookings per IP per hour, 0: 10)
+	OpenWaitingPerPhone   int
+	PublicBookingsPerHour int
 }
 
 // Service serves both the public booking page and the staff desk (staff bookings go through exactly
 // the same slot check as customer bookings, see slotsFor). It implements port.BookingService and
 // port.DeskService.
 type Service struct {
-	branches    output.BranchRepository
-	sports      output.SportRepository
-	resources   output.ResourceRepository
-	coaches     output.CoachRepository
-	hours       output.OpeningHourRepository
-	closures    output.ClosureRepository
-	prices      output.PriceRepository
-	classes     output.ClassSessionRepository
-	bookings    output.BookingRepository
-	users       output.UserRepository
-	memberships output.MembershipRepository
-	rules       catalogport.RuleService
-	mailer      output.Mailer
-	frontendURL string
-	floorItems  output.FloorItemRepository
-	tables      port.TableBooker    // restaurant branches book tables through the restaurant module (SetTables)
-	packages    output.PackageUse   // pays a booking with a customer's package (SetPackages); nil = off
-	slipWays    output.SlipWays     // which ways a slip can be sent (SetSlips); nil = WhatsApp only
-	slipDesk    output.SlipDesk     // where an uploaded slip goes; nil = no Telegram
-	team        output.TeamNotifier // tells the branch's team (Telegram) what happens; nil = nobody (SetTeamNotifier)
-	now         func() time.Time
+	openWaitingPerPhone int
+	branches            output.BranchRepository
+	sports              output.SportRepository
+	resources           output.ResourceRepository
+	coaches             output.CoachRepository
+	hours               output.OpeningHourRepository
+	closures            output.ClosureRepository
+	prices              output.PriceRepository
+	classes             output.ClassSessionRepository
+	bookings            output.BookingRepository
+	users               output.UserRepository
+	memberships         output.MembershipRepository
+	rules               catalogport.RuleService
+	mailer              output.Mailer
+	frontendURL         string
+	floorItems          output.FloorItemRepository
+	tables              port.TableBooker    // restaurant branches book tables through the restaurant module (SetTables)
+	packages            output.PackageUse   // pays a booking with a customer's package (SetPackages); nil = off
+	slipWays            output.SlipWays     // which ways a slip can be sent (SetSlips); nil = WhatsApp only
+	slipDesk            output.SlipDesk     // where an uploaded slip goes; nil = no Telegram
+	team                output.TeamNotifier // tells the branch's team (Telegram) what happens; nil = nobody (SetTeamNotifier)
+	now                 func() time.Time
 }
 
 var (
@@ -85,7 +90,15 @@ func New(d Deps) *Service {
 		closures: d.Closures, prices: d.Prices, classes: d.Classes, bookings: d.Bookings, users: d.Users,
 		memberships: d.Memberships, rules: d.Rules, mailer: d.Mailer,
 		frontendURL: strings.TrimRight(d.FrontendURL, "/"), floorItems: d.FloorItems, now: time.Now,
+		openWaitingPerPhone: orDefault(d.OpenWaitingPerPhone, 3),
 	}
+}
+
+func orDefault(n, def int) int {
+	if n <= 0 {
+		return def
+	}
+	return n
 }
 
 // ---------- what is being booked ----------
@@ -411,6 +424,33 @@ func (s *Service) checkBookingLimit(ctx context.Context, branchID uint, who *boo
 	return nil
 }
 
+// checkWaitingLimit stops one phone number holding many unpaid bookings that wait for approval (a bot or a prank
+// blocking the calendar): the phone of the account, or the one the guest typed, across all branches. Staff are
+// never limited.
+func (s *Service) checkWaitingLimit(ctx context.Context, who *booker) error {
+	if who.Staff != nil {
+		return nil
+	}
+	phone := ""
+	switch {
+	case who.Customer != nil:
+		phone = who.Customer.Phone
+	case who.Guest != nil:
+		phone = who.Guest.Phone
+	}
+	if phone == "" {
+		return nil
+	}
+	open, err := s.bookings.CountOpenWaitingForPhone(ctx, phone, s.now())
+	if err != nil {
+		return err
+	}
+	if open >= int64(s.openWaitingPerPhone) {
+		return conflict("TOO_MANY_WAITING_BOOKINGS")
+	}
+	return nil
+}
+
 func newBookingCode() (string, error) {
 	b := make([]byte, codeLength)
 	if _, err := rand.Read(b); err != nil {
@@ -471,6 +511,10 @@ func (s *Service) Create(ctx context.Context, slug string, actor *domain.User, r
 	}
 	who, err := whoBooks(b, actor, req.Guest)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.checkWaitingLimit(ctx, who); err != nil {
 		return nil, err
 	}
 

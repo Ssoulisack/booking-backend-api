@@ -16,7 +16,12 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 
 	pub := api.Group("/public/branches/:slug")
 	pub.Get("/availability", h.Availability)
-	pub.Post("/bookings", middleware.RateLimit(60, time.Hour), auth.OptionalUser, h.Create)
+	perHour := h.perHour
+	if perHour <= 0 {
+		perHour = 10
+	}
+	// the hourly cap per IP address also stops one address holding many slots; a counter with a shared Wi-Fi is one address
+	pub.Post("/bookings", middleware.RateLimit(perHour, time.Hour), auth.OptionalUser, h.Create)
 	// find a booking without its link (code + phone): POST keeps the phone out of addresses and logs;
 	// few tries, so codes cannot be guessed
 	pub.Post("/bookings/find", middleware.RateLimit(20, 15*time.Minute), h.FindBooking)

@@ -6,6 +6,12 @@ app:
 
 server:
   port: 3000
+  # Limits on the public booking page (against bots that hold many slots). Shown values are the defaults.
+  #   publicBookingsPerHour: new bookings one IP address may make per hour (a venue's shared Wi-Fi is one address:
+  #                          raise it for a very busy counter). Needs the real visitor address, see proxyHeader.
+  #   openWaitingPerPhone:   bookings one phone number may have waiting for approval and unpaid at the same time
+  publicBookingsPerHour: 10
+  openWaitingPerPhone: 3
   # Which payment gateway runs (see "payments" below):
   #   dev  = the built-in mock inside the backend: PhaJay is never called, no key needed. A dev page at
   #          /api/v1/dev/payments settles payments (Pay / Expire).

@@ -27,7 +27,7 @@ type Module struct {
 // New builds the module
 func New(d Deps) *Module {
 	svc := service.New(d)
-	return &Module{Service: svc, handler: http.New(svc, svc)}
+	return &Module{Service: svc, handler: http.New(svc, svc).WithPublicBookingsPerHour(d.PublicBookingsPerHour)}
 }
 
 // Desk is the staff desk's input port (the company handler lists customers through it)

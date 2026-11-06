@@ -50,6 +50,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Branches: r.branches, Sports: r.sports, Resources: r.resources, Coaches: r.coaches, Hours: r.openingHours,
 		Closures: r.closures, Prices: r.prices, Classes: r.classSessions, Bookings: r.bookings, Users: r.user,
 		Memberships: r.memberships, Rules: catalogModule.Rules, Mailer: r.mailer, FrontendURL: r.app.FrontendURL, FloorItems: r.floorItems,
+		OpenWaitingPerPhone: r.server.OpenWaitingPerPhone, PublicBookingsPerHour: r.server.PublicBookingsPerHour,
 	})
 	// modules: each owns its tables, rules and routes; the booking service and the jobs talk to them
 	bookingImpl := bookingModule.Service

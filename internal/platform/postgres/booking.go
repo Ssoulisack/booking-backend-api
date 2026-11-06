@@ -6,12 +6,17 @@ import (
 	"backend/internal/platform/postgres/exception"
 	"backend/pkg/response"
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// bookingInsertLock is the first key of the advisory lock that serializes booking inserts per branch
+const bookingInsertLock = 7001
 
 var activeStatuses = []string{domain.BookingPending, domain.BookingConfirmed}
 
@@ -25,7 +30,35 @@ func (r *bookingRepository) Create(ctx context.Context, b *domain.Booking) error
 	if b.BranchID == 0 {
 		return errNoScope
 	}
-	return exception.HandleGormError(r.db.WithContext(ctx).Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error)
+	// Many people booking the same place at once can make Postgres abort some inserts as a deadlock (each waits for
+	// the other's not yet committed item). Nothing was saved then, so try again: the retry meets the winner's
+	// committed row and gets the normal "taken" answer instead of a server error.
+	var err error
+	for attempt := 0; attempt < 4; attempt++ {
+		// the advisory lock (one per branch, released when the insert ends) makes the inserts of one branch take
+		// turns, so they do not wait on each other's items at all; the exclusion constraints stay as the safety net
+		err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?, ?)", bookingInsertLock, int32(b.BranchID)).Error; err != nil {
+				return err
+			}
+			return tx.Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error
+		})
+		if !isDeadlock(err) {
+			break
+		}
+		b.ID = 0
+		for i := range b.Items {
+			b.Items[i].ID, b.Items[i].BookingID = 0, nil
+		}
+		time.Sleep(time.Duration(attempt+1) * 15 * time.Millisecond)
+	}
+	return exception.HandleGormError(err)
+}
+
+// isDeadlock: Postgres chose this transaction to stop because of a deadlock (40P01) or a serialization clash (40001)
+func isDeadlock(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && (pg.Code == "40P01" || pg.Code == "40001")
 }
 
 func (r *bookingRepository) CreateClassBooking(ctx context.Context, b *domain.Booking, classID uint, seats int) error {
@@ -193,6 +226,15 @@ func (r *bookingRepository) CountActiveForGuestPhone(ctx context.Context, branch
 		branchID, phone, activeStatuses, now)
 }
 
+func (r *bookingRepository) CountOpenWaitingForPhone(ctx context.Context, phone string, now time.Time) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&domain.Booking{}).
+		Where("status = ? AND payment_status = ? AND ends_at > ? AND event_id IS NULL", domain.BookingPending, domain.PaymentUnpaid, now).
+		Where("guest_phone = ? OR customer_id IN (SELECT id FROM users WHERE phone = ? AND deleted_at IS NULL)", phone, phone).
+		Count(&n).Error
+	return n, exception.HandleGormError(err)
+}
+
 func (r *bookingRepository) SeatsTaken(ctx context.Context, branchID uint, classIDs []uint) (map[uint]int, error) {
 	out := make(map[uint]int, len(classIDs))
 	if len(classIDs) == 0 {
@@ -334,6 +376,37 @@ func (r *bookingRepository) SetStatus(ctx context.Context, b *domain.Booking, st
 	}
 	b.Status = status
 	return nil
+}
+
+func (r *bookingRepository) SettlePaidOnline(ctx context.Context, branchID, id uint, at time.Time) (*domain.Booking, bool, error) {
+	var bk domain.Booking
+	confirmed := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND branch_id = ?", id, branchID).First(&bk).Error; err != nil {
+			return err
+		}
+		switch {
+		case bk.Status == domain.BookingCancelled:
+			return domain.ErrNotPayable
+		case bk.PaymentStatus == domain.PaymentPaid:
+			return domain.ErrAlreadyPaid
+		}
+		bk.PaymentStatus, bk.PaymentMethod, bk.PaidAt, bk.PaidByID = domain.PaymentPaid, domain.MethodOnline, &at, nil
+		cols := map[string]any{"payment_status": bk.PaymentStatus, "payment_method": bk.PaymentMethod, "paid_at": at, "paid_by_id": nil}
+		if bk.EventID != nil && bk.Status == domain.BookingPending {
+			cols["status"] = domain.BookingConfirmed
+			bk.Status = domain.BookingConfirmed
+			confirmed = true
+		}
+		return tx.Model(&domain.Booking{}).Where("id = ?", bk.ID).Updates(cols).Error
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotPayable) || errors.Is(err, domain.ErrAlreadyPaid) {
+			return nil, false, err // the payments module tells these two apart to give the money back
+		}
+		return nil, false, keepAppError(err)
+	}
+	return &bk, confirmed, nil
 }
 
 func (r *bookingRepository) SetPayment(ctx context.Context, b *domain.Booking) error {

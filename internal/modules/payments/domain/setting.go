@@ -7,6 +7,11 @@ import "time"
 type Setting struct {
 	BranchID  uint `gorm:"primaryKey"`
 	OnlineOff bool
+	// OnlineBookingsOff: a sport branch takes no online payment for its bookings (courts, classes) but may still sell
+	// packages online; the customer pays at the venue
+	OnlineBookingsOff bool
+	// OnlinePackagesOff: packages are not sold online (the customer sends a slip or pays at the desk), bookings may be
+	OnlinePackagesOff bool
 	// ChargeMinutes is how long a customer has to pay a QR or page we made (0: the default, 30)
 	ChargeMinutes int
 	UpdatedAt     time.Time

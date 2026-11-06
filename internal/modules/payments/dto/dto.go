@@ -47,7 +47,11 @@ type StaffPaymentDTO struct {
 
 // SettingsDTO: the branch's online payment switch, and whether the server has a gateway to switch on
 type SettingsDTO struct {
-	OnlineEnabled    bool `json:"online_enabled"`
+	OnlineEnabled bool `json:"online_enabled"`
+	// OnlineBookings: sport branches only: online payment is offered for bookings (a package is separate)
+	OnlineBookings bool `json:"online_bookings"`
+	// OnlinePackages: online payment is offered when buying a package
+	OnlinePackages   bool `json:"online_packages"`
 	GatewayAvailable bool `json:"gateway_available"`
 	// ChargeMinutes is how long a customer has to pay once they chose a bank
 	ChargeMinutes int `json:"charge_minutes"`
@@ -56,6 +60,10 @@ type SettingsDTO struct {
 // SettingsRequest turns online payment on or off for the branch
 type SettingsRequest struct {
 	OnlineEnabled bool `json:"online_enabled"`
+	// OnlineBookings: not sent = on (as before)
+	OnlineBookings *bool `json:"online_bookings"`
+	// OnlinePackages: not sent = keep what the branch chose
+	OnlinePackages *bool `json:"online_packages"`
 	// ChargeMinutes: 5 to 30; not sent (0) = the default, 30
 	ChargeMinutes int `json:"charge_minutes"`
 }

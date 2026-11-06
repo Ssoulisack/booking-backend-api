@@ -18,7 +18,7 @@ type Handler struct{ svc port.Service }
 func New(svc port.Service) *Handler { return &Handler{svc: svc} }
 
 func (h *Handler) Options(c *fiber.Ctx) error {
-	res, err := h.svc.Options(c.UserContext(), c.Params("slug"))
+	res, err := h.svc.Options(c.UserContext(), c.Params("slug"), c.Query("for") == "package")
 	return httpx.OK(c, res, err)
 }
 

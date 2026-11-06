@@ -9,7 +9,7 @@ import (
 // Service is what the module offers: the handlers call it, and the job calls Poll
 type Service interface {
 	// customers
-	Options(ctx context.Context, slug string) ([]dto.OptionDTO, error)
+	Options(ctx context.Context, slug string, forPackage bool) ([]dto.OptionDTO, error)
 	StartByToken(ctx context.Context, slug, token string, req dto.StartRequest) (*dto.PaymentDTO, error)
 	StartByCustomer(ctx context.Context, userID, id uint, req dto.StartRequest) (*dto.PaymentDTO, error)
 	// the payment a customer can carry on with after leaving the page (nil: none)

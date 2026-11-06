@@ -6,6 +6,7 @@ import (
 	"backend/internal/core/dto"
 	"backend/internal/modules/reports/port"
 	"backend/internal/platform/httpx"
+	"backend/internal/platform/kit"
 	"backend/internal/platform/middleware"
 	"backend/pkg/response"
 	"bytes"
@@ -28,6 +29,22 @@ func reportQuery(c *fiber.Ctx) dto.ReportQuery {
 }
 
 func wantsCSV(c *fiber.Ctx) bool { return c.Query("format") == "csv" }
+
+// wantsPage: the caller asked for one page (?page= or ?limit=); without them the whole list comes back
+func wantsPage(c *fiber.Ctx) bool { return c.Query("page") != "" || c.Query("limit") != "" }
+
+// pageBounds is the slice [from:to) of a list of n rows for a page (a page past the end is empty)
+func pageBounds(n, page, limit int) (from, to int) {
+	from = (page - 1) * limit
+	if from > n {
+		from = n
+	}
+	to = from + limit
+	if to > n {
+		to = n
+	}
+	return from, to
+}
 
 // sendCSV writes rows as a downloadable CSV file
 func sendCSV(c *fiber.Ctx, filename string, rows [][]string) error {
@@ -81,6 +98,11 @@ func (h *Handler) Finance(c *fiber.Ctx) error {
 func (h *Handler) Unpaid(c *fiber.Ctx) error {
 	q := reportQuery(c)
 	res, err := h.svc.Unpaid(c.UserContext(), middleware.BranchID(c), q)
+	if err == nil && !wantsCSV(c) && wantsPage(c) { // one page of the list; the CSV always has every row
+		page, limit := kit.NormalizePage(dto.ListQuery{Page: c.QueryInt("page", 1), Limit: c.QueryInt("limit", kit.DefaultPageSize)})
+		from, to := pageBounds(len(res), page, limit)
+		return response.NewPaginatedResponse(c, res[from:to], kit.NewMeta(int64(len(res)), page, limit))
+	}
 	if err != nil || !wantsCSV(c) {
 		return httpx.OK(c, res, err)
 	}
@@ -96,6 +118,13 @@ func (h *Handler) Unpaid(c *fiber.Ctx) error {
 func (h *Handler) Transactions(c *fiber.Ctx) error {
 	q := reportQuery(c)
 	res, err := h.svc.Transactions(c.UserContext(), middleware.BranchID(c), q)
+	if err == nil && !wantsCSV(c) && wantsPage(c) { // one page of the rows; the totals stay for the whole period
+		page, limit := kit.NormalizePage(dto.ListQuery{Page: c.QueryInt("page", 1), Limit: c.QueryInt("limit", kit.DefaultPageSize)})
+		from, to := pageBounds(len(res.Rows), page, limit)
+		meta := kit.NewMeta(int64(len(res.Rows)), page, limit)
+		res.Rows, res.RowsMeta = res.Rows[from:to], &meta
+		return httpx.OK(c, res, nil)
+	}
 	if err != nil || !wantsCSV(c) {
 		return httpx.OK(c, res, err)
 	}

@@ -32,6 +32,9 @@ type BookingRepository interface {
 	// CountActive counts pending / confirmed bookings ending after now, by customer or by guest phone
 	CountActiveForCustomer(ctx context.Context, branchID, customerID uint, now time.Time) (int64, error)
 	CountActiveForGuestPhone(ctx context.Context, branchID uint, phone string, now time.Time) (int64, error)
+	// CountOpenWaitingForPhone: bookings (not event tables) still waiting for approval and unpaid, of a guest with this
+	// phone or an account with it, at every branch
+	CountOpenWaitingForPhone(ctx context.Context, phone string, now time.Time) (int64, error)
 	// SeatsTaken sums the active seats booked per class session
 	SeatsTaken(ctx context.Context, branchID uint, classIDs []uint) (map[uint]int, error)
 	// CountFutureForOwner counts active customer items of a resource or coach ending after now
@@ -49,6 +52,11 @@ type BookingRepository interface {
 	SetStatus(ctx context.Context, b *domain.Booking, status string) error
 	// SetPayment saves the payment fields
 	SetPayment(ctx context.Context, b *domain.Booking) error
+	// SettlePaidOnline records an online (bank) payment in ONE transaction with the booking row locked, so a cancel or
+	// another payment arriving at the same moment cannot leave half of it: a cancelled booking gives ErrNotPayable,
+	// an already paid one ErrAlreadyPaid, and nothing is written then. An event booking still waiting is confirmed
+	// in the same step (confirmed = true). It returns the booking as saved.
+	SettlePaidOnline(ctx context.Context, branchID, id uint, at time.Time) (bk *domain.Booking, confirmed bool, err error)
 
 	// ---- event days ----
 

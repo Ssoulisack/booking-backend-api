@@ -142,44 +142,42 @@ func (s *Service) Adjust(ctx context.Context, branchID, id uint, by *domain.User
 	if (req.Visits == 0 && req.ExtendDays == 0) || req.Visits < -maxAdjust || req.Visits > maxAdjust || req.ExtendDays < 0 || req.ExtendDays > maxDays {
 		return nil, badRequest("INVALID_ADJUSTMENT")
 	}
-	cp, err := s.Repo.Purchase(ctx, branchID, id)
+	// everything that reads the package runs inside the locked transaction, so a second adjust waits and then
+	// sees the first one's result (no lost update)
+	cp, err := s.Repo.AdjustPurchase(ctx, branchID, id, func(cp *pkgdomain.CustomerPackage) (*pkgdomain.Visit, error) {
+		if cp.Status != pkgdomain.StatusActive {
+			return nil, conflict("PACKAGE_NOT_ACTIVE")
+		}
+		if req.Visits != 0 && cp.Kind != pkgdomain.OptionTimes {
+			return nil, badRequest("INVALID_ADJUSTMENT") // a months pass has no visits to count
+		}
+		if req.Visits != 0 && cp.TimesLeft+req.Visits < 0 {
+			return nil, conflict("NOT_ENOUGH_VISITS")
+		}
+		if req.ExtendDays != 0 {
+			end := &cp.ExpiresOn
+			if cp.Kind == pkgdomain.OptionMonths {
+				end = &cp.EndsOn
+			}
+			if *end == "" {
+				return nil, badRequest("INVALID_ADJUSTMENT") // it never runs out: nothing to extend
+			}
+			from := s.today(b)
+			if *end > from {
+				from = *end
+			}
+			day, err := time.Parse("2006-01-02", from)
+			if err != nil {
+				return nil, err
+			}
+			*end = day.AddDate(0, 0, req.ExtendDays).Format("2006-01-02")
+		}
+		cp.TimesLeft += req.Visits
+		byID := by.ID
+		return &pkgdomain.Visit{CustomerPackageID: cp.ID, Change: req.Visits, Note: note, ByUserID: &byID, CreatedAt: s.now()}, nil
+	})
 	if err != nil {
 		return nil, mapNotFound(err, "PACKAGE_NOT_FOUND")
-	}
-	if cp.Status != pkgdomain.StatusActive {
-		return nil, conflict("PACKAGE_NOT_ACTIVE")
-	}
-	if req.Visits != 0 && cp.Kind != pkgdomain.OptionTimes {
-		return nil, badRequest("INVALID_ADJUSTMENT") // a months pass has no visits to count
-	}
-	if req.Visits != 0 && cp.TimesLeft+req.Visits < 0 {
-		return nil, conflict("NOT_ENOUGH_VISITS")
-	}
-	if req.ExtendDays != 0 {
-		end := &cp.ExpiresOn
-		if cp.Kind == pkgdomain.OptionMonths {
-			end = &cp.EndsOn
-		}
-		if *end == "" {
-			return nil, badRequest("INVALID_ADJUSTMENT") // it never runs out: nothing to extend
-		}
-		from := s.today(b)
-		if *end > from {
-			from = *end
-		}
-		day, err := time.Parse("2006-01-02", from)
-		if err != nil {
-			return nil, err
-		}
-		*end = day.AddDate(0, 0, req.ExtendDays).Format("2006-01-02")
-	}
-	cp.TimesLeft += req.Visits
-	if err := s.Repo.SavePurchase(ctx, cp); err != nil {
-		return nil, err
-	}
-	byID := by.ID
-	if err := s.Repo.AddVisit(ctx, &pkgdomain.Visit{CustomerPackageID: cp.ID, Change: req.Visits, Note: note, ByUserID: &byID, CreatedAt: s.now()}); err != nil {
-		return nil, err
 	}
 	return s.purchaseDTO(ctx, b, cp, nil)
 }
