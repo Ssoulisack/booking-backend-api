@@ -134,6 +134,10 @@ func (s *Service) ChangeStatus(ctx context.Context, branchID, id uint, req dto.S
 	if len([]rune(req.Reason)) > 255 {
 		return nil, badRequest("REASON_TOO_LONG")
 	}
+	// an event table is confirmed by its payment (online, or the team marking it paid): never by a status change alone
+	if req.Status == domain.BookingConfirmed && bk.EventID != nil && bk.PaymentStatus != domain.PaymentPaid {
+		return nil, conflict("EVENT_PAYMENT_REQUIRED")
+	}
 	now := s.now()
 	switch req.Status {
 	case domain.BookingCompleted, domain.BookingNoShow:
@@ -193,6 +197,10 @@ func (s *Service) SetPayment(ctx context.Context, branchID uint, actor *domain.U
 		now, actorID := s.now(), actor.ID
 		bk.PaymentStatus, bk.PaymentMethod, bk.PaidAt, bk.PaidByID = domain.PaymentPaid, req.Method, &now, &actorID
 	case domain.PaymentUnpaid:
+		// an event booking is confirmed because it was paid: taking the payment back would leave it confirmed and unpaid
+		if bk.EventID != nil && bk.Status == domain.BookingConfirmed {
+			return nil, conflict("EVENT_PAID_CANNOT_UNDO")
+		}
 		bk.PaymentStatus, bk.PaymentMethod, bk.PaidAt, bk.PaidByID = domain.PaymentUnpaid, "", nil, nil
 	default:
 		return nil, badRequest("INVALID_PAYMENT_STATUS")
