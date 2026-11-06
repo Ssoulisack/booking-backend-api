@@ -281,6 +281,8 @@ type TableAvailabilityDTO struct {
 	// time: customers pick one of Times; arrive_by: Times has the one evening, nothing to pick
 	BookingStyle string         `json:"booking_style"`
 	Times        []TableTimeDTO `json:"times"` // only times where the group fits somewhere
+	// KeptTableIDs: tables kept for walk-ins (not offered online): the page shows them as "walk-in only", not "taken"
+	KeptTableIDs []uint `json:"kept_table_ids"`
 }
 
 // TableTimeDTO is one start time with the tables free for the whole booking

@@ -236,7 +236,7 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 		if ev != nil && ev.WholeBranch() {
 			return &dto.TableAvailabilityDTO{
 				Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
-				LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{},
+				LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{}, KeptTableIDs: []uint{},
 				Event: eventRef(ev),
 			}, nil
 		}
@@ -247,7 +247,14 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 	}
 	out := &dto.TableAvailabilityDTO{
 		Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
-		LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{},
+		LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{}, KeptTableIDs: []uint{},
+	}
+	if live, _, err := s.liveTables(ctx, b.ID); err == nil {
+		for _, t := range live {
+			if t.WalkInOnly {
+				out.KeptTableIDs = append(out.KeptTableIDs, t.ID)
+			}
+		}
 	}
 	if ev != nil {
 		out.Event = eventRef(ev)
