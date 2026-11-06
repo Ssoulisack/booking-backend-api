@@ -958,9 +958,14 @@ func (s *Service) ExpireUnpaid(ctx context.Context) error {
 		return err
 	}
 	for i := range list {
-		if err := s.Bookings.Cancel(ctx, &list[i], "Not paid in time", s.Now()); err != nil {
+		// only if it is still unpaid and waiting when the row is locked: a payment that arrived meanwhile keeps its tables
+		released, err := s.Bookings.ReleaseUnpaid(ctx, &list[i], "Not paid in time", s.Now())
+		if err != nil {
 			log.Printf("⚠️  event booking %d: %v", list[i].ID, err) // the others still go
 			continue
+		}
+		if !released {
+			continue // paid, confirmed or cancelled in the meantime: nothing to tell anybody
 		}
 		if s.Notifier != nil {
 			s.Notifier.BookingReleased(ctx, list[i].BranchID, list[i].ID)

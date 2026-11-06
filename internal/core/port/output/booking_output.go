@@ -64,6 +64,10 @@ type BookingRepository interface {
 	ActiveResourceItems(ctx context.Context, branchID uint, from, to time.Time) ([]domain.BookingItem, error)
 	// EventHoldsExpired lists unpaid event bookings whose pay-by time has passed without a slip sent
 	EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error)
+	// ReleaseUnpaid cancels a booking only if it is STILL waiting and unpaid, in one transaction with its row locked (the
+	// same lock a payment takes), so a payment arriving at the same moment is never cancelled. false: it was paid,
+	// confirmed or cancelled meanwhile, and nothing was changed.
+	ReleaseUnpaid(ctx context.Context, b *domain.Booking, reason string, at time.Time) (bool, error)
 	// SetPayBy makes the pay-by time of an event booking still waiting for money (no slip sent) the moment the
 	// customer's online payment (its QR) runs out: not paid by then, the tables go back on sale
 	SetPayBy(ctx context.Context, id uint, until time.Time) error

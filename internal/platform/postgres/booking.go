@@ -164,6 +164,34 @@ func (r *bookingRepository) ListForCustomer(ctx context.Context, customerID uint
 	return items, total, exception.HandleGormError(err)
 }
 
+func (r *bookingRepository) ReleaseUnpaid(ctx context.Context, b *domain.Booking, reason string, at time.Time) (bool, error) {
+	released := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var cur domain.Booking
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND branch_id = ?", b.ID, b.BranchID).First(&cur).Error; err != nil {
+			return err
+		}
+		// looked at AFTER the lock: a payment that settled a moment ago has made it confirmed + paid
+		if cur.Status != domain.BookingPending || cur.PaymentStatus != domain.PaymentUnpaid {
+			return nil
+		}
+		if err := tx.Model(&domain.Booking{}).Where("id = ?", cur.ID).
+			Updates(map[string]any{"status": domain.BookingCancelled, "cancelled_at": at, "cancel_reason": reason}).Error; err != nil {
+			return err
+		}
+		released = true
+		return tx.Model(&domain.BookingItem{}).Where("booking_id = ?", cur.ID).Update("active", false).Error
+	})
+	if err != nil {
+		return false, keepAppError(err)
+	}
+	if released {
+		b.Status, b.CancelledAt, b.CancelReason = domain.BookingCancelled, &at, reason
+	}
+	return released, nil
+}
+
 func (r *bookingRepository) Cancel(ctx context.Context, b *domain.Booking, reason string, at time.Time) error {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&domain.Booking{}).
