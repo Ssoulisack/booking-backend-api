@@ -103,6 +103,10 @@ func (s *Service) tableTimes(ctx context.Context, b *domain.Branch, day time.Tim
 	if err != nil {
 		return nil, nil, err
 	}
+	if !staff {
+		// tables kept for walk-ins are never offered to customers (they show as taken)
+		tables = slices.DeleteFunc(tables, func(r domain.Resource) bool { return r.WalkInOnly })
+	}
 	open, err := s.kernel.OpenIntervals(ctx, b.ID, domain.OwnerVenue, 0, day)
 	if err != nil {
 		return nil, nil, err

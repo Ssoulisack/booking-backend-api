@@ -57,6 +57,8 @@ type ResourceRequest struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"` // restaurant branches: always "table"
 	Active  *bool  `json:"active"`
+	// WalkInOnly: restaurant tables kept for walk-ins; not sent = unchanged
+	WalkInOnly *bool `json:"walk_in_only"`
 	TableFields
 }
 
@@ -78,6 +80,8 @@ type ResourceDTO struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 	Active  bool   `json:"active"`
+	// WalkInOnly: kept for walk-ins (customers see it as taken, events do not sell it)
+	WalkInOnly bool `json:"walk_in_only"`
 	TableFields
 }
 
@@ -120,6 +124,7 @@ type NewTableDTO struct {
 	Seats       int    `json:"seats"`
 	ExtraChairs int    `json:"extra_chairs"`
 	Active      *bool  `json:"active"`
+	WalkInOnly  *bool  `json:"walk_in_only"`
 	Shape       string `json:"shape"`
 	PlanX       int    `json:"plan_x"`
 	PlanY       int    `json:"plan_y"`

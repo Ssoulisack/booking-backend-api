@@ -133,7 +133,7 @@ func copySetup(tx *gorm.DB, from, to uint) error {
 	}
 	for _, o := range oldResources {
 		n := domain.Resource{BranchID: to, SportID: sports[o.SportID], Name: o.Name, Kind: o.Kind, Active: o.Active,
-			Seats: o.Seats, ExtraChairs: o.ExtraChairs, Shape: o.Shape,
+			Seats: o.Seats, ExtraChairs: o.ExtraChairs, Shape: o.Shape, WalkInOnly: o.WalkInOnly,
 			PlanX: o.PlanX, PlanY: o.PlanY, PlanW: o.PlanW, PlanH: o.PlanH, Rotation: o.Rotation}
 		if err := tx.Create(&n).Error; err != nil {
 			return err

@@ -53,6 +53,9 @@ type Resource struct {
 	PlanW    int `gorm:"not null;default:0"`
 	PlanH    int `gorm:"not null;default:0"`
 	Rotation int `gorm:"not null;default:0"`
+	// WalkInOnly: kept for walk-ins. Customers cannot book it online (it shows as taken) and events do not sell it; staff
+	// seat walk-ins and move groups there as usual. Stays until the team switches it off.
+	WalkInOnly bool `gorm:"not null;default:false"`
 }
 
 // Coach is a trainer managed by the branch; coaches do not log in

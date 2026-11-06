@@ -213,7 +213,7 @@ func (s *CatalogServiceImpl) DeleteSport(ctx context.Context, branchID, id uint)
 
 func toResourceDTO(m domain.Resource) dto.ResourceDTO {
 	return dto.ResourceDTO{
-		ID: m.ID, SportID: m.SportID, Name: m.Name, Kind: m.Kind, Active: m.Active,
+		ID: m.ID, SportID: m.SportID, Name: m.Name, Kind: m.Kind, Active: m.Active, WalkInOnly: m.WalkInOnly,
 		TableFields: dto.TableFields{
 			Seats: m.Seats, ExtraChairs: m.ExtraChairs, Shape: m.Shape,
 			PlanX: m.PlanX, PlanY: m.PlanY, PlanW: m.PlanW, PlanH: m.PlanH, Rotation: m.Rotation,
@@ -382,6 +382,7 @@ func (s *CatalogServiceImpl) CreateResource(ctx context.Context, branchID uint, 
 	}
 	m := domain.Resource{BranchID: branchID, SportID: req.SportID, Name: req.Name, Kind: req.Kind, Active: isActive(req.Active)}
 	applyTable(&m, req.TableFields)
+	m.WalkInOnly = req.WalkInOnly != nil && *req.WalkInOnly
 	if err := s.resources.Create(ctx, &m); err != nil {
 		return nil, err
 	}
@@ -423,6 +424,9 @@ func (s *CatalogServiceImpl) UpdateResource(ctx context.Context, branchID, id ui
 	}
 	m.SportID, m.Name, m.Kind, m.Active = req.SportID, req.Name, req.Kind, isActive(req.Active)
 	applyTable(m, req.TableFields)
+	if req.WalkInOnly != nil {
+		m.WalkInOnly = *req.WalkInOnly
+	}
 	if err := s.resources.Update(ctx, m); err != nil {
 		return nil, err
 	}
@@ -613,6 +617,7 @@ func (s *CatalogServiceImpl) SaveFloorPlan(ctx context.Context, branchID, areaID
 			BranchID: branchID, SportID: areaID, Name: name, Kind: domain.ResourceKindTable, Active: isActive(n.Active),
 			Seats: n.Seats, ExtraChairs: n.ExtraChairs, Shape: shape,
 			PlanX: n.PlanX, PlanY: n.PlanY, PlanW: n.PlanW, PlanH: n.PlanH, Rotation: n.Rotation,
+			WalkInOnly: n.WalkInOnly != nil && *n.WalkInOnly,
 		})
 	}
 	existing := len(tables)

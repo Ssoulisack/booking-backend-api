@@ -172,7 +172,8 @@ func (s *Service) catalog(ctx context.Context, branchID uint) ([]domain.Resource
 	if err != nil {
 		return nil, nil, err
 	}
-	tables := slices.DeleteFunc(all, func(r domain.Resource) bool { return !live[r.SportID] || r.Seats < 1 })
+	// (a table kept for walk-ins is not sold in events either)
+	tables := slices.DeleteFunc(all, func(r domain.Resource) bool { return !live[r.SportID] || r.Seats < 1 || r.WalkInOnly })
 	items, _, err := s.FloorItems.List(ctx, branchID, output.ListQuery{})
 	if err != nil {
 		return nil, nil, err
