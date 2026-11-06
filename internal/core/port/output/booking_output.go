@@ -62,6 +62,10 @@ type BookingRepository interface {
 
 	// ActiveResourceItems lists the active table / court items of a branch overlapping [from, to)
 	ActiveResourceItems(ctx context.Context, branchID uint, from, to time.Time) ([]domain.BookingItem, error)
+	// NormalTableBookings lists the codes of waiting or confirmed NORMAL table bookings (not event bookings) that hold a
+	// table in [from, to); areaIDs limits it to tables of those areas (none: every table). An event may not take over
+	// those days while these exist.
+	NormalTableBookings(ctx context.Context, branchID uint, from, to time.Time, areaIDs []uint) ([]string, error)
 	// EventHoldsExpired lists unpaid event bookings whose pay-by time has passed without a slip sent
 	EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error)
 	// ReleaseUnpaid cancels a booking only if it is STILL waiting and unpaid, in one transaction with its row locked (the

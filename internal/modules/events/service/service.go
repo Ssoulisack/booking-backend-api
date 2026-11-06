@@ -334,6 +334,27 @@ func (s *Service) apply(ctx context.Context, b *domain.Branch, e *evdomain.Event
 			}
 		}
 	}
+	// a published event takes over its days: normal table bookings that already hold its tables would clash with the
+	// event's own sale of them, so the owner moves or cancels those first
+	if req.Published && b.Type == domain.BranchTypeRestaurant {
+		areas := ex.areas
+		if !ex.setAreas && e.ID != 0 {
+			var err error
+			if areas, err = s.Repo.AreaIDs(ctx, e.ID); err != nil {
+				return nil, err
+			}
+		}
+		loc := locationOf(b)
+		first, _ := time.ParseInLocation("2006-01-02", req.StartsOn, loc)
+		last, _ := time.ParseInLocation("2006-01-02", req.EndsOn, loc)
+		codes, err := s.Bookings.NormalTableBookings(ctx, b.ID, first, last.AddDate(0, 0, 1), areas)
+		if err != nil {
+			return nil, err
+		}
+		if len(codes) > 0 {
+			return nil, conflict("EVENT_HAS_TABLE_BOOKINGS_" + strings.Join(codes, ","))
+		}
+	}
 	e.BranchID, e.Name, e.Description = b.ID, name, strings.TrimSpace(req.Description)
 	e.StartsOn, e.EndsOn = req.StartsOn, req.EndsOn
 	e.BackgroundKey, e.AdKey = req.BackgroundKey, req.AdKey

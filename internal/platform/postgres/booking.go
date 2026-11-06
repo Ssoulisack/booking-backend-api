@@ -561,6 +561,20 @@ func (r *bookingRepository) ActiveResourceItems(ctx context.Context, branchID ui
 	return out, exception.HandleGormError(err)
 }
 
+func (r *bookingRepository) NormalTableBookings(ctx context.Context, branchID uint, from, to time.Time, areaIDs []uint) ([]string, error) {
+	q := r.db.WithContext(ctx).Table("bookings AS b").
+		Joins("JOIN booking_items bi ON bi.booking_id = b.id AND bi.active").
+		Joins("JOIN resources r ON r.id = bi.resource_id").
+		Where("b.branch_id = ? AND b.deleted_at IS NULL AND b.event_id IS NULL AND b.guests > 0 AND b.status IN ?", branchID, activeStatuses).
+		Where("bi.starts_at < ? AND bi.ends_at > ?", to, from)
+	if len(areaIDs) > 0 {
+		q = q.Where("r.sport_id IN ?", areaIDs)
+	}
+	var codes []string
+	err := q.Distinct().Order("b.code").Limit(20).Pluck("b.code", &codes).Error
+	return codes, exception.HandleGormError(err)
+}
+
 func (r *bookingRepository) EventHoldsExpired(ctx context.Context, now time.Time) ([]domain.Booking, error) {
 	var out []domain.Booking
 	err := r.db.WithContext(ctx).
