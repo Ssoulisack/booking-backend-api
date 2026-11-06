@@ -41,6 +41,7 @@ type Deps struct {
 // Module is the events module: its service (for the booking service and the job) and its routes
 type Module struct {
 	Service port.Service
+	svc     *service.Service
 	handler *http.Handler
 }
 
@@ -50,8 +51,11 @@ func New(d Deps) *Module {
 		Repo: eventscache.Wrap(postgres.New(d.DB), d.Cache), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources,
 		FloorItems: d.FloorItems, Bookings: d.Bookings, Media: d.Media, Files: d.Files, Booker: d.Booker, Notifier: d.Notifier, Now: d.Now,
 	})
-	return &Module{Service: svc, handler: http.New(svc)}
+	return &Module{Service: svc, svc: svc, handler: http.New(svc)}
 }
+
+// SetSlipChannel tells the module how to ask whether a branch can receive payment slips in Telegram
+func (m *Module) SetSlipChannel(c port.SlipChannel) { m.svc.SetSlipChannel(c) }
 
 // Routes registers the module's staff and public routes
 func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) { m.handler.Routes(api, auth) }

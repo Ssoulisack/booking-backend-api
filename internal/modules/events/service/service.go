@@ -54,6 +54,8 @@ type Deps struct {
 // Service holds the events rules (it implements port.Service)
 type Service struct {
 	Deps
+	// Slips: asks whether a branch can receive payment slips in Telegram (nil: no)
+	Slips port.SlipChannel
 }
 
 var _ port.Service = (*Service)(nil)
@@ -75,6 +77,27 @@ func (s *Service) branch(ctx context.Context, id uint) (*domain.Branch, error) {
 	}
 	if b.Type != domain.BranchTypeRestaurant {
 		return nil, conflict("NOT_A_RESTAURANT")
+	}
+	return b, nil
+}
+
+// anyBranch and anyPublicBranch are for what both kinds of branch share (how customers pay outside the
+// system): a sport branch uses it for packages, a restaurant for event tables
+func (s *Service) anyBranch(ctx context.Context, id uint) (*domain.Branch, error) {
+	b, err := s.Branches.GetByID(ctx, id)
+	if err != nil {
+		return nil, mapNotFound(err, "BRANCH_NOT_FOUND")
+	}
+	return b, nil
+}
+
+func (s *Service) anyPublicBranch(ctx context.Context, slug string) (*domain.Branch, error) {
+	b, err := s.Branches.GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, mapNotFound(err, "BRANCH_NOT_FOUND")
+	}
+	if !b.IsPublic() {
+		return nil, notFound("BRANCH_NOT_FOUND")
 	}
 	return b, nil
 }
@@ -538,25 +561,47 @@ func (s *Service) SetPrices(ctx context.Context, branchID, id uint, req dto.Pric
 
 // ---------- staff: how customers pay ----------
 
-func (s *Service) toPayDTO(p *evdomain.PayInfo) *dto.PayInfoDTO {
+func (s *Service) toPayDTO(ctx context.Context, branchID uint, p *evdomain.PayInfo) *dto.PayInfoDTO {
+	out := &dto.PayInfoDTO{TransferEnabled: true, SlipWhatsapp: true, TelegramReady: s.telegramReady(ctx, branchID)}
 	if p == nil {
-		return &dto.PayInfoDTO{TransferEnabled: true}
+		return out
 	}
-	return &dto.PayInfoDTO{
-		Whatsapp: p.Whatsapp, QRKey: p.QRKey, QRURL: s.url(p.QRKey), Note: p.Note,
-		AccountName: p.AccountName, AccountNumber: p.AccountNumber, TransferEnabled: !p.TransferOff,
+	out.Whatsapp, out.QRKey, out.QRURL, out.Note = p.Whatsapp, p.QRKey, s.url(p.QRKey), p.Note
+	out.AccountName, out.AccountNumber, out.TransferEnabled = p.AccountName, p.AccountNumber, !p.TransferOff
+	out.SlipWhatsapp, out.SlipTelegram = !p.WhatsappOff, p.SlipTelegram
+	return out
+}
+
+// SetSlipChannel tells the service how to ask whether a branch can receive slips in Telegram (nil: it cannot)
+func (s *Service) SetSlipChannel(c port.SlipChannel) { s.Slips = c }
+
+func (s *Service) telegramReady(ctx context.Context, branchID uint) bool {
+	return s.Slips != nil && s.Slips.SlipAvailable(ctx, branchID)
+}
+
+// SlipWays says which ways a customer can send a payment slip to the branch right now: WhatsApp (a number is set
+// and the way is on) and Telegram (on, and the bot and group are connected). Nothing is on when the branch turned
+// its own way to pay off.
+func (s *Service) SlipWays(ctx context.Context, branchID uint) (whatsapp, telegram bool, err error) {
+	p, err := s.Repo.PayInfo(ctx, branchID)
+	if err != nil || p == nil {
+		return false, false, err
 	}
+	if p.TransferOff {
+		return false, false, nil
+	}
+	return p.Whatsapp != "" && !p.WhatsappOff, p.SlipTelegram && s.telegramReady(ctx, branchID), nil
 }
 
 func (s *Service) Pay(ctx context.Context, branchID uint) (*dto.PayInfoDTO, error) {
-	if _, err := s.branch(ctx, branchID); err != nil {
+	if _, err := s.anyBranch(ctx, branchID); err != nil {
 		return nil, err
 	}
 	p, err := s.Repo.PayInfo(ctx, branchID)
 	if err != nil {
 		return nil, err
 	}
-	return s.toPayDTO(p), nil
+	return s.toPayDTO(ctx, branchID, p), nil
 }
 
 // cleanWhatsapp keeps digits only (the number as used in wa.me links, with the country code)
@@ -579,7 +624,7 @@ func cleanWhatsapp(raw string) (string, error) {
 }
 
 func (s *Service) SavePay(ctx context.Context, branchID uint, req dto.PayInfoRequest) (*dto.PayInfoDTO, error) {
-	if _, err := s.branch(ctx, branchID); err != nil {
+	if _, err := s.anyBranch(ctx, branchID); err != nil {
 		return nil, err
 	}
 	number, err := cleanWhatsapp(req.Whatsapp)
@@ -599,11 +644,16 @@ func (s *Service) SavePay(ctx context.Context, branchID uint, req dto.PayInfoReq
 	p := &evdomain.PayInfo{
 		BranchID: branchID, Whatsapp: number, QRKey: req.QRKey, Note: strings.TrimSpace(req.Note),
 		AccountName: name, AccountNumber: account, TransferOff: req.TransferEnabled != nil && !*req.TransferEnabled,
+		WhatsappOff:  req.SlipWhatsapp != nil && !*req.SlipWhatsapp,
+		SlipTelegram: req.SlipTelegram != nil && *req.SlipTelegram,
+	}
+	if p.SlipTelegram && !s.telegramReady(ctx, branchID) {
+		return nil, conflict("TELEGRAM_NOT_CONNECTED") // connect the bot and the group first (Setup > Telegram)
 	}
 	if err := s.Repo.SavePayInfo(ctx, p); err != nil {
 		return nil, err
 	}
-	return s.toPayDTO(p), nil
+	return s.toPayDTO(ctx, branchID, p), nil
 }
 
 // ---------- public ----------
@@ -611,7 +661,7 @@ func (s *Service) SavePay(ctx context.Context, branchID uint, req dto.PayInfoReq
 // PublicPay tells a customer how to pay the branch outside the system; nothing secret: it is what they see
 // after buying tables
 func (s *Service) PublicPay(ctx context.Context, slug string) (*dto.PublicPayInfoDTO, error) {
-	b, err := s.publicBranch(ctx, slug)
+	b, err := s.anyPublicBranch(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -623,6 +673,7 @@ func (s *Service) PublicPay(ctx context.Context, slug string) (*dto.PublicPayInf
 	if info != nil {
 		out.Whatsapp, out.QRURL, out.Note = info.Whatsapp, s.url(info.QRKey), info.Note
 		out.AccountName, out.AccountNumber, out.TransferEnabled = info.AccountName, info.AccountNumber, !info.TransferOff
+		out.SlipWhatsapp, out.SlipTelegram, _ = s.SlipWays(ctx, b.ID)
 	}
 	return out, nil
 }

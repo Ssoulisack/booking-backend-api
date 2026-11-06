@@ -26,6 +26,7 @@ func SetupRoutes(app fiber.Router, handlers *AppHandler) {
 	h.restaurant.Routes(api, h.authMiddleware)
 	h.events.Routes(api, h.authMiddleware)
 	h.payments.Routes(api, h.authMiddleware)
+	h.packages.Routes(api, h.authMiddleware)
 	if h.telegram != nil {
 		h.telegram.Routes(api, h.authMiddleware)
 	}

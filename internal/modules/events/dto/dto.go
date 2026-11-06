@@ -127,6 +127,9 @@ type PayInfoRequest struct {
 	AccountNumber string `json:"account_number"`
 	// TransferEnabled turns the branch's own way to pay on or off; not sent = on
 	TransferEnabled *bool `json:"transfer_enabled"`
+	// the ways to send the slip: WhatsApp (not sent = on) and Telegram (not sent = off)
+	SlipWhatsapp *bool `json:"slip_whatsapp"`
+	SlipTelegram *bool `json:"slip_telegram"`
 }
 
 type PayInfoDTO struct {
@@ -137,6 +140,10 @@ type PayInfoDTO struct {
 	AccountName     string `json:"account_name"`
 	AccountNumber   string `json:"account_number"`
 	TransferEnabled bool   `json:"transfer_enabled"`
+	SlipWhatsapp    bool   `json:"slip_whatsapp"`
+	SlipTelegram    bool   `json:"slip_telegram"`
+	// TelegramReady: the branch has a Telegram bot and group connected, so the Telegram way can be turned on
+	TelegramReady bool `json:"telegram_ready"`
 }
 
 // ---------- public ----------
@@ -220,4 +227,7 @@ type PublicPayInfoDTO struct {
 	AccountName     string `json:"account_name"`
 	AccountNumber   string `json:"account_number"`
 	TransferEnabled bool   `json:"transfer_enabled"`
+	// the ways to send the slip that work right now (WhatsApp: a number is set; Telegram: connected)
+	SlipWhatsapp bool `json:"slip_whatsapp"`
+	SlipTelegram bool `json:"slip_telegram"`
 }

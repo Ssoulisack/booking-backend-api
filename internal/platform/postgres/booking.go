@@ -469,18 +469,18 @@ func (r *bookingRepository) EventHoldsExpired(ctx context.Context, now time.Time
 	return out, exception.HandleGormError(err)
 }
 
-func (r *bookingRepository) SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time) error {
+func (r *bookingRepository) SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time, via string) error {
 	res := r.db.WithContext(ctx).Model(&domain.Booking{}).
 		Where("id = ? AND branch_id = ? AND status = ? AND payment_status = ? AND event_id IS NOT NULL",
 			b.ID, b.BranchID, domain.BookingPending, domain.PaymentUnpaid).
-		Update("slip_sent_at", at)
+		Updates(map[string]any{"slip_sent_at": at, "slip_via": via})
 	if res.Error != nil {
 		return exception.HandleGormError(res.Error)
 	}
 	if res.RowsAffected != 1 {
 		return response.NewError(http.StatusConflict, "NOT_WAITING_FOR_PAYMENT")
 	}
-	b.SlipSentAt = &at
+	b.SlipSentAt, b.SlipVia = &at, via
 	return nil
 }
 

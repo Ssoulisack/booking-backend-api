@@ -66,6 +66,9 @@ type Service struct {
 	frontendURL string
 	floorItems  output.FloorItemRepository
 	tables      port.TableBooker    // restaurant branches book tables through the restaurant module (SetTables)
+	packages    output.PackageUse   // pays a booking with a customer's package (SetPackages); nil = off
+	slipWays    output.SlipWays     // which ways a slip can be sent (SetSlips); nil = WhatsApp only
+	slipDesk    output.SlipDesk     // where an uploaded slip goes; nil = no Telegram
 	team        output.TeamNotifier // tells the branch's team (Telegram) what happens; nil = nobody (SetTeamNotifier)
 	now         func() time.Time
 }
@@ -475,6 +478,9 @@ func (s *Service) Create(ctx context.Context, slug string, actor *domain.User, r
 	var rawToken string
 	switch {
 	case b.Type == domain.BranchTypeRestaurant:
+		if req.PackageID != nil {
+			return nil, badRequest("PACKAGE_NOT_FOR_TABLES")
+		}
 		bk, rawToken, err = s.tableBooker().CreateTableBooking(ctx, b, who, req)
 	case req.ClassSessionID != nil:
 		bk, rawToken, err = s.createClassBooking(ctx, b, who, req)
@@ -702,11 +708,27 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 		return nil, "", err
 	}
 	bk.TotalPrice, bk.Currency, bk.Items = total, currency, items
-	// the database refuses the insert if another booking took the time meanwhile (409)
-	if err := s.bookings.Create(ctx, bk); err != nil {
+	use, err := s.takePackage(ctx, b, who, req, start, t.sportID, resourceRef(t), t.coach != nil)
+	if err != nil {
 		return nil, "", err
 	}
+	use.apply(bk, s.now())
+	// the database refuses the insert if another booking took the time meanwhile (409)
+	if err := s.bookings.Create(ctx, bk); err != nil {
+		s.packageFailed(ctx, use)
+		return nil, "", err
+	}
+	s.packageSaved(ctx, use, bk)
 	return bk, rawToken, nil
+}
+
+// resourceRef is the id of the rented space (nil when the booking is a coach alone)
+func resourceRef(t *target) *uint {
+	if t.resource == nil {
+		return nil
+	}
+	id := t.resource.ID
+	return &id
 }
 
 // createClassBooking books seats in a group class
@@ -756,10 +778,21 @@ func (s *Service) createClassBooking(ctx context.Context, b *domain.Branch, who 
 		BranchID: b.ID, Kind: domain.ItemClassSession, ClassSessionID: &classID, Seats: seats,
 		StartsAt: start, EndsAt: end, Price: price, Active: true,
 	}}
-	// the class row is locked while seats are counted, so the last seat goes to one customer only
-	if err := s.bookings.CreateClassBooking(ctx, bk, class.ID, seats); err != nil {
+	// a package pays one visit however many seats (a group class booking through a package is for one person)
+	if req.PackageID != nil && seats != 1 {
+		return nil, "", badRequest("PACKAGE_ONE_SEAT")
+	}
+	use, err := s.takePackage(ctx, b, who, req, start, class.SportID, nil, false)
+	if err != nil {
 		return nil, "", err
 	}
+	use.apply(bk, s.now())
+	// the class row is locked while seats are counted, so the last seat goes to one customer only
+	if err := s.bookings.CreateClassBooking(ctx, bk, class.ID, seats); err != nil {
+		s.packageFailed(ctx, use)
+		return nil, "", err
+	}
+	s.packageSaved(ctx, use, bk)
 	return bk, rawToken, nil
 }
 
@@ -793,7 +826,8 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 	if b.Sport != nil {
 		d.SportName = b.Sport.Name
 	}
-	d.EventID, d.PayBy, d.SlipSentAt = b.EventID, b.PayBy, b.SlipSentAt
+	d.EventID, d.PayBy, d.SlipSentAt, d.SlipVia, d.CustomerPackageID = b.EventID, b.PayBy, b.SlipSentAt, b.SlipVia, b.CustomerPackageID
+	d.Package, d.PackageCode = b.PackageLabel, b.PackageCode
 	if b.Event != nil {
 		d.EventName, d.EventStartTime, d.EventEndTime = b.Event.Name, b.Event.StartTime, b.Event.EndTime
 	}
@@ -828,6 +862,7 @@ func (s *Service) cancel(ctx context.Context, b *domain.Booking, reason string) 
 	if err := s.bookings.Cancel(ctx, b, strings.TrimSpace(reason), now); err != nil {
 		return nil, err
 	}
+	s.packageCancelled(ctx, b)
 	if s.team != nil {
 		s.team.Cancelled(ctx, b.BranchID, b.ID, "customer")
 	}

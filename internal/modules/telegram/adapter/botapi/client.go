@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -130,4 +131,40 @@ type chatRef struct {
 
 func (c *Client) Send(ctx context.Context, token, chatID, text string) error {
 	return c.call(ctx, token, "sendMessage", map[string]any{"chat_id": chatID, "text": text, "disable_web_page_preview": true}, nil)
+}
+
+// SendPhoto uploads a picture (multipart): the customer's payment slip, with a caption for the team
+func (c *Client) SendPhoto(ctx context.Context, token, chatID, caption string, photo []byte, filename string) error {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.WriteField("chat_id", chatID)
+	_ = w.WriteField("caption", caption)
+	part, err := w.CreateFormFile("photo", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(photo); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/bot"+url.PathEscape(token)+"/sendPhoto", &buf)
+	if err != nil {
+		return errors.New("telegram: the bot token is not usable")
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	res, err := c.http.Do(req)
+	if err != nil {
+		return errors.New("telegram: cannot be reached from this server")
+	}
+	defer res.Body.Close()
+	var env envelope
+	if err := json.NewDecoder(res.Body).Decode(&env); err != nil {
+		return &port.APIError{Code: res.StatusCode, Description: "unreadable answer"}
+	}
+	if !env.OK {
+		return &port.APIError{Code: env.ErrorCode, Description: env.Description}
+	}
+	return nil
 }

@@ -15,6 +15,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 
 	b := api.Group("/branches/:branchId", auth.RequireUser)
 	b.Get("/reports/cash-up", staff, h.CashUp)
+	b.Get("/reports/transactions", manager, h.Transactions)
 	b.Get("/reports/bookings", manager, h.Bookings)
 	b.Get("/reports/utilisation", manager, h.Utilisation)
 	b.Get("/reports/finance", manager, h.Finance)

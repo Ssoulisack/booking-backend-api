@@ -62,6 +62,9 @@ func compose(b domain.Booking, k kind, why string, hidePhone bool) string {
 	if b.TotalPrice > 0 {
 		lines = append(lines, "ລວມ: "+money(b.TotalPrice, b.Currency))
 	}
+	if k == kindNew && b.CustomerPackageID != nil {
+		lines = append(lines, "ຊຳລະດ້ວຍ: ແພັກເກັດ")
+	}
 	if k == kindPaid && b.PaymentMethod != "" {
 		lines = append(lines, "ຊຳລະຜ່ານ: "+methodText(b.PaymentMethod))
 	}
@@ -93,6 +96,8 @@ func methodText(m string) string {
 		return "ເງິນສົດ"
 	case domain.MethodTransfer:
 		return "ໂອນເງິນ"
+	case domain.MethodPackage:
+		return "ແພັກເກັດ"
 	}
 	return "ອື່ນໆ"
 }

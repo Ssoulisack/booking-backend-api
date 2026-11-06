@@ -27,6 +27,8 @@ type Deps struct {
 	Providers []port.Provider
 	Branches  output.BranchRepository
 	Bookings  port.Bookings
+	// Purchases: the packages module (nil: course passes cannot be paid online)
+	Purchases port.Purchases
 	Now       func() time.Time
 	// Cache keeps a branch's payment settings in Redis (nil or off: read from the database)
 	Cache *cache.Cache
@@ -44,7 +46,7 @@ type Module struct {
 // New builds the module
 func New(d Deps) *Module {
 	svc := service.New(service.Deps{
-		Repo: paycache.Wrap(postgres.New(d.DB), d.Cache), Providers: d.Providers, Branches: d.Branches, Bookings: d.Bookings, Now: d.Now,
+		Repo: paycache.Wrap(postgres.New(d.DB), d.Cache), Providers: d.Providers, Branches: d.Branches, Bookings: d.Bookings, Purchases: d.Purchases, Now: d.Now,
 	})
 	return &Module{Service: svc, handler: http.New(svc), dev: d.Dev}
 }

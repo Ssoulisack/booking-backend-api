@@ -67,6 +67,18 @@ func (r *postgresRepo) CountByBooking(ctx context.Context, bookingID uint) (int6
 	return n, exception.HandleGormError(err)
 }
 
+func (r *postgresRepo) ByPurchase(ctx context.Context, branchID, purchaseID uint) ([]domain.Payment, error) {
+	var out []domain.Payment
+	err := r.db.WithContext(ctx).Where("branch_id = ? AND purchase_id = ?", branchID, purchaseID).Order("id DESC").Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) CountByPurchase(ctx context.Context, purchaseID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&domain.Payment{}).Where("purchase_id = ?", purchaseID).Count(&n).Error
+	return n, exception.HandleGormError(err)
+}
+
 func (r *postgresRepo) Pending(ctx context.Context, before, since time.Time) ([]domain.Payment, error) {
 	var out []domain.Payment
 	err := r.db.WithContext(ctx).

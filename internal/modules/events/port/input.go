@@ -21,6 +21,9 @@ type Service interface {
 	Pay(ctx context.Context, branchID uint) (*dto.PayInfoDTO, error)
 	SavePay(ctx context.Context, branchID uint, req dto.PayInfoRequest) (*dto.PayInfoDTO, error)
 
+	// SlipWays: which ways a customer can send a payment slip to the branch now (WhatsApp, Telegram)
+	SlipWays(ctx context.Context, branchID uint) (whatsapp, telegram bool, err error)
+
 	// customers
 	Upcoming(ctx context.Context, slug string) ([]dto.PublicEventDTO, error)
 	// PublicPay is the branch's own way to pay (QR, account, WhatsApp) for customers

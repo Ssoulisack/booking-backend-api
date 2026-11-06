@@ -19,8 +19,9 @@ type BookingService interface {
 	FindCancel(ctx context.Context, slug string, req dto.FindBookingRequest) (*dto.BookingDTO, error)
 	GuestCancel(ctx context.Context, slug, token string, req dto.CancelBookingRequest) (*dto.BookingDTO, error)
 	// event days: "I paid and sent the slip" (by the private link, or for a logged-in customer's own booking)
-	SlipSent(ctx context.Context, slug, token string) (*dto.BookingDTO, error)
-	MySlipSent(ctx context.Context, userID, id uint) (*dto.BookingDTO, error)
+	// (the slip is "sent on WhatsApp" with nothing to upload, or a picture for the branch's Telegram group)
+	SlipSent(ctx context.Context, slug, token string, slip dto.SlipUpload) (*dto.BookingDTO, error)
+	MySlipSent(ctx context.Context, userID, id uint, slip dto.SlipUpload) (*dto.BookingDTO, error)
 
 	MyBookings(ctx context.Context, userID uint, q dto.ListQuery) (*dto.PagedResult[dto.BookingDTO], error)
 	MyBooking(ctx context.Context, userID, id uint) (*dto.BookingDTO, error)

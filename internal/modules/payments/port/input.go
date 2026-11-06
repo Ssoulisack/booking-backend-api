@@ -17,6 +17,11 @@ type Service interface {
 	OpenByCustomer(ctx context.Context, userID, id uint) (*dto.PaymentDTO, error)
 	CheckByToken(ctx context.Context, slug, token string, id uint) (*dto.PaymentDTO, error)
 	CheckByCustomer(ctx context.Context, userID, bookingID, id uint) (*dto.PaymentDTO, error)
+	// the same for a customer's package (course pass)
+	StartPackage(ctx context.Context, userID, id uint, req dto.StartRequest) (*dto.PaymentDTO, error)
+	OpenPackage(ctx context.Context, userID, id uint) (*dto.PaymentDTO, error)
+	CheckPackage(ctx context.Context, userID, packageID, id uint) (*dto.PaymentDTO, error)
+	ForPurchase(ctx context.Context, branchID, purchaseID uint) ([]dto.StaffPaymentDTO, error)
 	// the gateway's callback: ErrBadSignature when it is not from the gateway
 	HandleWebhook(ctx context.Context, provider string, header func(string) string, body []byte) error
 	// Notify applies a notice that is already trusted (the dev mock's Pay button; a webhook is verified first)

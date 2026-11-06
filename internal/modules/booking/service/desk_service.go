@@ -150,6 +150,9 @@ func (s *Service) ChangeStatus(ctx context.Context, branchID, id uint, req dto.S
 		}
 	case domain.BookingCancelled:
 		err = s.bookings.Cancel(ctx, bk, strings.TrimSpace(req.Reason), now)
+		if err == nil {
+			s.packageCancelled(ctx, bk)
+		}
 	default:
 		err = s.bookings.SetStatus(ctx, bk, req.Status)
 	}
@@ -168,6 +171,11 @@ func (s *Service) SetPayment(ctx context.Context, branchID uint, actor *domain.U
 	bk, err := s.bookings.GetByID(ctx, branchID, id)
 	if err != nil {
 		return nil, err
+	}
+	// a booking paid with a package has nothing to pay at the desk, and changing it would break the package's visits:
+	// to undo it the team cancels the booking, which gives the visit back
+	if bk.CustomerPackageID != nil {
+		return nil, conflict("PAID_BY_PACKAGE")
 	}
 	switch req.Status {
 	case domain.PaymentPaid:

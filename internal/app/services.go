@@ -7,6 +7,7 @@ import (
 	"backend/internal/modules/events"
 	"backend/internal/modules/identity"
 	"backend/internal/modules/media"
+	"backend/internal/modules/packages"
 	"backend/internal/modules/payments"
 	"backend/internal/modules/payments/adapter/mock"
 	"backend/internal/modules/payments/adapter/phajay"
@@ -33,6 +34,7 @@ type AppServices struct {
 	restaurant *restaurant.Module
 	events     *events.Module
 	payments   *payments.Module
+	packages   *packages.Module
 	telegram   *telegram.Module // nil when the server secret is too short to encrypt with
 }
 
@@ -62,12 +64,13 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl, Cache: r.cache,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
+	packagesModule := packages.New(packages.Deps{DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports, Resources: r.resources, Users: r.user})
 	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,
 	// prod: PhaJay for real money); a PhaJay without its keys is off and the QR / transfer / WhatsApp way stays
 	gateways, devGateway := ChooseGateway(r.server, r.payments)
 	paymentsModule := payments.New(payments.Deps{
 		DB: r.postgres.GetDB(), Providers: gateways,
-		Branches: r.branches, Bookings: bookingImpl, Dev: devGateway, Cache: r.cache,
+		Branches: r.branches, Bookings: bookingImpl, Purchases: packagesModule.Service, Dev: devGateway, Cache: r.cache,
 	})
 	// Telegram: bots and groups are connected on the website; what is stored is encrypted with a key made from the
 	// server's secret. Too short a secret switches the feature off (the booking flows then tell nobody).
@@ -80,6 +83,18 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		telegramModule = nil
 	} else {
 		bookingImpl.SetTeamNotifier(telegramModule.Service)
+	}
+	// a booking can be paid with a customer's package (course pass)
+	bookingImpl.SetPackages(packagesModule.Service)
+	// payment slips: how a customer may send one (the branch's "how to pay" setting) and, by Telegram, where it goes
+	if telegramModule != nil {
+		eventsModule.SetSlipChannel(telegramModule.Service)
+		packagesModule.SetSlips(eventsModule.Service, telegramModule.Service)
+		packagesModule.SetNews(telegramModule.Service)
+		bookingImpl.SetSlips(eventsModule.Service, telegramModule.Service)
+	} else {
+		packagesModule.SetSlips(eventsModule.Service, nil)
+		bookingImpl.SetSlips(eventsModule.Service, nil)
 	}
 	identityModule := identity.New(identity.Deps{
 		Users: r.user, Cache: r.redis, Memberships: r.memberships, Branches: r.branches, Company: r.company,
@@ -101,6 +116,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		restaurant: restaurantModule,
 		events:     eventsModule,
 		payments:   paymentsModule,
+		packages:   packagesModule,
 		telegram:   telegramModule,
 		filesDir:   r.filesDir,
 		identity:   identityModule,
@@ -108,7 +124,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		catalog:    catalogModule,
 		media:      media.New(media.Deps{Storage: r.storage, Media: r.media}),
 		booking:    bookingModule,
-		reports:    reports.New(reports.Deps{Branches: r.branches, Bookings: r.bookings, Resources: r.resources, Sports: r.sports, Hours: r.openingHours, Closures: r.closures, Rows: r.bookingReports}),
+		reports:    reports.New(reports.Deps{Branches: r.branches, Bookings: r.bookings, Resources: r.resources, Sports: r.sports, Hours: r.openingHours, Closures: r.closures, Rows: r.bookingReports, Packages: packagesModule.Service}),
 	}
 }
 
@@ -176,7 +192,7 @@ func KeepTablesSettled(svc *AppServices) {
 
 // Models are the tables the modules own, for the migration (make migrate)
 func Models() []any {
-	return append(append(append(events.Models(), payments.Models()...), identity.Models()...), telegram.Models()...)
+	return append(append(append(append(events.Models(), payments.Models()...), identity.Models()...), telegram.Models()...), packages.Models()...)
 }
 
 // SettleEventHolds cancels event bookings not paid in time (KeepTablesSettled runs it every minute)

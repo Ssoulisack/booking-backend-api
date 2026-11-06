@@ -53,11 +53,18 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	me.Get("/:id/payment", flood, perUser, h.OpenByCustomer)
 	me.Get("/:id/payments/:pid", flood, perUser, h.CheckByCustomer)
 
+	// a customer's package (course pass): the same way to pay, by its own id
+	pk := api.Group("/me/packages", auth.RequireUser)
+	pk.Post("/:id/pay", startIP, startUser, h.StartPackage)
+	pk.Get("/:id/payment", flood, perUser, h.OpenPackage)
+	pk.Get("/:id/payments/:pid", flood, perUser, h.CheckPackage)
+
 	// the gateway: no login, the signature is the proof
 	api.Post("/payments/webhooks/:provider", h.Webhook)
 
 	b := api.Group("/branches/:branchId", auth.RequireUser)
 	b.Get("/bookings/:id/payments", staff, h.ForBooking)
+	b.Get("/customer-packages/:id/payments", staff, h.ForPurchase)
 	b.Get("/payments/attention", manager, h.Attention)
 	b.Post("/payments/:id/refund", manager, h.Refund)
 	// online payment on / off for the branch

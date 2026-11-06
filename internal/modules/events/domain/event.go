@@ -89,7 +89,12 @@ type PayInfo struct {
 	// TransferOff turns the branch's own way to pay (QR, transfer, WhatsApp) off; false = on, so rows
 	// made before this column existed stay on
 	TransferOff bool
-	UpdatedAt   time.Time
+	// How a customer sends the payment slip. WhatsappOff: the WhatsApp way is off (false = on while a number is
+	// set, so rows made before this column keep working). SlipTelegram: the customer uploads the slip on the
+	// website and it goes to the branch's Telegram group (needs the Telegram connection). Both on: the customer chooses.
+	WhatsappOff  bool
+	SlipTelegram bool
+	UpdatedAt    time.Time
 }
 
 func (PayInfo) TableName() string { return "event_pay_info" }

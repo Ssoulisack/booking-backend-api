@@ -91,5 +91,5 @@ type MediaRepository interface {
 	Uses(ctx context.Context, branchID uint) ([]MediaUse, error)
 }
 
-// MediaUse says which record shows a file: Kind is sport, coach, cover or logo; Name the record's name
+// MediaUse says which record shows a file: Kind is sport, coach, cover, logo, pay_qr or event; Name the record's name
 type MediaUse struct{ Key, Kind, Name string }

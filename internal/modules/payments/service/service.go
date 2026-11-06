@@ -37,6 +37,8 @@ type Deps struct {
 	Providers []port.Provider
 	Branches  output.BranchRepository
 	Bookings  port.Bookings
+	// Purchases: course passes paid online (nil: not offered)
+	Purchases port.Purchases
 	Now       func() time.Time
 }
 
@@ -46,6 +48,7 @@ type Service struct {
 	providers map[string]port.Provider
 	branches  output.BranchRepository
 	bookings  port.Bookings
+	purchases port.Purchases
 	now       func() time.Time
 
 	// asked remembers when the gateway was last asked about a payment for a customer's page, so the page's
@@ -61,7 +64,7 @@ func New(d Deps) *Service {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
-	s := &Service{repo: d.Repo, providers: map[string]port.Provider{}, branches: d.Branches, bookings: d.Bookings, now: d.Now, asked: map[uint]time.Time{}}
+	s := &Service{repo: d.Repo, providers: map[string]port.Provider{}, branches: d.Branches, bookings: d.Bookings, purchases: d.Purchases, now: d.Now, asked: map[uint]time.Time{}}
 	for _, p := range d.Providers {
 		if p != nil {
 			s.providers[p.Name()] = p
@@ -101,7 +104,7 @@ func (s *Service) seen(p domain.Payment) dto.PaymentDTO {
 
 func toStaffDTO(p domain.Payment) dto.StaffPaymentDTO {
 	return dto.StaffPaymentDTO{
-		PaymentDTO: toDTO(p), BookingID: p.BookingID, OrderNo: p.OrderNo, ProviderRef: p.ProviderRef,
+		PaymentDTO: toDTO(p), BookingID: p.BookingID, PurchaseID: p.PurchaseID, OrderNo: p.OrderNo, ProviderRef: p.ProviderRef,
 		PaidAt: p.PaidAt, RefundRef: p.RefundRef, Note: p.Note, CreatedAt: p.CreatedAt,
 	}
 }
@@ -175,7 +178,7 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 	if f.PayBy != nil && !f.PayBy.After(now) {
 		return nil, conflict("PAY_TIME_UP")
 	}
-	tries, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
+	tries, err := s.triesOf(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -197,21 +200,26 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 		d := s.seen(*o)
 		return &d, nil
 	}
-	n, err := s.repo.CountByBooking(ctx, f.ID)
+	n, err := s.countOf(ctx, f)
 	if err != nil {
 		return nil, err
 	}
 	pay := &domain.Payment{
-		BranchID: f.BranchID, BookingID: f.ID, Provider: req.Provider, Method: req.Method,
-		OrderNo: fmt.Sprintf("%s-%d", f.Code, n+1), Amount: f.Total, Currency: f.Currency,
+		BranchID: f.BranchID, Provider: req.Provider, Method: req.Method,
+		OrderNo: fmt.Sprintf("%s-%d", orderBase(f), n+1), Amount: f.Total, Currency: f.Currency,
 		Status: domain.StatusPending, ExpiresAt: now.Add(life),
+	}
+	if f.Purchase {
+		pay.PurchaseID = f.ID
+	} else {
+		pay.BookingID = f.ID
 	}
 	if err := s.repo.Create(ctx, pay); err != nil {
 		return nil, err
 	}
 	issued, err := p.Charge(ctx, domain.ChargeRequest{
 		OrderNo: pay.OrderNo, Amount: pay.Amount, Currency: pay.Currency, Method: req.Method,
-		Description: "Booking " + f.Code, Tags: [3]string{f.BranchSlug, fmt.Sprint(f.ID), fmt.Sprint(pay.ID)},
+		Description: what(f) + " " + f.Code, Tags: [3]string{f.BranchSlug, fmt.Sprint(f.ID), fmt.Sprint(pay.ID)},
 	})
 	if err != nil {
 		pay.Status, pay.Note = domain.StatusFailed, shorten(err.Error())
@@ -243,6 +251,37 @@ func (s *Service) hold(ctx context.Context, pay *domain.Payment, f *coredomain.P
 	return nil
 }
 
+// orderBase is what the order number starts with: the booking's code, or a package's branch-wide reference
+func orderBase(f *coredomain.PayFacts) string {
+	if f.OrderRef != "" {
+		return f.OrderRef
+	}
+	return f.Code
+}
+
+// what names the thing being paid, for the gateway's description
+func what(f *coredomain.PayFacts) string {
+	if f.Purchase {
+		return "Package"
+	}
+	return "Booking"
+}
+
+// triesOf and countOf: the payments made for the booking or package in f (newest first) and how many
+func (s *Service) triesOf(ctx context.Context, f *coredomain.PayFacts) ([]domain.Payment, error) {
+	if f.Purchase {
+		return s.repo.ByPurchase(ctx, f.BranchID, f.ID)
+	}
+	return s.repo.ByBooking(ctx, f.BranchID, f.ID)
+}
+
+func (s *Service) countOf(ctx context.Context, f *coredomain.PayFacts) (int64, error) {
+	if f.Purchase {
+		return s.repo.CountByPurchase(ctx, f.ID)
+	}
+	return s.repo.CountByBooking(ctx, f.ID)
+}
+
 func shorten(s string) string {
 	if len(s) > 250 {
 		return s[:250]
@@ -269,7 +308,7 @@ func (s *Service) OpenByCustomer(ctx context.Context, userID, id uint) (*dto.Pay
 }
 
 func (s *Service) open(ctx context.Context, f *coredomain.PayFacts) (*dto.PaymentDTO, error) {
-	list, err := s.repo.ByBooking(ctx, f.BranchID, f.ID)
+	list, err := s.triesOf(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +356,7 @@ func (s *Service) check(ctx context.Context, f *coredomain.PayFacts, id uint) (*
 	if err != nil {
 		return nil, err
 	}
-	if p == nil || p.BookingID != f.ID {
+	if p == nil || (f.Purchase && p.PurchaseID != f.ID) || (!f.Purchase && p.BookingID != f.ID) {
 		return nil, notFound("PAYMENT_NOT_FOUND")
 	}
 	if p.Status == domain.StatusPending && p.ProviderRef != "" {
@@ -430,7 +469,7 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 			paidAt = n.PaidAt
 		}
 		p.PaidAt = &paidAt
-		err := s.bookings.SettlePaid(ctx, p.BranchID, p.BookingID, p.OrderNo)
+		err := s.settle(ctx, p)
 		switch {
 		case err == nil:
 			p.Status = domain.StatusPaid
@@ -463,10 +502,67 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 	if err := s.repo.Update(ctx, p); err != nil {
 		return err
 	}
-	if refundedNow {
+	if refundedNow && p.PurchaseID == 0 {
 		go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, true)
 	}
 	return nil
+}
+
+// settle records the money on what it paid: the booking, or the customer's package
+func (s *Service) settle(ctx context.Context, p *domain.Payment) error {
+	if p.PurchaseID != 0 {
+		if s.purchases == nil {
+			return errors.New("packages are not connected")
+		}
+		return s.purchases.SettlePaid(ctx, p.BranchID, p.PurchaseID, p.OrderNo)
+	}
+	return s.bookings.SettlePaid(ctx, p.BranchID, p.BookingID, p.OrderNo)
+}
+
+// ---------- course passes (customer packages) ----------
+
+func (s *Service) purchaseFacts(ctx context.Context, userID, id uint) (*coredomain.PayFacts, error) {
+	if s.purchases == nil {
+		return nil, notFound("PACKAGE_NOT_FOUND")
+	}
+	return s.purchases.PayFactsByCustomer(ctx, userID, id)
+}
+
+func (s *Service) StartPackage(ctx context.Context, userID, id uint, req dto.StartRequest) (*dto.PaymentDTO, error) {
+	f, err := s.purchaseFacts(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.start(ctx, f, req)
+}
+
+func (s *Service) OpenPackage(ctx context.Context, userID, id uint) (*dto.PaymentDTO, error) {
+	f, err := s.purchaseFacts(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.open(ctx, f)
+}
+
+func (s *Service) CheckPackage(ctx context.Context, userID, packageID, id uint) (*dto.PaymentDTO, error) {
+	f, err := s.purchaseFacts(ctx, userID, packageID)
+	if err != nil {
+		return nil, err
+	}
+	return s.check(ctx, f, id)
+}
+
+// ForPurchase lists a customer package's payment attempts
+func (s *Service) ForPurchase(ctx context.Context, branchID, purchaseID uint) ([]dto.StaffPaymentDTO, error) {
+	list, err := s.repo.ByPurchase(ctx, branchID, purchaseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.StaffPaymentDTO, 0, len(list))
+	for _, p := range list {
+		out = append(out, toStaffDTO(p))
+	}
+	return out, nil
 }
 
 // Poll is the fallback for a webhook that never came: payments still waiting are asked about at the
@@ -555,7 +651,9 @@ func (s *Service) Refund(ctx context.Context, branchID, id uint) (*dto.StaffPaym
 	if err := s.repo.Update(ctx, p); err != nil {
 		return nil, err
 	}
-	go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, false)
+	if p.PurchaseID == 0 {
+		go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, false)
+	}
 	d := toStaffDTO(*p)
 	return &d, nil
 }

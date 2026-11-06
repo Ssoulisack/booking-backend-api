@@ -214,3 +214,47 @@ type EventReportDTO struct {
 	Items  []EventReportRow `json:"items"`
 	Meta   Meta             `json:"meta"`
 }
+
+// Transaction kinds
+const (
+	TransactionBooking = "booking" // money for a booking
+	TransactionPackage = "package" // money for a package (course pass)
+	TransactionVisit   = "visit"   // a booking paid with a package: no money, the visit it used
+)
+
+// TransactionRow is one line of the transactions table: money received, or a package visit used
+type TransactionRow struct {
+	PaidAt time.Time `json:"paid_at"`
+	Kind   string    `json:"kind"`
+	Code   string    `json:"code"`
+	Name   string    `json:"name"`
+	Phone  string    `json:"phone"`
+	What   string    `json:"what"` // the sport of a booking, or the package and its option
+	// Package: for a package visit, which package was used ("Package A · 10 times"), and its code
+	Package     string `json:"package"`
+	PackageCode string `json:"package_code"`
+	Method      string `json:"method"`
+	Amount      int64  `json:"amount"`
+	Currency    string `json:"currency"`
+	PaidBy      string `json:"paid_by"`
+	// Cancelled: the booking or package was cancelled afterwards (the money was received)
+	Cancelled bool `json:"cancelled"`
+}
+
+// TransactionKindTotal is the money and the count of one kind
+type TransactionKindTotal struct {
+	Kind     string `json:"kind"`
+	Currency string `json:"currency"`
+	Count    int    `json:"count"`
+	Amount   int64  `json:"amount"`
+}
+
+// TransactionsDTO is every payment of a period as a table, with totals
+type TransactionsDTO struct {
+	From     string                 `json:"from"`
+	To       string                 `json:"to"`
+	Rows     []TransactionRow       `json:"rows"`
+	Totals   []Money                `json:"totals"`
+	ByKind   []TransactionKindTotal `json:"by_kind"`
+	ByMethod []CashUpMethod         `json:"by_method"`
+}

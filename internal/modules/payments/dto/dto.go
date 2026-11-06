@@ -36,6 +36,7 @@ type PaymentDTO struct {
 type StaffPaymentDTO struct {
 	PaymentDTO
 	BookingID   uint       `json:"booking_id"`
+	PurchaseID  uint       `json:"purchase_id,omitempty"`
 	OrderNo     string     `json:"order_no"`
 	ProviderRef string     `json:"provider_ref"`
 	PaidAt      *time.Time `json:"paid_at,omitempty"`

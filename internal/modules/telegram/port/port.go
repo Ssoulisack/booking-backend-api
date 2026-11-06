@@ -28,6 +28,8 @@ type Bot interface {
 	// FindGroups lists the groups the bot recently had activity in, latest first; ErrNoGroup when none
 	FindGroups(ctx context.Context, token string) ([]Group, error)
 	Send(ctx context.Context, token, chatID, text string) error
+	// SendPhoto sends a picture with a caption (at most 1024 characters)
+	SendPhoto(ctx context.Context, token, chatID, caption string, photo []byte, filename string) error
 }
 
 // Service is what the handlers call

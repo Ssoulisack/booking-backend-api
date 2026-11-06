@@ -132,3 +132,49 @@ func (h *Handler) OpenByCustomer(c *fiber.Ctx) error {
 	res, err := h.svc.OpenByCustomer(c.UserContext(), middleware.CurrentUser(c).ID, id)
 	return httpx.OK(c, res, err)
 }
+
+// ---------- course passes ----------
+
+func (h *Handler) StartPackage(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	var req dto.StartRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.StartPackage(c.UserContext(), middleware.CurrentUser(c).ID, id, req)
+	return httpx.Created(c, res, err)
+}
+
+func (h *Handler) OpenPackage(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.OpenPackage(c.UserContext(), middleware.CurrentUser(c).ID, id)
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) CheckPackage(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	pid, err := httpx.ID(c, "pid")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.CheckPackage(c.UserContext(), middleware.CurrentUser(c).ID, id, pid)
+	return httpx.OK(c, res, err)
+}
+
+func (h *Handler) ForPurchase(c *fiber.Ctx) error {
+	id, err := httpx.ID(c, "id")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.svc.ForPurchase(c.UserContext(), middleware.BranchID(c), id)
+	return httpx.OK(c, res, err)
+}

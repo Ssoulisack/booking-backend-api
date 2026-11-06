@@ -13,6 +13,12 @@ import (
 
 var _ port.Kernel = (*Service)(nil)
 
+// SetPackages gives the service the packages module, so a booking can be paid with a course pass
+func (s *Service) SetPackages(p output.PackageUse) { s.packages = p }
+
+// SetSlips tells the service how to read a branch's slip ways and where an uploaded slip goes (desk nil: no Telegram)
+func (s *Service) SetSlips(w output.SlipWays, d output.SlipDesk) { s.slipWays, s.slipDesk = w, d }
+
 // SetTeamNotifier gives the service a way to tell the branch's team about new bookings, payments and cancellations
 func (s *Service) SetTeamNotifier(t output.TeamNotifier) { s.team = t }
 

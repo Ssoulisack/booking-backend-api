@@ -60,7 +60,8 @@ type BookingRepository interface {
 	// customer's online payment (its QR) runs out: not paid by then, the tables go back on sale
 	SetPayBy(ctx context.Context, id uint, until time.Time) error
 	// SetSlipSent records when the customer said the slip was sent (only a pending, unpaid event booking)
-	SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time) error
+	// (via: "whatsapp" or "telegram"; a picture sent again just updates the time)
+	SetSlipSent(ctx context.Context, b *domain.Booking, at time.Time, via string) error
 
 	// ---- restaurant tables ----
 

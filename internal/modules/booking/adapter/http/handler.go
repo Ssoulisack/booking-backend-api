@@ -118,7 +118,11 @@ func (h *Handler) CancelMine(c *fiber.Ctx) error {
 
 // SlipSent: the customer says they paid and sent the slip (private link)
 func (h *Handler) SlipSent(c *fiber.Ctx) error {
-	res, err := h.book.SlipSent(c.UserContext(), c.Params("slug"), c.Params("token"))
+	slip, err := httpx.SlipUpload(c)
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.book.SlipSent(c.UserContext(), c.Params("slug"), c.Params("token"), slip)
 	return httpx.OK(c, res, err)
 }
 
@@ -128,7 +132,11 @@ func (h *Handler) MySlipSent(c *fiber.Ctx) error {
 	if err != nil {
 		return httpx.Fail(c, err)
 	}
-	res, err := h.book.MySlipSent(c.UserContext(), middleware.CurrentUser(c).ID, id)
+	slip, err := httpx.SlipUpload(c)
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.book.MySlipSent(c.UserContext(), middleware.CurrentUser(c).ID, id, slip)
 	return httpx.OK(c, res, err)
 }
 

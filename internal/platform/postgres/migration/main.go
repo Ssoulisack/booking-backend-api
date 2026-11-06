@@ -43,6 +43,12 @@ func DatabaseMigrations(db *gorm.DB, modules ...any) error {
 	); err != nil {
 		return err
 	}
+	if err := numberPackages(db); err != nil {
+		return err
+	}
+	if err := labelPackageBookings(db); err != nil {
+		return err
+	}
 	if err := noDoubleBooking(db); err != nil {
 		return err
 	}
@@ -109,4 +115,31 @@ func refuseOldPayments(db *gorm.DB) error {
 			"run  DROP TABLE payment_charges; DROP TABLE payments;  in the database, then run the migration again")
 	}
 	return nil
+}
+
+// numberPackages gives every customer package that has no number yet the next one of its branch (in the order they were
+// bought), then makes a number unique within its branch. Safe to run on every start.
+func numberPackages(db *gorm.DB) error {
+	if !db.Migrator().HasTable("customer_packages") {
+		return nil
+	}
+	if err := db.Exec(`UPDATE customer_packages cp SET seq = x.n FROM (
+			SELECT id, (SELECT COALESCE(MAX(seq), 0) FROM customer_packages o WHERE o.branch_id = c.branch_id)
+				+ ROW_NUMBER() OVER (PARTITION BY branch_id ORDER BY id) AS n
+			FROM customer_packages c WHERE seq = 0) x
+		WHERE cp.id = x.id`).Error; err != nil {
+		return err
+	}
+	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_packages_branch_seq ON customer_packages (branch_id, seq) WHERE seq > 0").Error
+}
+
+// labelPackageBookings fills in which package paid a booking made before the label was saved with it. Safe to run on
+// every start.
+func labelPackageBookings(db *gorm.DB) error {
+	if !db.Migrator().HasTable("customer_packages") || !db.Migrator().HasColumn(&domain.Booking{}, "package_label") {
+		return nil
+	}
+	return db.Exec(`UPDATE bookings b SET package_label = cp.name || ' · ' || cp.amount || ' ' || cp.kind, package_code = 'P-' || LPAD(cp.seq::text, 4, '0')
+		FROM customer_packages cp
+		WHERE b.customer_package_id = cp.id AND b.package_label = '' AND cp.seq > 0`).Error
 }

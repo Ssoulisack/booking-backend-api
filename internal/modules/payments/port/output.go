@@ -18,6 +18,9 @@ type Repository interface {
 	ByOrderNo(ctx context.Context, provider, orderNo string) (*domain.Payment, error)
 	ByBooking(ctx context.Context, branchID, bookingID uint) ([]domain.Payment, error)
 	CountByBooking(ctx context.Context, bookingID uint) (int64, error)
+	// the same for a customer package's payments
+	ByPurchase(ctx context.Context, branchID, purchaseID uint) ([]domain.Payment, error)
+	CountByPurchase(ctx context.Context, purchaseID uint) (int64, error)
 	// Pending: payments to ask the gateway about (created before `before`): those still waiting whose time ran
 	// out after `since`, and refunds in progress
 	Pending(ctx context.Context, before, since time.Time) ([]domain.Payment, error)
@@ -43,6 +46,14 @@ type Provider interface {
 	Status(ctx context.Context, ref string) (*domain.Notice, error)
 	// Refund asks for the money back; it returns the gateway's id of the refund
 	Refund(ctx context.Context, ref string) (string, error)
+}
+
+// Purchases is what the module needs from the packages module: a customer package is paid like a booking
+type Purchases interface {
+	// PayFactsByCustomer: the facts of the customer's own package (ErrNotFound-style error for someone else's)
+	PayFactsByCustomer(ctx context.Context, userID, id uint) (*coredomain.PayFacts, error)
+	// SettlePaid activates the package once; domain.ErrNotPayable / ErrAlreadyPaid when it cannot take the money
+	SettlePaid(ctx context.Context, branchID, id uint, ref string) error
 }
 
 // Bookings is what the module needs from the booking service

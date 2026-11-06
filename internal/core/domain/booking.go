@@ -41,7 +41,8 @@ const (
 	MethodTransfer = "transfer"
 	MethodQR       = "qr"
 	MethodOther    = "other"
-	MethodOnline   = "online" // paid through a payment gateway (never chosen by staff)
+	MethodOnline   = "online"  // paid through a payment gateway (never chosen by staff)
+	MethodPackage  = "package" // paid with the customer's package (course pass): no money at the booking (never chosen by staff)
 )
 
 // statusChanges lists the allowed one-way moves; cancelled, completed and no-show are final
@@ -103,8 +104,16 @@ type Booking struct {
 	EventID    *uint `gorm:"index"`
 	PayBy      *time.Time
 	SlipSentAt *time.Time
+	// SlipVia: how the slip came: "whatsapp" (sent there by the customer) or "telegram" (uploaded here, put in the group); "" = not sent
+	SlipVia string `gorm:"type:varchar(10);not null;default:''"`
 	// Zones the tables stood in when booked (e.g. "Smoking"), joined by ", "; a snapshot
 	Zones string `gorm:"type:varchar(120);not null;default:''"`
+	// CustomerPackageID: the package (course pass) a visit was paid with, set when it is used (packages module)
+	CustomerPackageID *uint `gorm:"index"`
+	// PackageLabel and PackageCode: which package it was ("Package A · 10 times", "P-0002"), copied when booked so
+	// every screen can say it without a lookup
+	PackageLabel string `gorm:"type:varchar(160);not null;default:''"`
+	PackageCode  string `gorm:"type:varchar(12);not null;default:''"`
 
 	// the event the booking bought, for names and the time of day in answers and emails (read-only)
 	Event *EventBrief `gorm:"foreignKey:EventID;-:migration"`
@@ -197,6 +206,11 @@ type PayFacts struct {
 	PayBy         *time.Time
 	// SlipSent: the customer said they paid outside the system and sent the slip; the team decides now
 	SlipSent bool
+	// Purchase: the thing being paid is a customer package (course pass), not a booking; ID is then its id
+	Purchase bool
+	// OrderRef: the base of the order number sent to the bank, when it is not the code (a package code repeats from
+	// branch to branch, an order number must not)
+	OrderRef string
 }
 
 // Payable: money can still be taken for it (not paid, not cancelled, something to pay)

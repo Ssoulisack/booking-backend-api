@@ -44,6 +44,12 @@ type Repository interface {
 	SavePayInfo(ctx context.Context, p *domain.PayInfo) error
 }
 
+// SlipChannel tells whether a branch can receive customers' payment slips as pictures in its Telegram group
+// (the Telegram module)
+type SlipChannel interface {
+	SlipAvailable(ctx context.Context, branchID uint) bool
+}
+
 // Booker is what the module needs from the booking service: store a booking, and when the venue is
 // open on a day
 type Booker interface {

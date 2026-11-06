@@ -198,7 +198,8 @@ func (r *mediaRepository) List(ctx context.Context, branchID uint) ([]domain.Med
 	return files, exception.HandleGormError(err)
 }
 
-// Uses finds what shows a file: sports, coaches and the branch cover, or for the company its logo and cover
+// Uses finds what shows a file: sports, coaches, the branch cover, the payment QR and the pictures of events, or for
+// the company its logo and cover
 func (r *mediaRepository) Uses(ctx context.Context, branchID uint) ([]output.MediaUse, error) {
 	var uses []output.MediaUse
 	var err error
@@ -213,8 +214,14 @@ func (r *mediaRepository) Uses(ctx context.Context, branchID uint) ([]output.Med
 			UNION ALL
 			SELECT image_key, 'coach', name FROM coaches WHERE branch_id = ? AND image_key <> '' AND deleted_at IS NULL
 			UNION ALL
-			SELECT cover_key, 'cover', name FROM branches WHERE id = ? AND cover_key <> '' AND deleted_at IS NULL`,
-			branchID, branchID, branchID).Scan(&uses).Error
+			SELECT cover_key, 'cover', name FROM branches WHERE id = ? AND cover_key <> '' AND deleted_at IS NULL
+			UNION ALL
+			SELECT qr_key, 'pay_qr', 'payment' FROM event_pay_info WHERE branch_id = ? AND qr_key <> ''
+			UNION ALL
+			SELECT background_key, 'event', name FROM events WHERE branch_id = ? AND background_key <> '' AND deleted_at IS NULL
+			UNION ALL
+			SELECT ad_key, 'event', name FROM events WHERE branch_id = ? AND ad_key <> '' AND deleted_at IS NULL`,
+			branchID, branchID, branchID, branchID, branchID, branchID).Scan(&uses).Error
 	}
 	return uses, exception.HandleGormError(err)
 }

@@ -44,17 +44,19 @@ type GuestInfo struct {
 // group class (class_session_id + seats). Guests fill guest; logged-in customers leave it empty.
 type CreateBookingRequest struct {
 	// restaurant branches: the chosen tables and the group size (no duration)
-	TableIDs       []uint     `json:"table_ids"`
-	Guests         int        `json:"guests"`
-	ResourceID     *uint      `json:"resource_id"`
-	CoachID        *uint      `json:"coach_id"`
-	SportID        uint       `json:"sport_id"`
-	StartsAt       time.Time  `json:"starts_at"`
-	DurationMin    int        `json:"duration_min"`
-	ClassSessionID *uint      `json:"class_session_id"`
-	Seats          int        `json:"seats"`
-	Guest          *GuestInfo `json:"guest"`
-	Notes          string     `json:"notes"`
+	TableIDs       []uint    `json:"table_ids"`
+	Guests         int       `json:"guests"`
+	ResourceID     *uint     `json:"resource_id"`
+	CoachID        *uint     `json:"coach_id"`
+	SportID        uint      `json:"sport_id"`
+	StartsAt       time.Time `json:"starts_at"`
+	DurationMin    int       `json:"duration_min"`
+	ClassSessionID *uint     `json:"class_session_id"`
+	Seats          int       `json:"seats"`
+	// PackageID: pay with this package (course pass) of the customer: a class or a space booking, price 0
+	PackageID *uint      `json:"package_id"`
+	Guest     *GuestInfo `json:"guest"`
+	Notes     string     `json:"notes"`
 }
 
 // FindBookingRequest finds a booking without its private link: its code and the phone it was made with
@@ -128,8 +130,14 @@ type BookingDTO struct {
 	EventEndTime   string     `json:"event_end_time,omitempty"`
 	PayBy          *time.Time `json:"pay_by,omitempty"`
 	SlipSentAt     *time.Time `json:"slip_sent_at,omitempty"`
-	ArriveBy       *time.Time `json:"arrive_by,omitempty"`
-	ArrivedAt      *time.Time `json:"arrived_at,omitempty"`
+	SlipVia        string     `json:"slip_via,omitempty"`
+	// the package (course pass) the booking was paid with
+	CustomerPackageID *uint `json:"customer_package_id,omitempty"`
+	// which package: "Package A · 10 times" and its code "P-0002"
+	Package     string     `json:"package,omitempty"`
+	PackageCode string     `json:"package_code,omitempty"`
+	ArriveBy    *time.Time `json:"arrive_by,omitempty"`
+	ArrivedAt   *time.Time `json:"arrived_at,omitempty"`
 	// arrive_by: a bar booking for the evening (its start is only "from opening"); time: a start time
 	BookingStyle string `json:"booking_style,omitempty"`
 	// restaurant tables: the floor of the area (sport_name) the tables are in; 0 = ground floor

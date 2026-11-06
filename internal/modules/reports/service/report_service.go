@@ -24,6 +24,7 @@ type ReportServiceImpl struct {
 	hours     output.OpeningHourRepository
 	closures  output.ClosureRepository
 	rows      output.BookingReportRepository
+	packages  output.PackageSales // package sales (nil: none)
 	now       func() time.Time
 }
 
@@ -35,10 +36,11 @@ func NewReportService(
 	hours output.OpeningHourRepository,
 	closures output.ClosureRepository,
 	rows output.BookingReportRepository,
+	packages output.PackageSales,
 ) port.ReportService {
 	return &ReportServiceImpl{
 		branches: branches, bookings: bookings, resources: resources, sports: sports,
-		hours: hours, closures: closures, rows: rows, now: time.Now,
+		hours: hours, closures: closures, rows: rows, packages: packages, now: time.Now,
 	}
 }
 
@@ -388,7 +390,8 @@ func (s *ReportServiceImpl) Unpaid(ctx context.Context, branchID uint, q dto.Rep
 	return out, nil
 }
 
-// CashUp sums the money marked paid on one day, per method and per staff member
+// CashUp sums the money marked paid on one day, per method and per staff member. Package sales count (money came in);
+// a booking paid with a package does not (the money was counted when the package was sold).
 func (s *ReportServiceImpl) CashUp(ctx context.Context, branchID uint, date string) (*dto.CashUpDTO, error) {
 	b, err := s.branches.GetByID(ctx, branchID)
 	if err != nil {
@@ -408,6 +411,10 @@ func (s *ReportServiceImpl) CashUp(ctx context.Context, branchID uint, date stri
 	byStaff := map[string]*dto.CashUpStaff{}
 	out := &dto.CashUpDTO{Date: date, Payments: []dto.CashUpPayment{}}
 	for _, p := range paid {
+		// a booking paid with a package took no money today: the money was counted when the package was sold
+		if p.PaymentMethod == domain.MethodPackage {
+			continue
+		}
 		totals[p.Currency] += p.TotalPrice
 		mk := p.PaymentMethod + "|" + p.Currency
 		m, ok := byMethod[mk]
@@ -435,6 +442,37 @@ func (s *ReportServiceImpl) CashUp(ctx context.Context, branchID uint, date stri
 			Code: p.Code, Name: bookerName(p), Method: p.PaymentMethod, Amount: p.TotalPrice,
 			Currency: p.Currency, PaidAt: p.PaidAt.In(loc), PaidBy: staffName,
 		})
+	}
+	// package sales paid that day count as money too: the till has them
+	if s.packages != nil {
+		sales, err := s.packages.SalesBetween(ctx, branchID, day, day.AddDate(0, 0, 1))
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range sales {
+			totals[p.Currency] += p.Price
+			mk := p.Method + "|" + p.Currency
+			m, ok := byMethod[mk]
+			if !ok {
+				m = &dto.CashUpMethod{Method: p.Method, Currency: p.Currency}
+				byMethod[mk] = m
+			}
+			m.Count++
+			m.Amount += p.Price
+			sk := p.PaidBy + "|" + p.Currency
+			st, ok := byStaff[sk]
+			if !ok {
+				st = &dto.CashUpStaff{Name: p.PaidBy, Currency: p.Currency}
+				byStaff[sk] = st
+			}
+			st.Count++
+			st.Amount += p.Price
+			out.Payments = append(out.Payments, dto.CashUpPayment{
+				Code: p.Code, Name: p.CustomerName, Method: p.Method, Amount: p.Price, Currency: p.Currency,
+				PaidAt: p.PaidAt.In(loc), PaidBy: p.PaidBy,
+			})
+		}
+		sort.Slice(out.Payments, func(i, j int) bool { return out.Payments[i].PaidAt.Before(out.Payments[j].PaidAt) })
 	}
 	out.Totals = moneyList(totals)
 	out.ByMethod = make([]dto.CashUpMethod, 0, len(byMethod))

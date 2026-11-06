@@ -25,10 +25,12 @@ type Payment struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	BranchID  uint   `gorm:"not null;index"`
-	BookingID uint   `gorm:"not null;index"`
-	Provider  string `gorm:"type:varchar(20);not null;index:idx_payment_ref,priority:1"`
-	Method    string `gorm:"type:varchar(20);not null"`
+	BranchID  uint `gorm:"not null;index"`
+	BookingID uint `gorm:"not null;index"`
+	// PurchaseID: the customer package (course pass) this pays; then BookingID is 0
+	PurchaseID uint   `gorm:"not null;default:0;index"`
+	Provider   string `gorm:"type:varchar(20);not null;index:idx_payment_ref,priority:1"`
+	Method     string `gorm:"type:varchar(20);not null"`
 	// OrderNo is ours and unique ("<booking code>-<try>"): it is also the order number sent to the gateway.
 	// ProviderRef is the gateway's id ("" for a payment page until the gateway tells us).
 	OrderNo     string `gorm:"type:varchar(40);not null;uniqueIndex"`

@@ -92,6 +92,21 @@ func (h *Handler) Unpaid(c *fiber.Ctx) error {
 	return sendCSV(c, "unpaid_"+q.From+"_"+q.To+".csv", rows)
 }
 
+// Transactions: ?from=&to= (YYYY-MM-DD); a table, or a CSV download with ?format=csv
+func (h *Handler) Transactions(c *fiber.Ctx) error {
+	q := reportQuery(c)
+	res, err := h.svc.Transactions(c.UserContext(), middleware.BranchID(c), q)
+	if err != nil || !wantsCSV(c) {
+		return httpx.OK(c, res, err)
+	}
+	rows := [][]string{{"paid_at", "kind", "code", "name", "phone", "what", "package", "package_code", "method", "amount", "currency", "paid_by", "cancelled"}}
+	for _, r := range res.Rows {
+		rows = append(rows, []string{r.PaidAt.Format(time.RFC3339), r.Kind, r.Code, r.Name, r.Phone, r.What, r.Package, r.PackageCode, r.Method,
+			amount(r.Amount), r.Currency, r.PaidBy, strconv.FormatBool(r.Cancelled)})
+	}
+	return sendCSV(c, "transactions_"+q.From+"_"+q.To+".csv", rows)
+}
+
 // CashUp expects ?date=YYYY-MM-DD
 func (h *Handler) CashUp(c *fiber.Ctx) error {
 	res, err := h.svc.CashUp(c.UserContext(), middleware.BranchID(c), c.Query("date"))
