@@ -29,14 +29,15 @@ type SlipDesk interface {
 
 // PackageFit is what a booking is, for checking that a customer's package (course pass) can pay it
 type PackageFit struct {
-	BranchID   uint
-	CustomerID uint
-	PackageID  uint   // the customer's package (not the package that is sold)
-	Day        string // the day of the booking, YYYY-MM-DD in the branch time zone
-	SportID    uint
-	ResourceID *uint // the space of a rental
-	Class      bool  // a seat in a group class (else a rental of a space)
-	WithCoach  bool  // a coach is part of the booking: packages do not cover coaches
+	BranchID    uint
+	CustomerID  uint
+	PackageID   uint   // the customer's package (not the package that is sold)
+	Day         string // the day of the booking, YYYY-MM-DD in the branch time zone
+	SportID     uint
+	ResourceID  *uint // the space of a rental
+	Class       bool  // a seat in a group class (else a rental of a space)
+	TimetableID *uint // the weekly class the seat belongs to (nil: a one-off class)
+	WithCoach   bool  // a coach is part of the booking: packages do not cover coaches
 }
 
 // PackageUse lets a booking be paid with a customer's package (the packages module). It works in three steps so a

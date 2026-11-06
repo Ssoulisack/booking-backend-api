@@ -81,7 +81,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl, Cache: r.cache,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
-	packagesModule := packages.New(packages.Deps{DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports, Resources: r.resources, Users: r.user})
+	packagesModule := packages.New(packages.Deps{DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports, Resources: r.resources, Timetables: r.timetables, Users: r.user})
 	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,
 	// prod: PhaJay for real money); a PhaJay without its keys is off and the QR / transfer / WhatsApp way stays
 	gateways, devGateway := ChooseGateway(r.server, r.payments)

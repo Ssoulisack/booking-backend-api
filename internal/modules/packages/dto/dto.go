@@ -22,6 +22,7 @@ type PackageRequest struct {
 	Description string          `json:"description"`
 	Covers      string          `json:"covers"`      // group_class | space
 	ResourceID  *uint           `json:"resource_id"` // the space, when covers = space
+	ClassIDs    []uint          `json:"class_ids"`   // the weekly classes (timetables) a group-class package covers; none = every class
 	Active      *bool           `json:"active"`      // not sent: yes on a new package, unchanged otherwise
 	Options     []OptionRequest `json:"options"`
 }
@@ -46,6 +47,8 @@ type PackageDTO struct {
 	Covers       string      `json:"covers"`
 	ResourceID   *uint       `json:"resource_id"`
 	ResourceName string      `json:"resource_name"`
+	ClassIDs     []uint      `json:"class_ids"`   // empty = every class of the sport
+	ClassNames   []string    `json:"class_names"` // the same classes by name
 	Active       bool        `json:"active"`
 	Currency     string      `json:"currency"`
 	Options      []OptionDTO `json:"options"`
@@ -87,6 +90,8 @@ type CustomerPackageDTO struct {
 	Covers        string     `json:"covers"`
 	ResourceID    *uint      `json:"resource_id"`
 	ResourceName  string     `json:"resource_name"`
+	ClassIDs      []uint     `json:"class_ids"`
+	ClassNames    []string   `json:"class_names"`
 	Kind          string     `json:"kind"`
 	Amount        int        `json:"amount"`
 	Price         int64      `json:"price"`

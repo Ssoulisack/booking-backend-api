@@ -22,7 +22,7 @@ type packageUse struct {
 
 // takePackage checks the request may use a package and takes the visit. nil when no package is asked for.
 // Only a logged-in customer (or staff booking for one) has packages; tables are never paid this way.
-func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker, req dto.CreateBookingRequest, start time.Time, sportID uint, resourceID *uint, withCoach bool) (*packageUse, error) {
+func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker, req dto.CreateBookingRequest, start time.Time, sportID uint, resourceID *uint, withCoach bool, timetableID *uint) (*packageUse, error) {
 	if req.PackageID == nil {
 		return nil, nil
 	}
@@ -34,7 +34,7 @@ func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker
 	}
 	change, ref, err := s.packages.Take(ctx, output.PackageFit{
 		BranchID: b.ID, CustomerID: who.Customer.ID, PackageID: *req.PackageID, Day: start.Format("2006-01-02"),
-		SportID: sportID, ResourceID: resourceID, Class: req.ClassSessionID != nil, WithCoach: withCoach,
+		SportID: sportID, ResourceID: resourceID, Class: req.ClassSessionID != nil, TimetableID: timetableID, WithCoach: withCoach,
 	})
 	if err != nil {
 		return nil, err

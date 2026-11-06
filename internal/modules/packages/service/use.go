@@ -40,7 +40,7 @@ func (s *Service) Take(ctx context.Context, f output.PackageFit) (int, output.Pa
 	covers := false
 	switch {
 	case f.Class:
-		covers = cp.Covers == pkgdomain.CoversClass && cp.SportID == f.SportID
+		covers = cp.Covers == pkgdomain.CoversClass && cp.SportID == f.SportID && pkgdomain.CoversClassOf(cp.ClassIDs, f.TimetableID)
 	default:
 		covers = cp.Covers == pkgdomain.CoversSpace && cp.ResourceID != nil && f.ResourceID != nil &&
 			*cp.ResourceID == *f.ResourceID && !f.WithCoach

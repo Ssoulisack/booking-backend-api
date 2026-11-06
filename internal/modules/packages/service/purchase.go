@@ -378,7 +378,7 @@ func (s *Service) newPurchase(ctx context.Context, b *domain.Branch, customerID,
 	}
 	return &pkgdomain.CustomerPackage{
 		BranchID: b.ID, CustomerID: customerID, PackageID: p.ID, OptionID: o.ID, SportID: p.SportID,
-		Name: p.Name, Covers: p.Covers, ResourceID: p.ResourceID, Kind: o.Kind, Amount: o.Amount, ValidDays: o.ValidDays,
+		Name: p.Name, Covers: p.Covers, ResourceID: p.ResourceID, ClassIDs: p.ClassIDs, Kind: o.Kind, Amount: o.Amount, ValidDays: o.ValidDays,
 		Price: o.Price, Currency: b.Currency, Status: pkgdomain.StatusPendingPayment, PaymentStatus: domain.PaymentUnpaid,
 	}, nil
 }
@@ -427,5 +427,6 @@ func purchaseDTO(b *domain.Branch, cp *pkgdomain.CustomerPackage, n nameBook) dt
 	if cp.ResourceID != nil {
 		d.ResourceName = n.spaces[*cp.ResourceID]
 	}
+	d.ClassIDs, d.ClassNames = n.classList(cp.ClassIDs)
 	return d
 }

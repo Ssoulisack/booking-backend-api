@@ -752,7 +752,7 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 		return nil, "", err
 	}
 	bk.TotalPrice, bk.Currency, bk.Items = total, currency, items
-	use, err := s.takePackage(ctx, b, who, req, start, t.sportID, resourceRef(t), t.coach != nil)
+	use, err := s.takePackage(ctx, b, who, req, start, t.sportID, resourceRef(t), t.coach != nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -826,7 +826,7 @@ func (s *Service) createClassBooking(ctx context.Context, b *domain.Branch, who 
 	if req.PackageID != nil && seats != 1 {
 		return nil, "", badRequest("PACKAGE_ONE_SEAT")
 	}
-	use, err := s.takePackage(ctx, b, who, req, start, class.SportID, nil, false)
+	use, err := s.takePackage(ctx, b, who, req, start, class.SportID, nil, false, class.TimetableID)
 	if err != nil {
 		return nil, "", err
 	}

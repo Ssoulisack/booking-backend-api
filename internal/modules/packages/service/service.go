@@ -35,7 +35,9 @@ type Deps struct {
 	Branches  output.BranchRepository
 	Sports    output.SportRepository
 	Resources output.ResourceRepository
-	Users     output.UserRepository
+	// Timetables: the weekly classes a group-class package can be limited to
+	Timetables output.ClassTimetableRepository
+	Users      output.UserRepository
 	// Now: the clock (nil: the real one)
 	Now func() time.Time
 }
@@ -147,6 +149,20 @@ func (s *Service) save(ctx context.Context, b *domain.Branch, p *pkgdomain.Packa
 		return nil, mapNotFound(err, "SPORT_NOT_FOUND")
 	}
 	var resourceID *uint
+	classIDs := ""
+	if req.Covers == pkgdomain.CoversClass && len(req.ClassIDs) > 0 {
+		// only weekly classes of this branch and sport
+		for _, id := range req.ClassIDs {
+			tt, err := s.Timetables.GetByID(ctx, b.ID, id)
+			if err != nil {
+				return nil, mapNotFound(err, "CLASS_NOT_FOUND")
+			}
+			if tt.SportID != req.SportID {
+				return nil, badRequest("CLASS_NOT_IN_SPORT")
+			}
+		}
+		classIDs = pkgdomain.ClassText(req.ClassIDs)
+	}
 	if req.Covers == pkgdomain.CoversSpace {
 		if req.ResourceID == nil {
 			return nil, badRequest("SPACE_REQUIRED")
@@ -165,7 +181,7 @@ func (s *Service) save(ctx context.Context, b *domain.Branch, p *pkgdomain.Packa
 		return nil, err
 	}
 	p.SportID, p.Name, p.Description = req.SportID, name, strings.TrimSpace(req.Description)
-	p.Covers, p.ResourceID = req.Covers, resourceID
+	p.Covers, p.ResourceID, p.ClassIDs = req.Covers, resourceID, classIDs
 	if req.Active != nil {
 		p.Active = *req.Active
 	}
@@ -290,10 +306,10 @@ func (s *Service) one(ctx context.Context, b *domain.Branch, p *pkgdomain.Packag
 }
 
 // nameBook gives the sport and space names of a branch, for answers
-type nameBook struct{ sports, spaces map[uint]string }
+type nameBook struct{ sports, spaces, classes map[uint]string }
 
 func (s *Service) names(ctx context.Context, branchID uint) (nameBook, error) {
-	n := nameBook{sports: map[uint]string{}, spaces: map[uint]string{}}
+	n := nameBook{sports: map[uint]string{}, spaces: map[uint]string{}, classes: map[uint]string{}}
 	sports, _, err := s.Sports.List(ctx, branchID, output.ListQuery{Limit: 500})
 	if err != nil {
 		return n, err
@@ -307,6 +323,15 @@ func (s *Service) names(ctx context.Context, branchID uint) (nameBook, error) {
 	}
 	for _, r := range res {
 		n.spaces[r.ID] = r.Name
+	}
+	if s.Timetables != nil {
+		tts, _, err := s.Timetables.List(ctx, branchID, output.ListQuery{Limit: 1000})
+		if err != nil {
+			return n, err
+		}
+		for _, tt := range tts {
+			n.classes[tt.ID] = tt.Title
+		}
 	}
 	return n, nil
 }
@@ -326,5 +351,18 @@ func packageDTO(p pkgdomain.Package, currency string, n nameBook, opts []dto.Opt
 	if p.ResourceID != nil {
 		d.ResourceName = n.spaces[*p.ResourceID]
 	}
+	d.ClassIDs, d.ClassNames = n.classList(p.ClassIDs)
 	return d
+}
+
+// classList gives the ids and the names of the classes of a ClassIDs text (a class that was deleted keeps no name)
+func (n nameBook) classList(text string) ([]uint, []string) {
+	ids, names := []uint{}, []string{}
+	for _, id := range pkgdomain.ClassList(text) {
+		ids = append(ids, id)
+		if name := n.classes[id]; name != "" {
+			names = append(names, name)
+		}
+	}
+	return ids, names
 }

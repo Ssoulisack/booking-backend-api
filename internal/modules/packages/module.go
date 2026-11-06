@@ -18,11 +18,12 @@ import (
 
 // Deps are what the module is built from
 type Deps struct {
-	DB        *gorm.DB
-	Branches  output.BranchRepository
-	Sports    output.SportRepository
-	Resources output.ResourceRepository
-	Users     output.UserRepository
+	DB         *gorm.DB
+	Branches   output.BranchRepository
+	Sports     output.SportRepository
+	Resources  output.ResourceRepository
+	Timetables output.ClassTimetableRepository
+	Users      output.UserRepository
 }
 
 // Module is the packages module
@@ -34,7 +35,7 @@ type Module struct {
 
 // New builds the module
 func New(d Deps) *Module {
-	svc := service.New(service.Deps{Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources, Users: d.Users})
+	svc := service.New(service.Deps{Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources, Timetables: d.Timetables, Users: d.Users})
 	return &Module{Service: svc, svc: svc, handler: http.New(svc)}
 }
 

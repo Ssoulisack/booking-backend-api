@@ -5,6 +5,9 @@ package domain
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -32,7 +35,9 @@ type Package struct {
 	Covers      string `gorm:"type:varchar(12);not null"`
 	// ResourceID is the space a CoversSpace package is for; nil for group classes
 	ResourceID *uint `gorm:"index"`
-	Active     bool  `gorm:"not null"` // always set explicitly: gorm would write the default for false
+	// ClassIDs: the weekly classes (timetables) a group-class package covers, "3,5"; empty = every class of the sport
+	ClassIDs string `gorm:"type:text;not null;default:''"`
+	Active   bool   `gorm:"not null"` // always set explicitly: gorm would write the default for false
 }
 
 func (Package) TableName() string { return "packages" }
@@ -76,11 +81,13 @@ type CustomerPackage struct {
 	Name       string `gorm:"type:varchar(120);not null"`
 	Covers     string `gorm:"type:varchar(12);not null"`
 	ResourceID *uint
-	Kind       string `gorm:"type:varchar(6);not null"`
-	Amount     int    `gorm:"not null"`
-	ValidDays  int    `gorm:"not null;default:0"` // copied from the option: a times package must be used within this many days
-	Price      int64  `gorm:"not null"`
-	Currency   string `gorm:"type:varchar(3);not null"`
+	// ClassIDs: copied from the package: the weekly classes it covers ("3,5"); empty = every class of the sport
+	ClassIDs  string `gorm:"type:text;not null;default:''"`
+	Kind      string `gorm:"type:varchar(6);not null"`
+	Amount    int    `gorm:"not null"`
+	ValidDays int    `gorm:"not null;default:0"` // copied from the option: a times package must be used within this many days
+	Price     int64  `gorm:"not null"`
+	Currency  string `gorm:"type:varchar(3);not null"`
 	// TimesLeft: visits left (times); unused for months
 	TimesLeft int `gorm:"not null;default:0"`
 	// StartsOn / EndsOn: the days a months pass works, YYYY-MM-DD in the branch time zone;
@@ -148,4 +155,51 @@ func (c CustomerPackage) StatusOn(today string) string {
 		return StatusExpired
 	}
 	return StatusActive
+}
+
+// ClassList reads a ClassIDs text ("3,5") as numbers; empty text = none listed (every class)
+func ClassList(text string) []uint {
+	var out []uint
+	for _, part := range strings.Split(text, ",") {
+		if n, err := strconv.ParseUint(strings.TrimSpace(part), 10, 64); err == nil && n > 0 {
+			out = append(out, uint(n))
+		}
+	}
+	return out
+}
+
+// ClassText writes class ids as a ClassIDs text, sorted and without repeats
+func ClassText(ids []uint) string {
+	seen := map[uint]bool{}
+	var list []uint
+	for _, id := range ids {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			list = append(list, id)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i] < list[j] })
+	parts := make([]string, len(list))
+	for i, id := range list {
+		parts[i] = strconv.FormatUint(uint64(id), 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+// CoversClassOf says whether a class-covering purchase pays a class: no list = every class of the sport; a list =
+// only those weekly classes (a one-off class that is not part of a timetable is covered only when no list is set)
+func CoversClassOf(classIDs string, timetableID *uint) bool {
+	list := ClassList(classIDs)
+	if len(list) == 0 {
+		return true
+	}
+	if timetableID == nil {
+		return false
+	}
+	for _, id := range list {
+		if id == *timetableID {
+			return true
+		}
+	}
+	return false
 }
