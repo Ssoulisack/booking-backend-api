@@ -38,6 +38,21 @@ type AppServices struct {
 	telegram   *telegram.Module // nil when the server secret is too short to encrypt with
 }
 
+// publicLimits are the abuse limits of the public booking page: what config.yaml says, or when it says 0 the default of
+// the environment (10 per IP per hour and 3 waiting per phone; dev has no real limit, because every test comes from one address)
+func publicLimits(srv config.ServerConfig) (l struct{ bookingsPerHour, waitingPerPhone int }) {
+	l.bookingsPerHour, l.waitingPerPhone = srv.PublicBookingsPerHour, srv.OpenWaitingPerPhone
+	if srv.Env == "" || srv.Env == "dev" {
+		if l.bookingsPerHour <= 0 {
+			l.bookingsPerHour = 100000
+		}
+		if l.waitingPerPhone <= 0 {
+			l.waitingPerPhone = 1000
+		}
+	}
+	return l
+}
+
 // SetupServices initializes all core services
 func SetupServices(repos *AppRepositories) *AppServices {
 	r := repos
@@ -46,11 +61,12 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Branches: r.branches, FloorItems: r.floorItems, Hours: r.openingHours, Closures: r.closures, Prices: r.prices,
 		Timetables: r.timetables, Rules: r.rules, Storage: r.storage, Media: r.media,
 	})
+	limits := publicLimits(r.server)
 	bookingModule := booking.New(booking.Deps{
 		Branches: r.branches, Sports: r.sports, Resources: r.resources, Coaches: r.coaches, Hours: r.openingHours,
 		Closures: r.closures, Prices: r.prices, Classes: r.classSessions, Bookings: r.bookings, Users: r.user,
 		Memberships: r.memberships, Rules: catalogModule.Rules, Mailer: r.mailer, FrontendURL: r.app.FrontendURL, FloorItems: r.floorItems,
-		OpenWaitingPerPhone: r.server.OpenWaitingPerPhone, PublicBookingsPerHour: r.server.PublicBookingsPerHour,
+		OpenWaitingPerPhone: limits.waitingPerPhone, PublicBookingsPerHour: limits.bookingsPerHour,
 	})
 	// modules: each owns its tables, rules and routes; the booking service and the jobs talk to them
 	bookingImpl := bookingModule.Service

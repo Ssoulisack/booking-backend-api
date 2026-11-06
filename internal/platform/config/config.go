@@ -96,9 +96,10 @@ type ServerConfig struct {
 	// proxy addresses allowed to set it. Empty = clients connect directly.
 	ProxyHeader    string
 	TrustedProxies []string
-	// Abuse limits for the public booking page (0 = the default). PublicBookingsPerHour: new bookings from one
-	// IP address per hour (a venue's shared Wi-Fi counts as one address). OpenWaitingPerPhone: bookings one phone
-	// number may have waiting for approval and unpaid at the same time.
+	// Abuse limits for the public booking page. 0 = the default of the environment: 10 bookings per IP per hour and 3
+	// waiting bookings per phone in uat and prod, practically no limit in dev (every test comes from one address).
+	// PublicBookingsPerHour: new bookings from one IP address per hour (a venue's shared Wi-Fi counts as one address).
+	// OpenWaitingPerPhone: bookings one phone number may have waiting for approval and unpaid at the same time.
 	PublicBookingsPerHour int
 	OpenWaitingPerPhone   int
 }
@@ -184,8 +185,6 @@ func setDefaults() {
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.readTimeout", 10)
 	viper.SetDefault("server.writeTimeout", 10)
-	viper.SetDefault("server.publicBookingsPerHour", 10)
-	viper.SetDefault("server.openWaitingPerPhone", 3)
 
 	// Postgres defaults
 	viper.SetDefault("database.postgres.host", "localhost")

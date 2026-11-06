@@ -33,30 +33,53 @@ func compose(b domain.Booking, k kind, why string, hidePhone bool) string {
 		}
 	}
 
-	var what []string
+	// a restaurant booking lists the table(s), the zone and the number of people on their own lines; any other
+	// booking keeps one "items" line (sport, court, coach, class)
+	restaurant := b.Branch.Type == domain.BranchTypeRestaurant
+	var what, tables []string
 	if b.Event != nil && b.Event.Name != "" {
 		what = append(what, "Event "+b.Event.Name)
 	}
 	if b.Sport != nil && b.Sport.Name != "" {
-		what = append(what, b.Sport.Name)
+		what = append(what, b.Sport.Name) // for a restaurant this is the area ("Main hall")
 	}
 	for _, it := range b.Items {
-		for _, name := range []string{resourceName(it), coachName(it), classTitle(it)} {
+		if name := resourceName(it); name != "" {
+			if restaurant {
+				tables = append(tables, name)
+			} else {
+				what = append(what, name)
+			}
+		}
+		for _, name := range []string{coachName(it), classTitle(it)} {
 			if name != "" {
 				what = append(what, name)
 			}
 		}
 	}
-	if b.Zones != "" {
-		what = append(what, b.Zones)
-	}
-	if b.Guests > 0 {
-		what = append(what, fmt.Sprintf("%d ຄົນ", b.Guests))
+	if !restaurant {
+		if b.Zones != "" {
+			what = append(what, b.Zones)
+		}
+		if b.Guests > 0 {
+			what = append(what, fmt.Sprintf("%d ຄົນ", b.Guests))
+		}
 	}
 
 	lines := []string{title, "", "ສາຂາ: " + b.Branch.Name, "ລະຫັດ: " + b.Code}
 	if len(what) > 0 {
 		lines = append(lines, "ລາຍການ: "+strings.Join(what, " · "))
+	}
+	if restaurant {
+		if len(tables) > 0 {
+			lines = append(lines, "ໂຕະ: "+strings.Join(tables, ", "))
+		}
+		if b.Zones != "" { // only when the tables stand in a named zone
+			lines = append(lines, "ໂຊນ: "+b.Zones)
+		}
+		if b.Guests > 0 {
+			lines = append(lines, fmt.Sprintf("ຈຳນວນ: %d ຄົນ", b.Guests))
+		}
 	}
 	lines = append(lines, "ເວລາ: "+whenText(b))
 	if b.TotalPrice > 0 {
