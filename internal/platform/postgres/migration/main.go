@@ -43,9 +43,6 @@ func DatabaseMigrations(db *gorm.DB, modules ...any) error {
 	); err != nil {
 		return err
 	}
-	if err := numbering.EnsureBookingDays(db); err != nil {
-		return err
-	}
 	if err := numberPackages(db); err != nil {
 		return err
 	}
