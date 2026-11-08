@@ -30,13 +30,20 @@ func (s *Service) tableBooking(ctx context.Context, branchID, id uint) (*domain.
 	return bk, nil
 }
 
-// MarkArrived records that the group came in (a confirmed table booking whose time is not over)
+// MarkArrived records that the group came in (a confirmed table booking whose time is not over). It can only be
+// done on the booking's own day (the branch's date): a booking for the 9th is not arrived on the 8th. A booking
+// that has begun stays open past midnight (an event night 19:00-01:00 can still be marked at 00:30).
 func (s *Service) MarkArrived(ctx context.Context, branchID, id uint) (*dto.BookingDTO, error) {
 	bk, err := s.tableBooking(ctx, branchID, id)
 	if err != nil {
 		return nil, err
 	}
+	_, loc, err := s.kernel.Branch(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
 	now := s.now()
+	ownDay := startOfDay(now, loc).Equal(startOfDay(bk.StartsAt.In(loc), loc))
 	switch {
 	case bk.Status != domain.BookingConfirmed:
 		return nil, conflict("CONFIRM_FIRST")
@@ -44,6 +51,8 @@ func (s *Service) MarkArrived(ctx context.Context, branchID, id uint) (*dto.Book
 		return nil, conflict("ALREADY_ARRIVED")
 	case !now.Before(bk.EndsAt):
 		return nil, conflict("BOOKING_OVER")
+	case !ownDay && now.Before(bk.StartsAt):
+		return nil, conflict("NOT_BOOKING_DAY")
 	}
 	if err := s.bookings.SetArrived(ctx, bk, now); err != nil {
 		return nil, err
