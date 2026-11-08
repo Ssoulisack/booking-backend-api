@@ -37,6 +37,16 @@ func (h *Handler) TableAvailability(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+// DeskTableAvailability: the free tables for a booking the team makes by phone
+func (h *Handler) DeskTableAvailability(c *fiber.Ctx) error {
+	var q dto.TableAvailabilityQuery
+	if err := c.QueryParser(&q); err != nil {
+		return httpx.Fail(c, response.ErrorBadRequest("INVALID_QUERY"))
+	}
+	res, err := h.desk.DeskTableAvailability(c.UserContext(), middleware.BranchID(c), q)
+	return httpx.OK(c, res, err)
+}
+
 // MarkArrived: a restaurant group came in
 func (h *Handler) MarkArrived(c *fiber.Ctx) error {
 	id, err := httpx.ID(c, "id")

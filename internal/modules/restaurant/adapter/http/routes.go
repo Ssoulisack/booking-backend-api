@@ -20,4 +20,5 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	b.Post("/bookings/:id/arrived", staff, h.MarkArrived)
 	b.Post("/bookings/:id/move", staff, h.MoveTables)
 	b.Post("/walk-ins", staff, h.WalkIn)
+	b.Get("/table-availability", staff, h.DeskTableAvailability)
 }

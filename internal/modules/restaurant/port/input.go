@@ -21,5 +21,7 @@ type DeskTables interface {
 	MarkArrived(ctx context.Context, branchID, id uint) (*dto.BookingDTO, error)
 	MoveTables(ctx context.Context, branchID, id uint, req dto.MoveTablesRequest) (*dto.BookingDTO, error)
 	WalkIn(ctx context.Context, branchID uint, actor *domain.User, req dto.WalkInRequest) (*dto.BookingDTO, error)
+	// DeskTableAvailability: the free times and tables for a table booking made by the team (a customer who phoned)
+	DeskTableAvailability(ctx context.Context, branchID uint, q dto.TableAvailabilityQuery) (*dto.TableAvailabilityDTO, error)
 	SettleTables(ctx context.Context) error
 }

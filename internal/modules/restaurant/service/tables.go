@@ -210,6 +210,16 @@ func (s *Service) TableAvailability(ctx context.Context, slug string, q dto.Tabl
 	return s.tableAvailability(ctx, b, q, false)
 }
 
+// DeskTableAvailability is the team's view for booking a table by phone: the same free times and tables, with the
+// tables kept for walk-ins too and without the customers' notice and last-call limits
+func (s *Service) DeskTableAvailability(ctx context.Context, branchID uint, q dto.TableAvailabilityQuery) (*dto.TableAvailabilityDTO, error) {
+	b, _, err := s.kernel.Branch(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	return s.tableAvailability(ctx, b, q, true)
+}
+
 func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto.TableAvailabilityQuery, staff bool) (*dto.TableAvailabilityDTO, error) {
 	if b.Type != domain.BranchTypeRestaurant {
 		return nil, conflict("NOT_A_RESTAURANT")
@@ -227,19 +237,16 @@ func (s *Service) tableAvailability(ctx context.Context, b *domain.Branch, q dto
 	}
 	// an event holds the tables of its areas: they are sold, not booked free. Held everywhere, it takes the whole
 	// day over; held in some areas, the other areas are booked as usual (and the answer names the event)
-	var ev *domain.EventDay
-	if !staff {
-		var err error
-		if ev, err = s.eventOn(ctx, b.ID, q.Date); err != nil {
-			return nil, err
-		}
-		if ev != nil && ev.WholeBranch() {
-			return &dto.TableAvailabilityDTO{
-				Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
-				LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{}, KeptTableIDs: []uint{},
-				Event: eventRef(ev),
-			}, nil
-		}
+	ev, err := s.eventOn(ctx, b.ID, q.Date)
+	if err != nil {
+		return nil, err
+	}
+	if ev != nil && ev.WholeBranch() {
+		return &dto.TableAvailabilityDTO{
+			Date: q.Date, Timezone: loc.String(), Guests: q.Guests, MaxGuestsOnline: b.MaxGuestsOnline,
+			LateMinutes: b.LateMinutes, BookingStyle: b.BookingStyle, Times: []dto.TableTimeDTO{}, KeptTableIDs: []uint{},
+			Event: eventRef(ev),
+		}, nil
 	}
 	times, _, err := s.tableTimes(ctx, b, day, staff)
 	if err != nil {
@@ -332,15 +339,14 @@ func (s *Service) createTableBooking(ctx context.Context, b *domain.Branch, who 
 	}
 	loc := locationOf(b)
 	start := req.StartsAt.In(loc)
-	var ev *domain.EventDay // an event of the day that holds some areas: those tables are not booked free
-	if who.Staff == nil {
-		var err error
-		if ev, err = s.eventOn(ctx, b.ID, start.Format("2006-01-02")); err != nil {
-			return nil, "", err
-		}
-		if ev != nil && ev.WholeBranch() {
-			return nil, "", conflict("EVENT_DAY") // that day every table is sold for the event
-		}
+	// an event of the day that holds some areas: those tables are not booked free (not by customers, not by the team:
+	// they are sold for the event)
+	ev, err := s.eventOn(ctx, b.ID, start.Format("2006-01-02"))
+	if err != nil {
+		return nil, "", err
+	}
+	if ev != nil && ev.WholeBranch() {
+		return nil, "", conflict("EVENT_DAY") // that day every table is sold for the event
 	}
 	times, rule, err := s.tableTimes(ctx, b, startOfDay(start, loc), who.Staff != nil)
 	if err != nil {

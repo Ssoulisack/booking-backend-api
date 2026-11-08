@@ -109,7 +109,13 @@ func (s *Service) CreateForCustomer(ctx context.Context, branchID uint, actor *d
 	}
 
 	var bk *domain.Booking
-	if req.ClassSessionID != nil {
+	if b.Type == domain.BranchTypeRestaurant {
+		// a customer who phoned: the team books tables for them (confirmed at once; the event days' tables are not for this)
+		if req.PackageID != nil {
+			return nil, badRequest("PACKAGE_NOT_FOR_TABLES")
+		}
+		bk, _, err = s.tableBooker().CreateTableBooking(ctx, b, who, req.CreateBookingRequest)
+	} else if req.ClassSessionID != nil {
 		bk, _, err = s.createClassBooking(ctx, b, who, req.CreateBookingRequest)
 	} else {
 		bk, _, err = s.createRental(ctx, b, who, req.CreateBookingRequest)
