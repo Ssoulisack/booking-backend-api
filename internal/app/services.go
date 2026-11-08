@@ -227,6 +227,10 @@ func PollPayments(svc *AppServices) error {
 // keys, so a key left in config.yaml can never be used by the wrong one: dev never calls PhaJay.
 func ChooseGateway(srv config.ServerConfig, pay config.PaymentsConfig) ([]paymentsport.Provider, *mock.Mock) {
 	phajayCfg := pay.PhaJay
+	if !phajayCfg.On() {
+		log.Printf("💳 payments: switched off (payments.phajay.enabled: false): only the branch's own QR / transfer way is offered")
+		return nil, nil
+	}
 	switch env := srv.Mode(); env {
 	case config.EnvDev:
 		m := mock.New(mock.Config{BaseURL: "http://localhost:" + srv.Port, DailyLimit: pay.Mock.DailyLimit})

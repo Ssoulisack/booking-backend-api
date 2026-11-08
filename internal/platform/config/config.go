@@ -45,6 +45,9 @@ type PaymentsConfig struct {
 	Mock   MockConfig
 }
 
+// On reports whether online payment is allowed at all (payments.phajay.enabled)
+func (c PhaJayConfig) On() bool { return c.Enabled == nil || *c.Enabled }
+
 // MockConfig: the built-in stand-in gateway used when server.env is dev
 type MockConfig struct {
 	// DailyLimit refuses more than this many payments a day, to try the "limit reached" message (the real
@@ -56,6 +59,9 @@ type MockConfig struct {
 // Before KYC use TestKey for calls and DevSecretKey for webhooks; after approval SecretKey does both.
 // Keys can contain "$": write them in double quotes in YAML and check the length in the start-up log.
 type PhaJayConfig struct {
+	// Enabled: false switches ALL online payment off (customers and the settings page only see the branch's own QR /
+	// transfer way). Not written = on, so an older config.yaml keeps working.
+	Enabled      *bool
 	BaseURL      string // default https://payment-gateway.phajay.co
 	TestKey      string // calls to the API before KYC
 	DevSecretKey string // webhook signing before KYC
