@@ -233,6 +233,10 @@ func (s *Service) SettleTables(ctx context.Context) error {
 		}
 		if err := s.bookings.Finish(ctx, bk, status, now); err != nil {
 			log.Printf("⚠️  table booking %d: %v", bk.ID, err)
+			continue
+		}
+		if status == domain.BookingNoShow && s.team != nil {
+			s.team.NoShow(ctx, bk.BranchID, bk.ID, true) // not there by its time: the table was freed
 		}
 	}
 	return nil

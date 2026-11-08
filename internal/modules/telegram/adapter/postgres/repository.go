@@ -30,7 +30,16 @@ func (r *repo) Get(ctx context.Context, branchID uint) (*domain.Setting, error) 
 }
 
 func (r *repo) Save(ctx context.Context, s *domain.Setting) error {
-	return exception.HandleGormError(r.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(s).Error)
+	db := r.db.WithContext(ctx)
+	// the two newer switches have a column default of true (so existing branches get them on). On insert gorm replaces
+	// a false in the struct by that default, so their real values are kept here and written back explicitly
+	staffCancel, noShow := s.OnStaffCancel, s.OnNoShow
+	if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(s).Error; err != nil {
+		return exception.HandleGormError(err)
+	}
+	s.OnStaffCancel, s.OnNoShow = staffCancel, noShow
+	return exception.HandleGormError(db.Model(&domain.Setting{}).Where("branch_id = ?", s.BranchID).
+		UpdateColumns(map[string]any{"on_staff_cancel": staffCancel, "on_no_show": noShow}).Error)
 }
 
 func (r *repo) Delete(ctx context.Context, branchID uint) error {

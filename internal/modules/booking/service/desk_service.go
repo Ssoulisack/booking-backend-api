@@ -172,6 +172,15 @@ func (s *Service) ChangeStatus(ctx context.Context, branchID, id uint, req dto.S
 	if req.Status == domain.BookingCancelled || req.Status == domain.BookingConfirmed {
 		s.notifyStatusChange(bk, req.Status, strings.TrimSpace(req.Reason))
 	}
+	// the whole team sees what one of them did (their own switches in the Telegram settings)
+	if s.team != nil {
+		switch req.Status {
+		case domain.BookingCancelled:
+			s.team.Cancelled(ctx, branchID, id, "staff")
+		case domain.BookingNoShow:
+			s.team.NoShow(ctx, branchID, id, false)
+		}
+	}
 	return s.GetBooking(ctx, branchID, id)
 }
 

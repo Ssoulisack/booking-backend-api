@@ -20,7 +20,11 @@ type Setting struct {
 	OnEvent   bool // a new event booking
 	OnPayment bool // an online payment received, or a customer says the slip was sent
 	OnCancel  bool // a booking cancelled by the customer, or released because it was not paid in time
-	HidePhone bool // leave the customer's phone number out of the messages
+	// the team's own actions, announced too (so the whole team sees them). Existing branches get them ON: the column
+	// default is true, and Save writes them explicitly (see the repository)
+	OnStaffCancel bool `gorm:"not null;default:true"` // a booking cancelled by the team
+	OnNoShow      bool `gorm:"not null;default:true"` // a group that did not come (the team marked it, or it was not there by its time)
+	HidePhone     bool // leave the customer's phone number out of the messages
 
 	LastError string `gorm:"type:varchar(300);not null"` // what Telegram last answered when sending failed; "" = fine
 	LastOKAt  *time.Time

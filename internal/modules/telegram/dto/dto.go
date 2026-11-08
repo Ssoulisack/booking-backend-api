@@ -8,13 +8,15 @@ type SaveRequest struct {
 	// BotToken from @BotFather; sent only when it is new (it is checked with Telegram, then kept encrypted)
 	BotToken *string `json:"bot_token"`
 	// ChatID typed by hand ("-1001234567890" or "@channel"); usually found with "Find my group" instead
-	ChatID    *string `json:"chat_id"`
-	Enabled   *bool   `json:"enabled"`
-	OnBooking *bool   `json:"on_booking"`
-	OnEvent   *bool   `json:"on_event"`
-	OnPayment *bool   `json:"on_payment"`
-	OnCancel  *bool   `json:"on_cancel"`
-	HidePhone *bool   `json:"hide_phone"`
+	ChatID        *string `json:"chat_id"`
+	Enabled       *bool   `json:"enabled"`
+	OnBooking     *bool   `json:"on_booking"`
+	OnEvent       *bool   `json:"on_event"`
+	OnPayment     *bool   `json:"on_payment"`
+	OnCancel      *bool   `json:"on_cancel"`
+	OnStaffCancel *bool   `json:"on_staff_cancel"`
+	OnNoShow      *bool   `json:"on_no_show"`
+	HidePhone     *bool   `json:"hide_phone"`
 }
 
 // GroupDTO is a group the bot recently saw
@@ -31,16 +33,18 @@ type GroupsDTO struct {
 
 // SettingDTO is the page: whether a bot and a group are connected (never their secrets), and the switches
 type SettingDTO struct {
-	HasBot    bool       `json:"has_bot"`
-	BotName   string     `json:"bot_name"`
-	HasGroup  bool       `json:"has_group"`
-	ChatTitle string     `json:"chat_title"`
-	Enabled   bool       `json:"enabled"`
-	OnBooking bool       `json:"on_booking"`
-	OnEvent   bool       `json:"on_event"`
-	OnPayment bool       `json:"on_payment"`
-	OnCancel  bool       `json:"on_cancel"`
-	HidePhone bool       `json:"hide_phone"`
-	LastError string     `json:"last_error"`
-	LastOKAt  *time.Time `json:"last_ok_at,omitempty"`
+	HasBot        bool       `json:"has_bot"`
+	BotName       string     `json:"bot_name"`
+	HasGroup      bool       `json:"has_group"`
+	ChatTitle     string     `json:"chat_title"`
+	Enabled       bool       `json:"enabled"`
+	OnBooking     bool       `json:"on_booking"`
+	OnEvent       bool       `json:"on_event"`
+	OnPayment     bool       `json:"on_payment"`
+	OnCancel      bool       `json:"on_cancel"`
+	OnStaffCancel bool       `json:"on_staff_cancel"`
+	OnNoShow      bool       `json:"on_no_show"`
+	HidePhone     bool       `json:"hide_phone"`
+	LastError     string     `json:"last_error"`
+	LastOKAt      *time.Time `json:"last_ok_at,omitempty"`
 }

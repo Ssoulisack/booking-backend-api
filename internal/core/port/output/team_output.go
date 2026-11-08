@@ -4,15 +4,18 @@ import "context"
 
 // TeamNotifier tells a branch's team about what happens to bookings (today through a Telegram group). Every
 // method returns at once and does its work in the background; a failure is the notifier's to record and never
-// changes the booking. Staff-made changes are not announced: the team already knows.
+// changes the booking. Staff cancels and no-shows are announced too (each has its own switch).
 type TeamNotifier interface {
 	NewBooking(ctx context.Context, branchID, bookingID uint)
 	// SlipSent: a customer says they sent the payment slip; the team should check it
 	SlipSent(ctx context.Context, branchID, bookingID uint)
 	// PaymentReceived: an online payment settled the booking
 	PaymentReceived(ctx context.Context, branchID, bookingID uint)
-	// Cancelled: the customer cancelled ("customer"), or the unpaid event booking was released ("unpaid")
+	// Cancelled: the customer cancelled ("customer"), the unpaid event booking was released ("unpaid"), or the team
+	// cancelled it ("staff")
 	Cancelled(ctx context.Context, branchID, bookingID uint, why string)
+	// NoShow: the group did not come: the team marked it (auto false), or it was not there by its time (auto true)
+	NoShow(ctx context.Context, branchID, bookingID uint, auto bool)
 }
 
 // SlipWays tells which ways a customer can send a payment slip to a branch now (WhatsApp, Telegram): the branch's

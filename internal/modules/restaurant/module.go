@@ -29,6 +29,9 @@ func New(d Deps) *Module {
 	return &Module{Service: svc, handler: http.New(svc, svc)}
 }
 
+// SetTeamNotifier lets the module tell the team (Telegram) about a group that did not come in time
+func (m *Module) SetTeamNotifier(n output.TeamNotifier) { m.Service.SetTeamNotifier(n) }
+
 // SetEventDays tells the module how to ask whether an event takes over a day
 func (m *Module) SetEventDays(e output.EventDays) { m.Service.SetEventDays(e) }
 

@@ -52,14 +52,14 @@ func New(d Deps) *Service {
 
 // fresh is a setting for a branch that has none yet: everything on once it is connected
 func fresh(branchID uint) *domain.Setting {
-	return &domain.Setting{BranchID: branchID, Enabled: false, OnBooking: true, OnEvent: true, OnPayment: true, OnCancel: true}
+	return &domain.Setting{BranchID: branchID, Enabled: false, OnBooking: true, OnEvent: true, OnPayment: true, OnCancel: true, OnStaffCancel: true, OnNoShow: true}
 }
 
 func toDTO(s *domain.Setting) *dto.SettingDTO {
 	return &dto.SettingDTO{
 		HasBot: s.TokenEnc != "", BotName: s.BotName, HasGroup: s.ChatIDEnc != "", ChatTitle: s.ChatTitle,
 		Enabled: s.Enabled && s.TokenEnc != "" && s.ChatIDEnc != "", OnBooking: s.OnBooking, OnEvent: s.OnEvent,
-		OnPayment: s.OnPayment, OnCancel: s.OnCancel, HidePhone: s.HidePhone, LastError: s.LastError, LastOKAt: s.LastOKAt,
+		OnPayment: s.OnPayment, OnCancel: s.OnCancel, OnStaffCancel: s.OnStaffCancel, OnNoShow: s.OnNoShow, HidePhone: s.HidePhone, LastError: s.LastError, LastOKAt: s.LastOKAt,
 	}
 }
 
@@ -160,6 +160,8 @@ func (s *Service) Save(ctx context.Context, branchID uint, req dto.SaveRequest) 
 	set(&cur.OnEvent, req.OnEvent)
 	set(&cur.OnPayment, req.OnPayment)
 	set(&cur.OnCancel, req.OnCancel)
+	set(&cur.OnStaffCancel, req.OnStaffCancel)
+	set(&cur.OnNoShow, req.OnNoShow)
 	set(&cur.HidePhone, req.HidePhone)
 	set(&cur.Enabled, req.Enabled)
 	if cur.Enabled && (cur.TokenEnc == "" || cur.ChatIDEnc == "") {
@@ -248,6 +250,7 @@ const (
 	kindSlip
 	kindPaid
 	kindCancelled
+	kindNoShow
 )
 
 func (s *Service) NewBooking(ctx context.Context, branchID, bookingID uint) {
@@ -261,6 +264,15 @@ func (s *Service) PaymentReceived(ctx context.Context, branchID, bookingID uint)
 }
 func (s *Service) Cancelled(ctx context.Context, branchID, bookingID uint, why string) {
 	s.later(ctx, branchID, bookingID, kindCancelled, why)
+}
+
+// NoShow: the group did not come: the team marked it, or (auto) it was not there by its time and the table was freed
+func (s *Service) NoShow(ctx context.Context, branchID, bookingID uint, auto bool) {
+	why := ""
+	if auto {
+		why = "auto"
+	}
+	s.later(ctx, branchID, bookingID, kindNoShow, why)
 }
 
 // later does the work in the background: the booking never waits for Telegram
@@ -287,7 +299,10 @@ func (s *Service) deliver(ctx context.Context, branchID, bookingID uint, k kind,
 	isEvent := bk.EventID != nil
 	switch {
 	case k == kindNew && isEvent && !cur.OnEvent, k == kindNew && !isEvent && !cur.OnBooking,
-		(k == kindSlip || k == kindPaid) && !cur.OnPayment, k == kindCancelled && !cur.OnCancel:
+		(k == kindSlip || k == kindPaid) && !cur.OnPayment,
+		k == kindCancelled && why == "staff" && !cur.OnStaffCancel,
+		k == kindCancelled && why != "staff" && !cur.OnCancel,
+		k == kindNoShow && !cur.OnNoShow:
 		return nil
 	}
 	token, chat, err := s.open(cur)

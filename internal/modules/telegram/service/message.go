@@ -28,8 +28,16 @@ func compose(b domain.Booking, k kind, why string, hidePhone bool) string {
 		title = "💰 ໄດ້ຮັບເງິນແລ້ວ"
 	case kindCancelled:
 		title = "❌ ລູກຄ້າຍົກເລີກການຈອງ"
-		if why == "unpaid" {
+		switch why {
+		case "unpaid":
 			title = "⏱ ປ່ອຍການຈອງ ເພາະບໍ່ຊຳລະທັນເວລາ"
+		case "staff":
+			title = "❌ ທີມງານຍົກເລີກການຈອງ"
+		}
+	case kindNoShow:
+		title = "🚫 ລູກຄ້າບໍ່ມາ (No-show)"
+		if why == "auto" {
+			title = "🚫 ລູກຄ້າບໍ່ມາຕາມເວລາ: ປ່ອຍໂຕະແລ້ວ"
 		}
 	}
 

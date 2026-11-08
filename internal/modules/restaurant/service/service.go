@@ -39,7 +39,8 @@ type Service struct {
 	bookings   output.BookingRepository
 	floorItems output.FloorItemRepository
 	rules      catalogport.RuleService
-	eventDays  output.EventDays // set when the events module is on (SetEventDays)
+	eventDays  output.EventDays    // set when the events module is on (SetEventDays)
+	team       output.TeamNotifier // tells the team (Telegram) about a group that did not come in time; nil = nobody
 	now        func() time.Time
 }
 
@@ -82,3 +83,6 @@ func floorItemDTO(f domain.FloorItem) dto.FloorItemDTO {
 		PlanX: f.PlanX, PlanY: f.PlanY, PlanW: f.PlanW, PlanH: f.PlanH, Rotation: f.Rotation, TargetFloor: f.TargetFloor,
 		Shape: f.Shape, CutW: f.CutW, CutH: f.CutH, CutCorner: f.CutCorner}
 }
+
+// SetTeamNotifier gives the service a way to tell the team when a group did not come by its time
+func (s *Service) SetTeamNotifier(n output.TeamNotifier) { s.team = n }

@@ -100,6 +100,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		telegramModule = nil
 	} else {
 		bookingImpl.SetTeamNotifier(telegramModule.Service)
+		restaurantModule.SetTeamNotifier(telegramModule.Service)
 	}
 	// a booking can be paid with a customer's package (course pass)
 	bookingImpl.SetPackages(packagesModule.Service)
