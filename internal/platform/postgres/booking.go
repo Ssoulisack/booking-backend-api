@@ -4,6 +4,7 @@ import (
 	"backend/internal/core/domain"
 	"backend/internal/core/port/output"
 	"backend/internal/platform/postgres/exception"
+	"backend/internal/platform/postgres/numbering"
 	"backend/pkg/response"
 	"context"
 	"errors"
@@ -41,18 +42,35 @@ func (r *bookingRepository) Create(ctx context.Context, b *domain.Booking) error
 			if err := tx.Exec("SELECT pg_advisory_xact_lock(?, ?)", bookingInsertLock, int32(b.BranchID)).Error; err != nil {
 				return err
 			}
+			if err := numberBooking(tx, b); err != nil {
+				return err
+			}
 			return tx.Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error
 		})
 		if !isDeadlock(err) {
 			break
 		}
-		b.ID = 0
+		b.ID, b.Code = 0, ""
 		for i := range b.Items {
 			b.Items[i].ID, b.Items[i].BookingID = 0, nil
 		}
 		time.Sleep(time.Duration(attempt+1) * 15 * time.Millisecond)
 	}
 	return exception.HandleGormError(err)
+}
+
+// numberBooking gives a new booking its number: the date and the count of the day (20261108001). It is taken inside
+// the insert's transaction, so a booking that does not get saved gives its number back.
+func numberBooking(tx *gorm.DB, b *domain.Booking) error {
+	if b.Code != "" {
+		return nil
+	}
+	code, err := numbering.NextBookingCode(tx, time.Now())
+	if err != nil {
+		return err
+	}
+	b.Code = code
+	return nil
 }
 
 // isDeadlock: Postgres chose this transaction to stop because of a deadlock (40P01) or a serialization clash (40001)
@@ -80,6 +98,9 @@ func (r *bookingRepository) CreateClassBooking(ctx context.Context, b *domain.Bo
 		}
 		if taken+int64(seats) > int64(class.Capacity) {
 			return response.NewError(http.StatusConflict, "CLASS_FULL")
+		}
+		if err := numberBooking(tx, b); err != nil {
+			return err
 		}
 		return tx.Omit("Branch", "Customer", "PaidBy", "Sport", "Event").Create(b).Error
 	})

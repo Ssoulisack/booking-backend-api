@@ -4,7 +4,9 @@ package numbering
 
 import (
 	"backend/internal/core/domain"
+	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -78,4 +80,27 @@ func SyncAll(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// EnsureBookingDays creates the table that counts the bookings of each day; safe on every start
+func EnsureBookingDays(db *gorm.DB) error {
+	return db.Exec(`CREATE TABLE IF NOT EXISTS booking_day_counters (day varchar(8) PRIMARY KEY, last integer NOT NULL)`).Error
+}
+
+// NextBookingCode gives the next booking number of the day: the date and the count of that day, "20261108001",
+// "20261108002"... and "20261109001" on the next day. It runs inside the insert's transaction, so a booking that is
+// rolled back gives its number back and there are no gaps. The date is the Laos date (the shop's day).
+func NextBookingCode(tx *gorm.DB, now time.Time) (string, error) {
+	loc, err := time.LoadLocation("Asia/Vientiane")
+	if err != nil {
+		loc = time.FixedZone("ICT", 7*3600)
+	}
+	day := now.In(loc).Format("20060102")
+	var last int
+	err = tx.Raw(`INSERT INTO booking_day_counters (day, last) VALUES (?, 1)
+		ON CONFLICT (day) DO UPDATE SET last = booking_day_counters.last + 1 RETURNING last`, day).Scan(&last).Error
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%03d", day, last), nil
 }

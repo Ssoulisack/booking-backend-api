@@ -524,6 +524,13 @@ func (s *Service) Prices(ctx context.Context, branchID, id uint) (*dto.PricesDTO
 		if v, ok := book.OwnPrice(t.ID); ok {
 			d.Own = &v
 		}
+		for _, z := range zones {
+			if z.AreaID == t.SportID && z.Holds(t) {
+				id := z.ID
+				d.ZoneID = &id
+				break
+			}
+		}
 		out.Tables = append(out.Tables, d)
 	}
 	return out, nil

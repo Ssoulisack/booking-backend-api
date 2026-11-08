@@ -116,6 +116,8 @@ type TablePriceDTO struct {
 	Seats   int    `json:"seats"`
 	Own     *int64 `json:"own"`
 	Price   int64  `json:"price"`
+	// ZoneID is the zone that holds the table (the first one on the plan); nil: it sits in no zone
+	ZoneID *uint `json:"zone_id"`
 }
 
 // PayInfoRequest and PayInfoDTO: how customers pay the branch for event tables

@@ -8,7 +8,6 @@ import (
 	catalogport "backend/internal/modules/catalog/port"
 	"backend/pkg/response"
 	"context"
-	"crypto/rand"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,8 +19,6 @@ import (
 )
 
 const (
-	codeAlphabet  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no 0/O or 1/I: easy to read out on the phone
-	codeLength    = 8
 	maxGuestName  = 120
 	maxNotesChars = 1000
 )
@@ -451,30 +448,15 @@ func (s *Service) checkWaitingLimit(ctx context.Context, who *booker) error {
 	return nil
 }
 
-func newBookingCode() (string, error) {
-	b := make([]byte, codeLength)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	for i := range b {
-		b[i] = codeAlphabet[int(b[i])%len(codeAlphabet)]
-	}
-	return string(b), nil
-}
-
 // newBooking fills in what every booking has: who, status, code, cancel deadline, guest token
 // Staff bookings are confirmed at once and walk-ins get no private link (staff handle them).
 func (s *Service) newBooking(b *domain.Branch, who *booker, sportID uint, start, end time.Time, rule *domain.EffectiveRule, notes string) (*domain.Booking, string, error) {
-	code, err := newBookingCode()
-	if err != nil {
-		return nil, "", err
-	}
 	status := domain.BookingConfirmed
 	if b.RequireApproval && who.Staff == nil {
 		status = domain.BookingPending
 	}
 	bk := &domain.Booking{
-		BranchID: b.ID, Code: code, SportID: sportID, Status: status, StartsAt: start, EndsAt: end,
+		BranchID: b.ID, SportID: sportID, Status: status, StartsAt: start, EndsAt: end,
 		PaymentStatus: domain.PaymentUnpaid, Notes: strings.TrimSpace(notes),
 		CancellableUntil: start.Add(-time.Duration(rule.CancelBeforeHours) * time.Hour),
 	}
