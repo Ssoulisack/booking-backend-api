@@ -16,7 +16,8 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o main ./cmd/api
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o main ./cmd/api \
+ && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o migrate ./cmd/migrate
 
 # Use a smaller image for the final stage
 FROM alpine:3.20
@@ -31,7 +32,7 @@ RUN adduser -D -H app
 WORKDIR /app
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/main .
+COPY --from=builder /app/main /app/migrate ./
 
 # No config.yaml in the image: passwords and keys never travel inside it. Mount the server's own file at run time:
 #   -v /path/to/config.yaml:/app/config.yaml:ro
