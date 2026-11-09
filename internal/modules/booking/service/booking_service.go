@@ -373,24 +373,12 @@ func cleanGuest(g dto.GuestInfo) (*dto.GuestInfo, error) {
 	if g.Name == "" || len([]rune(g.Name)) > maxGuestName {
 		return nil, badRequest("GUEST_NAME_REQUIRED")
 	}
-	var phone strings.Builder
-	digits := 0
-	for i, r := range strings.TrimSpace(g.Phone) {
-		switch {
-		case unicode.IsDigit(r):
-			phone.WriteRune(r)
-			digits++
-		case r == '+' && i == 0:
-			phone.WriteRune(r)
-		case r == ' ' || r == '-' || r == '(' || r == ')':
-		default:
-			return nil, badRequest("INVALID_PHONE")
-		}
-	}
-	if digits < 6 || digits > 15 {
+	// a guest is reached by phone like an account: a Lao mobile, written 20xxxxxxxx (020 5555 1234 and +856 are accepted)
+	phone, ok := domain.NormalizePhone(g.Phone)
+	if !ok {
 		return nil, badRequest("INVALID_PHONE")
 	}
-	g.Phone = phone.String()
+	g.Phone = phone
 	g.Email = normalizeEmail(g.Email)
 	if g.Email != "" {
 		if addr, err := mail.ParseAddress(g.Email); err != nil || addr.Address != g.Email {
