@@ -35,9 +35,10 @@ WORKDIR /app
 # Copy the binary from the builder stage
 COPY --from=builder /app/main .
 
-# config.yaml is baked into the image, so keep the image private (never push it to a public repo).
-# A config.yaml mounted at /app/config.yaml at run time still overrides this one.
-COPY config.yaml .
+# No config.yaml in the image: passwords and keys never travel inside it. Mount the server's own file at run time:
+#   -v /path/to/config.yaml:/app/config.yaml:ro
+# The uploads folder is owned by the app user, so a named volume mounted on it starts out writable.
+RUN mkdir -p /app/data/uploads && chown -R app /app/data
 USER app
 
 # Expose the application port
