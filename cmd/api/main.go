@@ -40,6 +40,7 @@ func main() {
 	app.KeepTablesSettled(services)
 	handlers := app.SetupHandlers(services)
 	app.SetupRoutes(server.App(), handlers)
+	app.SetupHealth(server.App(), repositories)
 
 	// Start HTTP server
 	log.Println("🌟 Server starting on port:", cfg.Server.Port, "🚀")

@@ -1,0 +1,25 @@
+package app
+
+import (
+	"context"
+
+	apphttp "backend/internal/http"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+// Version is the release number. The Dockerfile sets it from the `version` file at build time
+// (-ldflags "-X backend/internal/app.Version=1.0.5"); a plain `go run` shows "dev".
+var Version = "dev"
+
+// SetupHealth adds GET /api/v1/health (see apphttp.Health).
+func SetupHealth(app fiber.Router, r *AppRepositories) {
+	dbPing := func(ctx context.Context) error {
+		sqlDB, err := r.postgres.GetDB().DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.PingContext(ctx)
+	}
+	app.Get("/api/v1/health", apphttp.Health(Version, dbPing, r.cache.Ping))
+}

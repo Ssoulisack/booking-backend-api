@@ -81,6 +81,15 @@ func (c *Cache) Close() {
 // On reports whether the cache is configured on (it may still be skipping a Redis that is down)
 func (c *Cache) On() bool { return c != nil && c.rdb != nil }
 
+// Ping asks Redis directly (not through the "left alone after an error" pause), for the health check.
+// enabled is false when the cache is switched off: then there is nothing to ping and err is nil.
+func (c *Cache) Ping(ctx context.Context) (enabled bool, err error) {
+	if !c.On() {
+		return false, nil
+	}
+	return true, c.rdb.Ping(ctx).Err()
+}
+
 // usable: switched on, and Redis was not failing a moment ago
 func (c *Cache) usable() bool {
 	return c.On() && time.Now().UnixNano() >= c.downUntil.Load()
