@@ -1,6 +1,6 @@
 # Copy to config.yaml and fill in real values (config.yaml is git-ignored)
 app:
-  name: Sport Booking
+  name: efyb
   # base of the links in invite and password-reset emails, e.g. https://booking.example.com
   frontendUrl: http://localhost:5173
 

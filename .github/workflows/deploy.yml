@@ -4,6 +4,7 @@
 #   push of a tag v1.2.0   → (the tag must be on main) → the image of that commit is PROMOTED to 1.2.0 if it already
 #                            passed on test (same bytes, no rebuild), else built → deploy to PRODUCTION after approval
 #   push to `main`         → nothing deploys. Work on main as usual; `git push origin main:test` sends it to test.
+#   "Run workflow" button  → on branch `test` the same as a push to test (build + deploy); on another branch it only builds
 #
 # GitHub settings (Settings → Environments):
 #   test         secrets: SSH_HOST, SSH_USER, SSH_KEY, SSH_KNOWN_HOSTS      variable: DEPLOY_PATH (e.g. /srv/booking-test)
@@ -16,6 +17,9 @@ on:
   push:
     branches: [test]
     tags: ["v*"]
+  # the "Run workflow" button in the Actions tab. Choose branch `test` to build and deploy it again without a new commit
+  # (any other branch only builds an image; nothing is deployed from it).
+  workflow_dispatch:
 
 concurrency:
   group: api-${{ github.ref }}
