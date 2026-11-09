@@ -2,10 +2,22 @@ package http
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
+
+// ResolveVersion picks the number Health shows: the one in config.yaml (app.version) when it is set, else the one baked into
+// the image, else "dev".
+func ResolveVersion(configured, baked string) string {
+	for _, v := range []string{configured, baked} {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return "dev"
+}
 
 // Health answers GET /api/v1/health for the container health check, the uptime monitor and a quick look by hand.
 //

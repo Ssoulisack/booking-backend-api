@@ -19,7 +19,6 @@ test
 scripts
 git_workflow.sh
 Makefile
-version
 docker-compose.yml
 Dockerfile
 .dockerignore

@@ -7,6 +7,7 @@ import (
 	"backend/internal/platform/social"
 	"backend/internal/platform/storage"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -88,6 +89,9 @@ type CompanyConfig struct {
 type AppConfig struct {
 	Name        string
 	FrontendURL string
+	// Version is the release number shown by GET /api/v1/health (app.version in config.yaml, or APP_APP_VERSION).
+	// Empty = the number baked into the image at build time (the `version` file), and "dev" when there is none.
+	Version string
 }
 
 // ServerConfig holds the HTTP server configuration
@@ -155,6 +159,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetEnvPrefix("APP")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
+	// Unmarshal only sees keys viper already knows (a default or a line in the file), so a setting that has neither could not
+	// be set from its APP_... variable. Bind every field of the struct so all of them can.
+	bindEnvKeys("", reflect.TypeOf(Config{}))
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
@@ -180,11 +187,33 @@ func LoadConfig() (*Config, error) {
 	return &config, nil
 }
 
+// bindEnvKeys tells viper about every leaf field of t, so APP_<SECTION>_<KEY> (for example APP_COMPANY_OWNEREMAIL, APP_STORAGE_LOCAL_PATH)
+// is read for it even when the key has no default and is not in the config file. Postgres is skipped: it is read key by key
+// from database.postgres.* below. Lists (server.trustedProxies) are given as a comma separated value.
+func bindEnvKeys(prefix string, t reflect.Type) {
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.IsExported() || (prefix == "" && f.Name == "Postgres") {
+			continue
+		}
+		key := strings.ToLower(f.Name)
+		if prefix != "" {
+			key = prefix + "." + key
+		}
+		if f.Type.Kind() == reflect.Struct {
+			bindEnvKeys(key, f.Type)
+			continue
+		}
+		_ = viper.BindEnv(key)
+	}
+}
+
 // setDefaults sets the default values for the configuration
 func setDefaults() {
 	// App defaults
 	viper.SetDefault("app.name", "Sport Booking")
 	viper.SetDefault("app.frontendUrl", "http://localhost:5173")
+	viper.SetDefault("app.version", "")
 
 	// Server defaults
 	viper.SetDefault("server.env", "dev")

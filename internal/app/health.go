@@ -8,9 +8,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Version is the release number. The Dockerfile sets it from the `version` file at build time
-// (-ldflags "-X backend/internal/app.Version=1.0.5"); a plain `go run` shows "dev".
-var Version = "dev"
+// Version is the number baked into the image: the Dockerfile sets it from the `version` file at build time
+// (-ldflags "-X backend/internal/app.Version=1.0.5"). It is only used when app.version in config.yaml is empty;
+// with neither, the health check shows "dev".
+var Version = ""
 
 // SetupHealth adds GET /api/v1/health (see apphttp.Health).
 func SetupHealth(app fiber.Router, r *AppRepositories) {
@@ -21,5 +22,5 @@ func SetupHealth(app fiber.Router, r *AppRepositories) {
 		}
 		return sqlDB.PingContext(ctx)
 	}
-	app.Get("/api/v1/health", apphttp.Health(Version, dbPing, r.cache.Ping))
+	app.Get("/api/v1/health", apphttp.Health(apphttp.ResolveVersion(r.app.Version, Version), dbPing, r.cache.Ping))
 }
