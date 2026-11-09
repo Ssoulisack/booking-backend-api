@@ -1,6 +1,6 @@
 # Copy to the BACKEND repo as .github/workflows/deploy.yml
 #
-#   push to branch `test`  → checks → build image sha-<commit> → deploy to the TEST environment
+#   push to branch `test`  → checks → build image sha-<commit> and <version> → deploy <version> to the TEST environment
 #   push of a tag v1.2.0   → (the tag must be on main) → the image of that commit is PROMOTED to 1.2.0 if it already
 #                            passed on test (same bytes, no rebuild), else built → deploy to PRODUCTION after approval
 #   push to `main`         → nothing deploys. Work on main as usual; `git push origin main:test` sends it to test.
@@ -54,12 +54,18 @@ jobs:
       tag: ${{ steps.tags.outputs.deploy_tag }}
     steps:
       - uses: actions/checkout@v4
+      # the image tag is the number in the `version` file (the server's API_TAG / WEB_TAG are set from it by deploy.sh, never by hand);
+      # every build also keeps the unchanged tag sha-<commit>. Bump the file for each release.
       - id: tags
         run: |
           short="sha-${GITHUB_SHA::7}"
+          version="$(tr -d '[:space:]' < version)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::the version file must hold x.y.z, it holds '$version'"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF_NAME#v}" != "$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the version file ($version): fix one of them"; exit 1
+          fi
           echo "short=$short" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "deploy_tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          else echo "deploy_tag=$short" >> "$GITHUB_OUTPUT"; fi
+          echo "deploy_tag=$version" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:

@@ -16,7 +16,7 @@ DOCKER_COMPOSE_BUILD=$(DOCKER_COMPOSE) up --build -d
 DOCKER_DOWN=$(DOCKER_COMPOSE) down
 DOCKER_RESTART=$(DOCKER_COMPOSE) restart
 
-.PHONY: run migrate build run-docker logs stop clean release release-dry db-clear db-drop
+.PHONY: run migrate build run-docker logs stop clean release release-dry db-clear db-drop config2env env2config
 
 # Run the application
 run:
@@ -50,6 +50,17 @@ db-clear:
 # Drop every table instead (use when the schema changed, then run make migrate)
 db-drop:
 	scripts/reset-db.sh --drop $(CONFIG)
+
+# Convert between config.yaml and .env (key = YAML path upper-cased, joined with _)
+#   make config2env                    config.yaml -> .env (merges into an existing .env)
+#   make env2config                    .env -> config.yaml
+#   make config2env CONFIG=a.yaml ENV=a.env
+ENV ?= .env
+config2env:
+	$(GORUN) ./scripts/config2env -config $(CONFIG) -env $(ENV)
+
+env2config:
+	$(GORUN) ./scripts/env2config -config $(CONFIG) -env $(ENV)
 
 # Run Docker container (config.yaml is mounted, never baked into the image)
 run-docker:

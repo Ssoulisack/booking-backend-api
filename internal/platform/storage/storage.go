@@ -50,7 +50,7 @@ func New(config Config) (output.FileStorage, error) {
 	case "r2":
 		return NewS3Storage(config.R2)
 	case "supabase":
-		return NewSupabaseStorage(config.Supabase), nil
+		return nil, fmt.Errorf("supabase storage is not supported")
 	default:
 		return nil, fmt.Errorf("unknown storage.driver %q (use local, r2 or supabase)", config.Driver)
 	}

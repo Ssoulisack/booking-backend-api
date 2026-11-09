@@ -3,25 +3,25 @@ app:
   frontendUrl: 
 
 server:
-  port: 3000
-  env: dev # dev | uat | prod
-  readTimeout: 10
-  writeTimeout: 10
+  port: 
+  env: 
+  readTimeout: 
+  writeTimeout: 
 
 database:
   postgres:
-    host: localhost
-    port: 5432
-    user: booking
-    password: booking
-    dbname: booking
-    sslmode: disable
-    timezone: Asia/Vientiane
+    host: 
+    port: 
+    user: 
+    password: 
+    dbname: 
+    sslmode: 
+    timezone: 
 
 redis:
-  host: localhost
-  port: 6379
-  password: ""
+  host: 
+  port: 
+  password: 
   db: 0
   enabled: false
   ttlSeconds: 
@@ -31,7 +31,7 @@ jwt:
   refreshSecret: 
 
 storage:
-  driver: 
+  driver:  
   local:
     path: 
     publicBaseUrl: 
@@ -42,11 +42,6 @@ storage:
     accessKey: 
     secretKey: 
     publicBaseUrl: 
-  supabase:
-    projectUrl: 
-    bucket: 
-    serviceKey: 
-    publicBaseUrl: 
 
 mailer:
   host: 
@@ -56,9 +51,9 @@ mailer:
   from: 
 
 social:
-  googleClientId: 
-  facebookAppId: 
-  facebookAppSecret: 
+  googleClientId: ""
+  facebookAppId: ""
+  facebookAppSecret: ""
 
 company:
   name: 
@@ -73,3 +68,6 @@ payments:
     testKey: ""
     devSecretKey: ""
     secretKey: ""
+    testAmountDivisor: 
+  mock:
+    dailyLimit: 
