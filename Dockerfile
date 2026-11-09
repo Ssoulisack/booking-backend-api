@@ -1,4 +1,4 @@
-# builds on the machine's own CPU and cross-compiles for the target one, so a multi-arch image is fast
+# Builds the API and the migrate program on the machine's own CPU and cross-compiles for the target one, so a multi-arch image is fast
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
