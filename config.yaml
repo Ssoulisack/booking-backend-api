@@ -1,58 +1,75 @@
 app:
-  name: ""
-  frontendUrl: ""
+  name: 
+  frontendUrl: 
 
 server:
-  port: ""
-  readTimeout: ""
-  writeTimeout: ""
+  port: 3000
+  env: dev # dev | uat | prod
+  readTimeout: 10
+  writeTimeout: 10
 
 database:
   postgres:
-    host: ""
-    port: ""
-    user: ""
-    password: ""
-    dbname: ""
-    sslmode: ""
-    timezone: ""
+    host: localhost
+    port: 5432
+    user: booking
+    password: booking
+    dbname: booking
+    sslmode: disable
+    timezone: Asia/Vientiane
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  enabled: false
+  ttlSeconds: 
 
 jwt:
-  secret: ""
-  refreshSecret: ""
+  secret: 
+  refreshSecret: 
 
 storage:
-  driver: ""
+  driver: 
   local:
-    path: ""
-    publicBaseUrl: ""
+    path: 
+    publicBaseUrl: 
   r2:
-    endpoint: ""
-    region: ""
-    bucket: ""
-    accessKey: ""
-    secretKey: ""
-    publicBaseUrl: ""
+    endpoint: 
+    region: 
+    bucket: 
+    accessKey: 
+    secretKey: 
+    publicBaseUrl: 
   supabase:
-    projectUrl: ""
-    bucket: ""
-    serviceKey: ""
-    publicBaseUrl: ""
+    projectUrl: 
+    bucket: 
+    serviceKey: 
+    publicBaseUrl: 
 
 mailer:
-  host: ""
-  username: ""
-  password: ""
-  port: ""
-  from: ""
+  host: 
+  username: 
+  password: 
+  port: 
+  from: 
 
 social:
-  googleClientId: ""
-  facebookAppId: ""
-  facebookAppSecret: ""
+  googleClientId: 
+  facebookAppId: 
+  facebookAppSecret: 
 
 company:
-  name: ""
-  ownerName: ""
-  ownerEmail: ""
-  ownerPassword: ""
+  name: 
+  ownerName: 
+  ownerEmail: 
+  ownerPassword: 
+
+payments:
+  phajay:
+    enabled: false
+    baseUrl: ""
+    testKey: ""
+    devSecretKey: ""
+    secretKey: ""
