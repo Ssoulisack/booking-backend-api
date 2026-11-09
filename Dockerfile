@@ -23,10 +23,8 @@ FROM alpine:3.20
 
 # Set timezone
 ENV TZ=Asia/Vientiane
-# Install tzdata for timezone support
-RUN apk add --no-cache tzdata
-
-RUN apk --no-cache add ca-certificates
+# Install the latest security fixes, tzdata for the timezone and the CA certificates
+RUN apk upgrade --no-cache && apk add --no-cache tzdata ca-certificates
 
 # Run as a non-root user
 RUN adduser -D -H app

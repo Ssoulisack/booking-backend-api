@@ -1,0 +1,122 @@
+# Copy to the BACKEND repo as .github/workflows/deploy.yml
+#
+#   push to branch `test`  → checks → build image sha-<commit> → deploy to the TEST environment
+#   push of a tag v1.2.0   → (the tag must be on main) → the image of that commit is PROMOTED to 1.2.0 if it already
+#                            passed on test (same bytes, no rebuild), else built → deploy to PRODUCTION after approval
+#   push to `main`         → nothing deploys. Work on main as usual; `git push origin main:test` sends it to test.
+#
+# GitHub settings (Settings → Environments):
+#   test         secrets: SSH_HOST, SSH_USER, SSH_KEY, SSH_KNOWN_HOSTS      variable: DEPLOY_PATH (e.g. /srv/booking-test)
+#   production   same names, its own values;  turn on "Required reviewers" so a person approves every production deploy
+# Repository secrets/variables: DOCKERHUB_USERNAME (variable), DOCKERHUB_TOKEN (secret), API_IMAGE (variable, e.g. user/booking-api)
+# The SSH key is a deploy-only key that can do nothing but run in DEPLOY_PATH (see deploy/README.md).
+name: api
+
+on:
+  push:
+    branches: [test]
+    tags: ["v*"]
+
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ${{ vars.API_IMAGE }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: A release tag must be on main
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::tag $GITHUB_REF_NAME is not on main"; exit 1; }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./...
+      # TODO when test/ is committed (it is git-ignored today): add the e2e job with Postgres, Redis and Mailpit as
+      # service containers (E2E=1 go test ./test/e2e/, about 2.5 minutes), and make `image` depend on it.
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tags.outputs.deploy_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tags
+        run: |
+          short="sha-${GITHUB_SHA::7}"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "deploy_tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else echo "deploy_tag=$short" >> "$GITHUB_OUTPUT"; fi
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # a release re-tags the image that already passed on test: what was reviewed is what goes live
+      - id: promote
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:${{ steps.tags.outputs.short }}" >/dev/null 2>&1; then
+            docker buildx imagetools create -t "$IMAGE:${{ steps.tags.outputs.deploy_tag }}" "$IMAGE:${{ steps.tags.outputs.short }}"
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.promote.outputs.done != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64 # the VPS; add linux/arm64 if you ever need it
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tags.outputs.short }}
+            ${{ env.IMAGE }}:${{ steps.tags.outputs.deploy_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-test:
+    if: github.ref == 'refs/heads/test'
+    needs: image
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$SSH_KEY" > key
+          install -m 600 /dev/null known_hosts && printf '%s\n' "$SSH_KNOWN_HOSTS" > known_hosts
+          ssh -i key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && ./scripts/deploy.sh api '$TAG'"
+
+  deploy-production:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production # waits here for the reviewer's approval
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          TAG: ${{ needs.image.outputs.tag }}
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$SSH_KEY" > key
+          install -m 600 /dev/null known_hosts && printf '%s\n' "$SSH_KNOWN_HOSTS" > known_hosts
+          ssh -i key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && ./scripts/deploy.sh api '$TAG'"
