@@ -2,6 +2,7 @@ package service
 
 import (
 	"backend/internal/core/domain"
+	"backend/internal/core/port/output"
 	pkgdomain "backend/internal/modules/packages/domain"
 	"backend/internal/modules/packages/dto"
 	"backend/internal/platform/kit"
@@ -117,6 +118,7 @@ func (s *Service) CancelMine(ctx context.Context, userID, id uint) (*dto.Custome
 	if err := s.Repo.SavePurchase(ctx, cp); err != nil {
 		return nil, err
 	}
+	s.tellAs(ctx, output.NewsCancel, b, cp, "↩️ ລູກຄ້າຍົກເລີກແພັກເກັດ")
 	return s.purchaseDTO(ctx, b, cp, nil)
 }
 
@@ -294,10 +296,11 @@ func (s *Service) MarkPaid(ctx context.Context, branchID, id uint, by *domain.Us
 	if err := s.Repo.SavePurchase(ctx, cp); err != nil {
 		return nil, err
 	}
+	s.tell(ctx, b, cp, "✅ ທີມງານຮັບເງິນແລ້ວ (ແພັກເກັດ)", "ຊຳລະຜ່ານ: "+method(req.Method), "ໂດຍ: "+by.Name)
 	return s.purchaseDTO(ctx, b, cp, nil)
 }
 
-func (s *Service) Cancel(ctx context.Context, branchID, id uint) (*dto.CustomerPackageDTO, error) {
+func (s *Service) Cancel(ctx context.Context, branchID, id uint, by *domain.User) (*dto.CustomerPackageDTO, error) {
 	b, err := s.branch(ctx, branchID)
 	if err != nil {
 		return nil, err
@@ -313,6 +316,11 @@ func (s *Service) Cancel(ctx context.Context, branchID, id uint) (*dto.CustomerP
 	if err := s.Repo.SavePurchase(ctx, cp); err != nil {
 		return nil, err
 	}
+	paid := "ຍັງບໍ່ໄດ້ຊຳລະ"
+	if cp.PaymentStatus == domain.PaymentPaid {
+		paid = "ຊຳລະແລ້ວ (ຄືນເງິນຕ້ອງຈັດການເອງ)"
+	}
+	s.tellAs(ctx, output.NewsStaffCancel, b, cp, "🚫 ທີມງານຍົກເລີກແພັກເກັດ", "ສະຖານະ: "+paid, "ໂດຍ: "+by.Name)
 	return s.purchaseDTO(ctx, b, cp, nil)
 }
 

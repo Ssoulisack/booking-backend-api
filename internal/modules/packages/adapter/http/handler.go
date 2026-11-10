@@ -140,7 +140,7 @@ func (h *Handler) Cancel(c *fiber.Ctx) error {
 	if err != nil {
 		return httpx.Fail(c, err)
 	}
-	res, err := h.svc.Cancel(c.UserContext(), middleware.BranchID(c), id)
+	res, err := h.svc.Cancel(c.UserContext(), middleware.BranchID(c), id, middleware.CurrentUser(c))
 	return httpx.OK(c, res, err)
 }
 

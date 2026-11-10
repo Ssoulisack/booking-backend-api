@@ -3,7 +3,11 @@ package output
 import "context"
 
 // News topics: which of the branch's Telegram switches a piece of news follows
-const NewsPayment = "payment" // money, slips: follows the "payments" switch
+const (
+	NewsPayment     = "payment"      // money, slips: follows the "payments" switch
+	NewsCancel      = "cancel"       // a customer cancelled: follows the "cancellations by customers" switch
+	NewsStaffCancel = "staff_cancel" // the team cancelled: follows the "cancellations by the team" switch
+)
 
 // TeamNews tells a branch's team something that is not about one booking (a package sold): a Lao title and a few
 // lines, with the customer's name and phone added (the phone unless the branch hides it). It returns at once and

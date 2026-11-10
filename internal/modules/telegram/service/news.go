@@ -27,7 +27,7 @@ func (s *Service) announce(ctx context.Context, branchID uint, topic, title stri
 	if err != nil || cur == nil || !cur.Enabled || cur.TokenEnc == "" || cur.ChatIDEnc == "" {
 		return err
 	}
-	if topic == output.NewsPayment && !cur.OnPayment {
+	if (topic == output.NewsPayment && !cur.OnPayment) || (topic == output.NewsCancel && !cur.OnCancel) || (topic == output.NewsStaffCancel && !cur.OnStaffCancel) {
 		return nil
 	}
 	token, chat, err := s.open(cur)

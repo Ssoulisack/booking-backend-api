@@ -36,7 +36,7 @@ type Service interface {
 	Sold(ctx context.Context, branchID, customerID uint, status, q string) ([]dto.CustomerPackageDTO, error)
 	Sell(ctx context.Context, branchID uint, by *domain.User, req dto.SellRequest) (*dto.CustomerPackageDTO, error)
 	MarkPaid(ctx context.Context, branchID, id uint, by *domain.User, req dto.MarkPaidRequest) (*dto.CustomerPackageDTO, error)
-	Cancel(ctx context.Context, branchID, id uint) (*dto.CustomerPackageDTO, error)
+	Cancel(ctx context.Context, branchID, id uint, by *domain.User) (*dto.CustomerPackageDTO, error)
 
 	// the log of visits: the team reads any package's, a customer their own; the team can adjust (add or remove a
 	// visit, extend the last day) with a note
