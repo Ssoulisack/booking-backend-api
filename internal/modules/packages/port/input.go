@@ -5,6 +5,7 @@ import (
 	"backend/internal/core/port/output"
 	"backend/internal/modules/packages/dto"
 	"context"
+	"time"
 )
 
 // Service is what the module offers
@@ -46,4 +47,11 @@ type Service interface {
 	// what the payments module needs to take money for a package
 	PayFactsByCustomer(ctx context.Context, userID, id uint) (*domain.PayFacts, error)
 	SettlePaid(ctx context.Context, branchID, id uint, ref string) error
+	// CancelUnpaid cancels a package that is still waiting for its payment because the online payment failed or ran
+	// out; one that is paid, active or already cancelled is left alone (nil)
+	CancelUnpaid(ctx context.Context, branchID, id uint, why string) error
+	// SetHold moves the pay-by time to the end of the customer's online payment
+	SetHold(ctx context.Context, id uint, until time.Time) error
+	// ExpireUnpaid cancels the packages not paid by their pay-by time (a job, every minute)
+	ExpireUnpaid(ctx context.Context) error
 }

@@ -65,4 +65,10 @@ type Repository interface {
 	PaidBetween(ctx context.Context, branchID uint, from, to time.Time) ([]domain.CustomerPackage, error)
 	// PendingCount: the customer's packages at the branch still waiting for payment
 	PendingCount(ctx context.Context, branchID, customerID uint) (int64, error)
+	// CancelUnpaid cancels the package only if it is still waiting and unpaid, in one step (false: it was not)
+	CancelUnpaid(ctx context.Context, id uint) (bool, error)
+	// SetPayBy moves the pay-by time of a package still waiting for money and with no slip sent
+	SetPayBy(ctx context.Context, id uint, until time.Time) error
+	// PayByExpired: packages waiting for money, no slip sent, whose pay-by time is before `before`
+	PayByExpired(ctx context.Context, before time.Time) ([]domain.CustomerPackage, error)
 }

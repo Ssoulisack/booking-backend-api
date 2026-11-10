@@ -263,6 +263,7 @@ func (s *Service) start(ctx context.Context, f *coredomain.PayFacts, req dto.Sta
 		pay.Status, pay.Note = domain.StatusFailed, shorten(err.Error())
 		_ = s.repo.Update(ctx, pay)
 		log.Printf("⚠️  %s charge for booking %s failed: %v", req.Provider, f.Code, err)
+		s.dropPurchase(ctx, pay, "ການຊຳລະອອນລາຍບໍ່ສຳເລັດ")
 		// the gateway's own daily limit (a test account): say so, so the customer can pay another way or tomorrow
 		if errors.Is(err, domain.ErrRateLimited) {
 			return nil, response.NewError(http.StatusTooManyRequests, "PAYMENT_LIMIT_REACHED")
@@ -295,6 +296,9 @@ func (s *Service) lockStart(f *coredomain.PayFacts) func() {
 // (the customer may come back to the page until then)
 func (s *Service) hold(ctx context.Context, pay *domain.Payment, f *coredomain.PayFacts) error {
 	if f.PayBy != nil {
+		if f.Purchase {
+			return s.purchases.SetHold(ctx, f.ID, pay.ExpiresAt)
+		}
 		return s.bookings.SetHold(ctx, f.ID, pay.ExpiresAt)
 	}
 	return nil
@@ -551,10 +555,35 @@ func (s *Service) apply(ctx context.Context, p *domain.Payment, n *domain.Notice
 	if err := s.repo.Update(ctx, p); err != nil {
 		return err
 	}
+	if p.Status == domain.StatusExpired {
+		s.dropPurchase(ctx, p, "ໝົດເວລາຊຳລະ")
+	}
 	if refundedNow && p.PurchaseID == 0 {
 		go s.bookings.NotifyRefund(context.WithoutCancel(ctx), p.BranchID, p.BookingID, p.Amount, p.Currency, true)
 	}
 	return nil
+}
+
+// dropPurchase cancels a customer package whose online payment failed or ran out, unless another payment of it is still
+// open or already paid (the customer may have made a newer QR). A booking is not touched here: events release theirs.
+func (s *Service) dropPurchase(ctx context.Context, p *domain.Payment, why string) {
+	if p.PurchaseID == 0 || s.purchases == nil {
+		return
+	}
+	list, err := s.repo.ByPurchase(ctx, p.BranchID, p.PurchaseID)
+	if err != nil {
+		log.Printf("⚠️  package %d: %v", p.PurchaseID, err)
+		return
+	}
+	now := s.now()
+	for _, o := range list {
+		if o.ID != p.ID && (o.Open(now) || o.Settled()) {
+			return
+		}
+	}
+	if err := s.purchases.CancelUnpaid(ctx, p.BranchID, p.PurchaseID, why); err != nil {
+		log.Printf("⚠️  cancelling unpaid package %d: %v", p.PurchaseID, err)
+	}
 }
 
 // settle records the money on what it paid: the booking, or the customer's package
@@ -637,6 +666,16 @@ func (s *Service) Poll(ctx context.Context) error {
 		}
 		if err := s.apply(ctx, &p, n); err != nil {
 			log.Printf("⚠️  %s payment %s: %v", p.Provider, p.OrderNo, err)
+			continue
+		}
+		// the gateway still says "waiting" but our time for this QR is up: it is expired for us too
+		if p.PurchaseID != 0 && p.Status == domain.StatusPending && !p.ExpiresAt.After(now) {
+			p.Status = domain.StatusExpired
+			if err := s.repo.Update(ctx, &p); err != nil {
+				log.Printf("⚠️  %s payment %s: %v", p.Provider, p.OrderNo, err)
+				continue
+			}
+			s.dropPurchase(ctx, &p, "ໝົດເວລາຊຳລະ")
 		}
 	}
 	return nil

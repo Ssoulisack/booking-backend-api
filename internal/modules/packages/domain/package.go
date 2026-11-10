@@ -111,6 +111,9 @@ type CustomerPackage struct {
 	SoldByType string `gorm:"type:varchar(10);not null"`
 	SoldByID   *uint
 	Notes      string `gorm:"type:text"`
+	// PayBy: a package a customer bought online must be paid by this time or it cancels itself (nil: no limit, as for
+	// packages the team sells). The customer's online payment moves it to the end of its QR's life.
+	PayBy *time.Time
 }
 
 func (CustomerPackage) TableName() string { return "customer_packages" }

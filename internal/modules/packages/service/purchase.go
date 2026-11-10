@@ -20,6 +20,9 @@ const maxPending = 3 // packages one customer may leave waiting for payment at a
 // the ways staff can record a payment (never "online": that comes from the gateway)
 var deskMethods = []string{domain.MethodCash, domain.MethodTransfer, domain.MethodQR, domain.MethodOther}
 
+// PayWindow is how long a customer has to pay a package they just bought online, before it cancels itself
+const PayWindow = 30 * time.Minute
+
 func (s *Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
@@ -60,6 +63,9 @@ func (s *Service) Buy(ctx context.Context, slug string, user *domain.User, packa
 		return nil, err
 	}
 	cp.SoldByType = domain.CreatedByCustomer
+	// the customer has this long to pay (the same as an online QR lives); the pay page counts it down
+	by := s.now().Add(PayWindow)
+	cp.PayBy = &by
 	if err := s.Repo.CreatePurchase(ctx, cp); err != nil {
 		return nil, err
 	}
@@ -331,7 +337,7 @@ func (s *Service) PayFactsByCustomer(ctx context.Context, userID, id uint) (*dom
 	}
 	return &domain.PayFacts{
 		ID: cp.ID, BranchID: cp.BranchID, BranchSlug: b.Slug, Code: cp.Code(), OrderRef: cp.OrderRef(), Total: cp.Price, Currency: cp.Currency,
-		Status: status, PaymentStatus: cp.PaymentStatus, SlipSent: cp.SlipSentAt != nil, Purchase: true,
+		Status: status, PaymentStatus: cp.PaymentStatus, PayBy: cp.PayBy, SlipSent: cp.SlipSentAt != nil, Purchase: true,
 	}, nil
 }
 
@@ -357,6 +363,46 @@ func (s *Service) SettlePaid(ctx context.Context, branchID, id uint, _ string) e
 		return err
 	}
 	s.tell(ctx, b, cp, "💰 ໄດ້ຮັບເງິນແລ້ວ (ແພັກເກັດ)", "ຊຳລະຜ່ານ: "+method(domain.MethodOnline))
+	return nil
+}
+
+// CancelUnpaid: the online payment of a package failed or ran out, so the purchase is cancelled (it was never paid and
+// gives the customer nothing). Only a package still waiting for money is touched; the team is told.
+func (s *Service) CancelUnpaid(ctx context.Context, branchID, id uint, why string) error {
+	b, err := s.Branches.GetByID(ctx, branchID)
+	if err != nil {
+		return err
+	}
+	cp, err := s.Repo.Purchase(ctx, branchID, id)
+	if err != nil {
+		return err
+	}
+	// one step in the database: a payment that arrives at this moment keeps the package
+	done, err := s.Repo.CancelUnpaid(ctx, cp.ID)
+	if err != nil || !done {
+		return err
+	}
+	s.tell(ctx, b, cp, "❌ ຍົກເລີກແພັກເກັດ (ບໍ່ໄດ້ຊຳລະ)", "ເຫດຜົນ: "+why)
+	return nil
+}
+
+// SetHold moves the pay-by time of a package still waiting for money to the end of the customer's online payment
+func (s *Service) SetHold(ctx context.Context, id uint, until time.Time) error {
+	return s.Repo.SetPayBy(ctx, id, until)
+}
+
+// ExpireUnpaid cancels the packages customers bought online and did not pay by their pay-by time (and sent no slip for:
+// then the team decides). Runs every minute; a minute of grace lets a late webhook arrive first.
+func (s *Service) ExpireUnpaid(ctx context.Context) error {
+	list, err := s.Repo.PayByExpired(ctx, s.now().Add(-time.Minute))
+	if err != nil {
+		return err
+	}
+	for _, cp := range list {
+		if err := s.CancelUnpaid(ctx, cp.BranchID, cp.ID, "ໝົດເວລາຊຳລະ"); err != nil {
+			log.Printf("⚠️  package %d: %v", cp.ID, err) // the others still go
+		}
+	}
 	return nil
 }
 
@@ -421,7 +467,7 @@ func purchaseDTO(b *domain.Branch, cp *pkgdomain.CustomerPackage, n nameBook) dt
 		ID: cp.ID, Code: cp.Code(), BranchID: cp.BranchID, CustomerID: cp.CustomerID, PackageID: cp.PackageID, SportID: cp.SportID,
 		Name: cp.Name, Covers: cp.Covers, ResourceID: cp.ResourceID, Kind: cp.Kind, Amount: cp.Amount, Price: cp.Price,
 		Currency: cp.Currency, TimesLeft: cp.TimesLeft, StartsOn: cp.StartsOn, EndsOn: cp.EndsOn, ExpiresOn: cp.ExpiresOn,
-		Status: cp.StatusOn(today), PaymentStatus: cp.PaymentStatus, PaymentMethod: cp.PaymentMethod, PaidAt: cp.PaidAt, SlipSentAt: cp.SlipSentAt, SlipVia: cp.SlipVia,
+		Status: cp.StatusOn(today), PaymentStatus: cp.PaymentStatus, PaymentMethod: cp.PaymentMethod, PaidAt: cp.PaidAt, SlipSentAt: cp.SlipSentAt, SlipVia: cp.SlipVia, PayBy: cp.PayBy,
 		SoldBy: cp.SoldByType, Notes: cp.Notes, CreatedAt: cp.CreatedAt,
 	}
 	if cp.ResourceID != nil {

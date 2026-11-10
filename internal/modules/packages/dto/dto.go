@@ -106,7 +106,8 @@ type CustomerPackageDTO struct {
 	PaidAt        *time.Time `json:"paid_at"`
 	SlipSentAt    *time.Time `json:"slip_sent_at"`
 	SlipVia       string     `json:"slip_via"`
-	SoldBy        string     `json:"sold_by"` // customer | staff
+	PayBy         *time.Time `json:"pay_by,omitempty"` // until when an unpaid online purchase is kept
+	SoldBy        string     `json:"sold_by"`          // customer | staff
 	Notes         string     `json:"notes"`
 	CreatedAt     time.Time  `json:"created_at"`
 }

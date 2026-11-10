@@ -54,6 +54,10 @@ type Purchases interface {
 	PayFactsByCustomer(ctx context.Context, userID, id uint) (*coredomain.PayFacts, error)
 	// SettlePaid activates the package once; domain.ErrNotPayable / ErrAlreadyPaid when it cannot take the money
 	SettlePaid(ctx context.Context, branchID, id uint, ref string) error
+	// CancelUnpaid cancels the package when its online payment failed or ran out and nothing was paid
+	CancelUnpaid(ctx context.Context, branchID, id uint, why string) error
+	// SetHold: an unpaid package is kept until the customer's online payment runs out
+	SetHold(ctx context.Context, id uint, until time.Time) error
 }
 
 // Bookings is what the module needs from the booking service

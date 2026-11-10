@@ -196,6 +196,9 @@ func KeepTablesSettled(svc *AppServices) {
 				if err := svc.events.Service.ExpireUnpaid(context.Background()); err != nil {
 					log.Printf("⚠️  event holds: %v", err)
 				}
+				if err := svc.packages.Service.ExpireUnpaid(context.Background()); err != nil {
+					log.Printf("⚠️  package holds: %v", err)
+				}
 			case <-settle.C:
 				if err := svc.restaurant.Service.SettleTables(context.Background()); err != nil {
 					log.Printf("⚠️  settling tables: %v", err)

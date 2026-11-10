@@ -231,6 +231,28 @@ func (r *postgresRepo) PendingCount(ctx context.Context, branchID, customerID ui
 	return n, exception.HandleGormError(err)
 }
 
+func (r *postgresRepo) CancelUnpaid(ctx context.Context, id uint) (bool, error) {
+	res := r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
+		Where("id = ? AND status = ? AND payment_status <> ?", id, domain.StatusPendingPayment, "paid").
+		Update("status", domain.StatusCancelled)
+	return res.RowsAffected == 1, exception.HandleGormError(res.Error)
+}
+
+func (r *postgresRepo) SetPayBy(ctx context.Context, id uint, until time.Time) error {
+	err := r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
+		Where("id = ? AND status = ? AND payment_status <> ? AND slip_sent_at IS NULL AND pay_by IS NOT NULL", id, domain.StatusPendingPayment, "paid").
+		Update("pay_by", until).Error
+	return exception.HandleGormError(err)
+}
+
+func (r *postgresRepo) PayByExpired(ctx context.Context, before time.Time) ([]domain.CustomerPackage, error) {
+	var out []domain.CustomerPackage
+	err := r.db.WithContext(ctx).
+		Where("status = ? AND payment_status <> ? AND slip_sent_at IS NULL AND pay_by IS NOT NULL AND pay_by < ?", domain.StatusPendingPayment, "paid", before).
+		Order("id").Limit(200).Find(&out).Error
+	return out, exception.HandleGormError(err)
+}
+
 func (r *postgresRepo) TakeVisit(ctx context.Context, id uint) (bool, error) {
 	res := r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
 		Where("id = ? AND status = ? AND kind = ? AND times_left > 0", id, domain.StatusActive, domain.OptionTimes).
