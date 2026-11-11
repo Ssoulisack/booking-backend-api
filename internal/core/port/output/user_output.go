@@ -19,6 +19,8 @@ type UserRepository interface {
 	EmailTaken(ctx context.Context, email string, exceptID uint) (bool, error)
 	// UpdateProfile saves name, email (and username), phone, nationality and the stand-in flag
 	UpdateProfile(ctx context.Context, u *domain.User) error
+	// SetVerified marks the person's email as proven (or not)
+	SetVerified(ctx context.Context, id uint, verified bool) error
 	// FindByMemberNo looks up a stored member number (CNO000042 / ENO000007)
 	FindByMemberNo(ctx context.Context, no string) (*domain.User, error)
 	// SyncMemberNo gives the account the member number for its current role and returns it: CNO for
@@ -32,5 +34,8 @@ type UserRepository interface {
 	SetCompanyRole(ctx context.Context, id uint, role string) error
 	// TransferOwnership makes toID the owner and fromID an admin, in one transaction
 	TransferOwnership(ctx context.Context, fromID, toID uint) error
+	// SetPassword stores a password the person chose (a reset or a change): the "must change" mark goes
 	SetPassword(ctx context.Context, id uint, hash []byte, changedAt time.Time) error
+	// SetPasswordByTeam stores a password the team set for the person: they will be asked to choose their own
+	SetPasswordByTeam(ctx context.Context, id uint, hash []byte, changedAt time.Time) error
 }

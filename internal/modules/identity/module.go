@@ -43,7 +43,7 @@ type Module struct {
 // New builds the module
 func New(d Deps) *Module {
 	m := &Module{
-		Auth:    service.NewAuthService(d.Users, d.Cache, d.Memberships, d.Branches, d.PasswordResets, d.Social, idpostgres.NewSocialIdentities(d.DB), d.Mailer, d.FrontendURL),
+		Auth:    service.NewAuthService(d.Users, d.Cache, d.Memberships, d.Branches, d.PasswordResets, d.Social, idpostgres.NewSocialIdentities(d.DB), idpostgres.NewEmailCodes(d.DB), d.Mailer, d.FrontendURL),
 		Access:  service.NewAccessService(d.Users, d.Memberships, d.Branches),
 		Invites: service.NewInvitationService(idpostgres.NewInvitations(d.DB), d.Memberships, d.Branches, d.Company, d.Users, d.Mailer, d.FrontendURL),
 	}
@@ -58,4 +58,6 @@ func (m *Module) Middleware() *middleware.Auth { return middleware.NewAuth(m.Acc
 func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) { m.handler.Routes(api, auth) }
 
 // Models are the tables of this module, for the migration
-func Models() []any { return []any{&domain.Invitation{}, &domain.SocialIdentity{}} }
+func Models() []any {
+	return []any{&domain.Invitation{}, &domain.SocialIdentity{}, &domain.EmailCode{}}
+}

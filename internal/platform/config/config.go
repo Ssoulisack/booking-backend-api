@@ -258,7 +258,9 @@ func setDefaults() {
 	viper.SetDefault("storage.supabase.serviceKey", "")
 	viper.SetDefault("storage.supabase.publicBaseUrl", "")
 
-	// Social sign-in (Google, Facebook): a provider with empty credentials is switched off
+	// Social sign-in (Google, Facebook): social.enabled false switches both off; a provider with empty credentials
+	// is switched off too. On by default, so an install without the key keeps working as before.
+	viper.SetDefault("social.enabled", true)
 	viper.SetDefault("social.googleClientId", "")
 	viper.SetDefault("social.facebookAppId", "")
 	viper.SetDefault("social.facebookAppSecret", "")

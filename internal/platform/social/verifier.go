@@ -23,6 +23,8 @@ const (
 // The Facebook app secret stays on the server; the Google client id and Facebook app id are
 // public values the browser needs.
 type Config struct {
+	// Enabled: false switches Google and Facebook off (people log in with their account in the system only)
+	Enabled           bool
 	GoogleClientID    string
 	FacebookAppID     string
 	FacebookAppSecret string
@@ -62,6 +64,9 @@ func (v *verifier) Public() output.SocialPublic {
 }
 
 func (v *verifier) enabled() map[string]bool {
+	if !v.config.Enabled {
+		return map[string]bool{} // social login switched off: no buttons, every sign-in refused
+	}
 	return map[string]bool{
 		Google: v.config.GoogleClientID != "",
 		// Facebook is off until the app is verified: remove the comment to bring it back

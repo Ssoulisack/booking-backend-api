@@ -61,6 +61,18 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 	return httpx.Created(c, res, err)
 }
 
+// PhoneCheck: { phone } → { has_account } for the guest form (POST keeps the phone out of addresses and logs)
+func (h *Handler) PhoneCheck(c *fiber.Ctx) error {
+	var req struct {
+		Phone string `json:"phone"`
+	}
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	has, err := h.book.PhoneHasAccount(c.UserContext(), c.Params("slug"), req.Phone)
+	return httpx.OK(c, fiber.Map{"has_account": has}, err)
+}
+
 func (h *Handler) FindBooking(c *fiber.Ctx) error {
 	var req dto.FindBookingRequest
 	if err := httpx.Bind(c, &req); err != nil {

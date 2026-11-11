@@ -12,6 +12,12 @@ type UserDTO struct {
 	Nationality string `json:"nationality"`
 	// the email is a stand-in: the person should add a real one in My account
 	EmailGenerated bool `json:"email_generated"`
+	// the team set the password: the person is asked to choose their own
+	MustChangePassword bool `json:"must_change_password"`
+	// the person proved the email is theirs with a code (false for a stand-in email)
+	EmailVerified bool `json:"email_verified"`
+	// false for an account made with Google / Facebook that never set a password
+	HasPassword bool `json:"has_password"`
 	// the number this person tells staff: CNO000042 (customer) or ENO000007 (the team)
 	MemberNo  string `json:"member_no"`
 	Status    bool   `json:"status"`

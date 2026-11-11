@@ -38,6 +38,10 @@ type MembershipRepository interface {
 	ListAll(ctx context.Context) ([]domain.Membership, error)
 	// Replace sets a person's branches and role in one transaction (no branches: removed from all)
 	Replace(ctx context.Context, userID uint, role string, branchIDs []uint, active bool) error
+	// SetActive switches one person's access to one branch on or off
+	SetActive(ctx context.Context, branchID, userID uint, active bool) error
+	// Delete takes one person off one branch
+	Delete(ctx context.Context, branchID, userID uint) error
 }
 
 type PasswordResetRepository interface {
@@ -53,6 +57,8 @@ type Mailer interface {
 	// SendInvitation asks someone to join the team; where is "every branch" or the branch names
 	SendInvitation(to, companyName, inviterName, role, where, acceptURL string) error
 	SendPasswordReset(to, name, resetURL string) error
+	// SendEmailCode sends the 6-digit code that proves the email is the person's
+	SendEmailCode(to, name, code, accountURL string) error
 	// SendWelcome gives the first owner the link to choose a password (first start)
 	SendWelcome(to, name, companyName, setPasswordURL string) error
 	// SendBookingLink gives a guest the private link to view or cancel their booking

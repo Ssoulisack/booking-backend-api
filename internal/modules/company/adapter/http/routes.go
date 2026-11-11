@@ -25,6 +25,8 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	c.Post("/branches/:id/reopen", h.ReopenBranch)
 
 	c.Get("/team", h.ListTeam)
+	c.Get("/team/lookup", h.FindTeamCandidate)
+	c.Post("/team", h.AddTeamMember)
 	c.Put("/team/:userId", h.UpdateTeamMember)
 	c.Delete("/team/:userId", h.RemoveTeamMember)
 	c.Post("/transfer-ownership", h.TransferOwnership)
@@ -38,6 +40,10 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	// the branch's own settings (company values in force are shown with them) and publishing
 	b := api.Group("/branches/:branchId", auth.RequireUser)
 	b.Get("/settings", staff, h.GetSettings)
+	// who works here: managers see the list; the owner and admins switch access off or remove someone
+	b.Get("/team", manager, h.BranchTeam)
+	b.Patch("/team/:userId", admin, h.SetBranchAccess)
+	b.Delete("/team/:userId", admin, h.RemoveFromBranch)
 	b.Put("/settings", admin, h.UpdateSettings)
 	b.Post("/publish", admin, h.Publish)
 	b.Post("/unpublish", admin, h.Unpublish)

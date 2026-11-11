@@ -46,19 +46,22 @@ func SyncMemberNo(ctx context.Context, users output.UserRepository, u *domain.Us
 // UserDTO is the account as the API shows it
 func UserDTO(u *domain.User) dto.UserDTO {
 	return dto.UserDTO{
-		ID:             u.ID,
-		Email:          u.Email,
-		Avatar:         u.Avatar,
-		Name:           u.Name,
-		Username:       u.Username,
-		Phone:          u.Phone,
-		CompanyRole:    u.CompanyRole,
-		Nationality:    u.Nationality,
-		EmailGenerated: u.EmailGenerated,
-		MemberNo:       domain.MemberNoOf(u.MemberNo),
-		Status:         u.Status,
-		CreatedAt:      u.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      u.UpdatedAt.Format(time.RFC3339),
+		ID:                 u.ID,
+		Email:              u.Email,
+		Avatar:             u.Avatar,
+		Name:               u.Name,
+		Username:           u.Username,
+		Phone:              u.Phone,
+		CompanyRole:        u.CompanyRole,
+		Nationality:        u.Nationality,
+		EmailGenerated:     u.EmailGenerated,
+		MustChangePassword: u.MustChangePassword,
+		EmailVerified:      u.Verified && !u.EmailGenerated,
+		HasPassword:        len(u.PasswordHash) > 0,
+		MemberNo:           domain.MemberNoOf(u.MemberNo),
+		Status:             u.Status,
+		CreatedAt:          u.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:          u.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

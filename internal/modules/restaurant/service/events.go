@@ -40,7 +40,7 @@ func (s *Service) CreateEventBooking(ctx context.Context, in dto.EventBookingInp
 	case len([]rune(in.Notes)) > maxNotesChars:
 		return nil, badRequest("NOTES_TOO_LONG")
 	}
-	who, err := s.kernel.WhoBooks(b, in.Actor, in.Guest)
+	who, err := s.kernel.WhoBooks(ctx, b, in.Actor, in.Guest)
 	if err != nil {
 		return nil, err
 	}

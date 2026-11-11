@@ -299,6 +299,68 @@ func (s *CompanyServiceImpl) UpdateTeamMember(ctx context.Context, actor *domain
 	if _, err := s.teamMember(ctx, userID); err != nil {
 		return nil, err
 	}
+	if err := s.applyRole(ctx, actor, userID, req); err != nil {
+		return nil, err
+	}
+	return s.teamMember(ctx, userID)
+}
+
+// FindTeamCandidate looks up a registered account by phone (2055551234) or member number (CNO000042), so the owner
+// or an admin can add someone who has no email to the team: they register first, then are added here.
+func (s *CompanyServiceImpl) FindTeamCandidate(ctx context.Context, query string) (*dto.TeamCandidateDTO, error) {
+	var user *domain.User
+	var err error
+	if no, ok := domain.ParseMemberNo(query); ok {
+		user, err = s.users.FindByMemberNo(ctx, no)
+	} else if phone, ok := domain.NormalizePhone(query); ok {
+		user, err = s.users.FindByPhone(ctx, phone)
+	} else {
+		return nil, badRequest("ENTER_PHONE_OR_MEMBER_NO")
+	}
+	if err != nil {
+		return nil, orNotFound(err, "ACCOUNT_NOT_FOUND")
+	}
+	if !user.Status {
+		return nil, forbidden("ACCOUNT_DISABLED")
+	}
+	inTeam := user.RunsCompany()
+	if !inTeam {
+		if _, err := s.teamMember(ctx, user.ID); err == nil {
+			inTeam = true
+		}
+	}
+	return &dto.TeamCandidateDTO{UserID: user.ID, MemberNo: domain.MemberNoOf(user.MemberNo), Name: user.Name,
+		Phone: user.Phone, Email: user.ContactEmail(), InTeam: inTeam}, nil
+}
+
+// AddTeamMember puts a registered account (a customer) on the team with a role and branches, without an
+// invitation: for people who have no email. Same rules as inviting: only the owner adds admins.
+func (s *CompanyServiceImpl) AddTeamMember(ctx context.Context, actor *domain.User, req dto.AddTeamMemberRequest) (*dto.TeamMemberDTO, error) {
+	target, err := s.users.FindByID(ctx, req.UserID)
+	if err != nil {
+		return nil, orNotFound(err, "ACCOUNT_NOT_FOUND")
+	}
+	if !target.Status {
+		return nil, forbidden("ACCOUNT_DISABLED")
+	}
+	if err := mayManage(actor, target); err != nil {
+		return nil, err
+	}
+	if target.RunsCompany() {
+		return nil, conflict("ALREADY_IN_THE_TEAM")
+	}
+	if _, err := s.teamMember(ctx, target.ID); err == nil {
+		return nil, conflict("ALREADY_IN_THE_TEAM")
+	}
+	if err := s.applyRole(ctx, actor, target.ID, dto.TeamMemberRequest{Role: req.Role, BranchIDs: req.BranchIDs}); err != nil {
+		return nil, err
+	}
+	return s.teamMember(ctx, target.ID)
+}
+
+// applyRole gives someone their place in the team: admin (owner only) or manager / staff at open branches; the
+// ENO number follows
+func (s *CompanyServiceImpl) applyRole(ctx context.Context, actor *domain.User, userID uint, req dto.TeamMemberRequest) error {
 	active := true
 	if req.Active != nil {
 		active = *req.Active
@@ -306,33 +368,123 @@ func (s *CompanyServiceImpl) UpdateTeamMember(ctx context.Context, actor *domain
 	switch req.Role {
 	case domain.CompanyAdmin:
 		if !actor.IsOwner() {
-			return nil, forbidden("ONLY_THE_OWNER_MANAGES_ADMINS")
+			return forbidden("ONLY_THE_OWNER_MANAGES_ADMINS")
 		}
 		if err := s.memberships.Replace(ctx, userID, "", nil, true); err != nil {
-			return nil, err
+			return err
 		}
 		if err := s.users.SetCompanyRole(ctx, userID, domain.CompanyAdmin); err != nil {
-			return nil, err
+			return err
 		}
 	case domain.MemberManager, domain.MemberStaff:
 		ids, err := s.openBranchIDs(ctx, req.BranchIDs)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := s.users.SetCompanyRole(ctx, userID, ""); err != nil {
-			return nil, err
+			return err
 		}
 		if err := s.memberships.Replace(ctx, userID, req.Role, ids, active); err != nil {
-			return nil, err
+			return err
 		}
 	default:
-		return nil, badRequest("INVALID_ROLE")
+		return badRequest("INVALID_ROLE")
 	}
-	// still on the team (admin <-> manager / staff): the ENO number stays
+	// a customer who joins gets an ENO number; someone already on the team keeps theirs
 	if _, err := s.users.SyncMemberNo(ctx, userID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// BranchTeam lists who works at a branch: the owner and admins first, then its managers and staff. role filters
+// (owner, admin, manager, staff); q finds a phone, a member number (CNO / ENO) or a name.
+func (s *CompanyServiceImpl) BranchTeam(ctx context.Context, branchID uint, role, q string) ([]dto.BranchTeamMemberDTO, error) {
+	out := []dto.BranchTeamMemberDTO{}
+	for _, r := range []string{domain.CompanyOwner, domain.CompanyAdmin} {
+		users, _, err := s.users.List(ctx, output.ListQuery{Filters: map[string]any{"company_role": r}})
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range users {
+			out = append(out, dto.BranchTeamMemberDTO{UserID: u.ID, MemberNo: domain.MemberNoOf(u.MemberNo), Name: u.Name,
+				Phone: u.Phone, Email: u.ContactEmail(), Role: r, Active: u.Status})
+		}
+	}
+	members, err := s.memberships.ListByBranch(ctx, branchID)
+	if err != nil {
 		return nil, err
 	}
-	return s.teamMember(ctx, userID)
+	for _, m := range members {
+		if m.User.RunsCompany() {
+			continue // listed above
+		}
+		out = append(out, dto.BranchTeamMemberDTO{UserID: m.UserID, MemberNo: domain.MemberNoOf(m.User.MemberNo),
+			Name: m.User.Name, Phone: m.User.Phone, Email: m.User.ContactEmail(), Role: m.Role, Active: m.Active && m.User.Status})
+	}
+	q = strings.TrimSpace(q)
+	phone, isPhone := domain.NormalizePhone(q)
+	no, isNo := domain.ParseMemberNo(q)
+	keep := out[:0]
+	for _, p := range out {
+		if role != "" && p.Role != role {
+			continue
+		}
+		if q != "" {
+			hit := strings.Contains(strings.ToLower(p.Name), strings.ToLower(q)) ||
+				strings.Contains(p.Phone, q) || strings.Contains(p.MemberNo, strings.ToUpper(q)) ||
+				(isPhone && p.Phone == phone) || (isNo && p.MemberNo == no)
+			if !hit {
+				continue
+			}
+		}
+		keep = append(keep, p)
+	}
+	return keep, nil
+}
+
+// branchMember is someone's place at one branch, checked before a change there: only managers and staff are changed
+// per branch (the owner and admins on the company Team page)
+func (s *CompanyServiceImpl) branchMember(ctx context.Context, actor *domain.User, branchID, userID uint) error {
+	target, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return orNotFound(err, "TEAM_MEMBER_NOT_FOUND")
+	}
+	if err := mayManage(actor, target); err != nil {
+		return err
+	}
+	if target.RunsCompany() {
+		return badRequest("MANAGE_ADMINS_ON_TEAM_PAGE")
+	}
+	m, err := s.memberships.Get(ctx, branchID, userID)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return notFound("TEAM_MEMBER_NOT_FOUND")
+	}
+	return nil
+}
+
+// SetBranchAccess switches someone's access to one branch off (or back on): off, the branch refuses them at once
+// and they see the site as a customer there
+func (s *CompanyServiceImpl) SetBranchAccess(ctx context.Context, actor *domain.User, branchID, userID uint, active bool) error {
+	if err := s.branchMember(ctx, actor, branchID, userID); err != nil {
+		return err
+	}
+	return s.memberships.SetActive(ctx, branchID, userID, active)
+}
+
+// RemoveFromBranch takes someone off one branch; with no branch left they are a customer again (a CNO number)
+func (s *CompanyServiceImpl) RemoveFromBranch(ctx context.Context, actor *domain.User, branchID, userID uint) error {
+	if err := s.branchMember(ctx, actor, branchID, userID); err != nil {
+		return err
+	}
+	if err := s.memberships.Delete(ctx, branchID, userID); err != nil {
+		return err
+	}
+	_, err := s.users.SyncMemberNo(ctx, userID)
+	return err
 }
 
 func (s *CompanyServiceImpl) RemoveTeamMember(ctx context.Context, actor *domain.User, userID uint) error {
@@ -421,5 +573,6 @@ func (s *CompanyServiceImpl) SetUserPassword(ctx context.Context, actor *domain.
 	if err != nil {
 		return err
 	}
-	return s.users.SetPassword(ctx, targetID, hash, s.now())
+	// the person did not choose it: they are asked to set their own after logging in
+	return s.users.SetPasswordByTeam(ctx, targetID, hash, s.now())
 }

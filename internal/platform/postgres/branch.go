@@ -371,6 +371,16 @@ func (r *membershipRepository) Replace(ctx context.Context, userID uint, role st
 	}))
 }
 
+func (r *membershipRepository) SetActive(ctx context.Context, branchID, userID uint, active bool) error {
+	return requireAffected(r.db.WithContext(ctx).Model(&domain.Membership{}).
+		Where("branch_id = ? AND user_id = ?", branchID, userID).Update("active", active))
+}
+
+func (r *membershipRepository) Delete(ctx context.Context, branchID, userID uint) error {
+	return requireAffected(r.db.WithContext(ctx).Where("branch_id = ? AND user_id = ?", branchID, userID).
+		Delete(&domain.Membership{}))
+}
+
 // ---------- password resets ----------
 
 type passwordResetRepository struct{ db *gorm.DB }

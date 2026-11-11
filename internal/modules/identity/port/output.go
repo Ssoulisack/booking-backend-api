@@ -18,6 +18,16 @@ type InvitationRepository interface {
 	Delete(ctx context.Context, id uint) error
 }
 
+// EmailCodeRepository keeps the one live email code of each person
+type EmailCodeRepository interface {
+	// Replace stores a new code for the person (their older one goes)
+	Replace(ctx context.Context, code *domain.EmailCode) error
+	// Find returns (nil, nil) when the person has no code
+	Find(ctx context.Context, userID uint) (*domain.EmailCode, error)
+	AddAttempt(ctx context.Context, id uint) error
+	Delete(ctx context.Context, userID uint) error
+}
+
 type SocialIdentityRepository interface {
 	// Find returns (nil, nil) when the provider account is not linked to anyone yet
 	Find(ctx context.Context, provider, uid string) (*domain.SocialIdentity, error)

@@ -105,6 +105,33 @@ func (h *Handler) UpdateMe(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+// ChangePassword: the logged-in person sets a new password and gets new tokens
+func (h *Handler) ChangePassword(c *fiber.Ctx) error {
+	var req iddto.ChangePasswordRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.auth.ChangePassword(c.UserContext(), middleware.CurrentUser(c).ID, req)
+	return httpx.OK(c, res, err)
+}
+
+// SendEmailCode emails the logged-in person a code for their email
+func (h *Handler) SendEmailCode(c *fiber.Ctx) error {
+	return httpx.Done(c, "CODE_SENT", h.auth.SendEmailCode(c.UserContext(), middleware.CurrentUser(c).ID))
+}
+
+// VerifyEmail checks the code and marks the email verified
+func (h *Handler) VerifyEmail(c *fiber.Ctx) error {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.auth.VerifyEmail(c.UserContext(), middleware.CurrentUser(c).ID, req.Code)
+	return httpx.OK(c, res, err)
+}
+
 // Invitation serves an invite link (no branch membership needed)
 func (h *Handler) Invitation(c *fiber.Ctx) error {
 	res, err := h.invites.GetInvitation(c.UserContext(), c.Params("token"))

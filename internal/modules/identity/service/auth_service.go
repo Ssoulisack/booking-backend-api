@@ -31,6 +31,7 @@ type AuthServiceImpl struct {
 	resets      output.PasswordResetRepository
 	social      output.SocialVerifier
 	socialIDs   port.SocialIdentityRepository
+	emailCodes  port.EmailCodeRepository
 	mailer      output.Mailer
 	frontendURL string
 	now         func() time.Time
@@ -44,6 +45,7 @@ func NewAuthService(
 	resets output.PasswordResetRepository,
 	social output.SocialVerifier,
 	socialIDs port.SocialIdentityRepository,
+	emailCodes port.EmailCodeRepository,
 	mailer output.Mailer,
 	frontendURL string,
 ) port.AuthService {
@@ -55,6 +57,7 @@ func NewAuthService(
 		resets:      resets,
 		social:      social,
 		socialIDs:   socialIDs,
+		emailCodes:  emailCodes,
 		mailer:      mailer,
 		frontendURL: strings.TrimRight(frontendURL, "/"),
 		now:         time.Now,
@@ -162,6 +165,9 @@ func (s *AuthServiceImpl) UpdateProfile(ctx context.Context, userID uint, req id
 	if err != nil {
 		return nil, err
 	}
+	if email != user.Email {
+		user.Verified = false // a new email: not proven yet
+	}
 	user.Name, user.Email, user.Username, user.Phone = strings.TrimSpace(req.Name), email, email, phone
 	user.EmailGenerated = generated
 	if err := s.userRepo.UpdateProfile(ctx, user); err != nil {
@@ -169,6 +175,54 @@ func (s *AuthServiceImpl) UpdateProfile(ctx context.Context, userID uint, req id
 	}
 	d := kit.UserDTO(user)
 	return &d, nil
+}
+
+// ChangePassword lets the logged-in person choose a new password (the current one is checked). Older logins end;
+// this one gets new tokens, so the person stays logged in. The "must change" mark set by the team goes.
+func (s *AuthServiceImpl) ChangePassword(ctx context.Context, userID uint, req iddto.ChangePasswordRequest) (*iddto.AuthResponseDTO, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	// an account made with Google / Facebook has no password yet: it sets its first one without a current one
+	if len(user.PasswordHash) > 0 && utils.VerifyPassword(string(user.PasswordHash), req.CurrentPassword) != nil {
+		return nil, badRequest("CURRENT_PASSWORD_WRONG")
+	}
+	if err := kit.ValidPassword(req.NewPassword); err != nil {
+		return nil, err
+	}
+	if req.NewPassword == req.CurrentPassword {
+		return nil, badRequest("NEW_PASSWORD_SAME")
+	}
+	// the team set the password because there was no email to reset it: an email is now required, so this does not
+	// happen again
+	if user.MustChangePassword && user.EmailGenerated {
+		if strings.TrimSpace(req.Email) == "" {
+			return nil, badRequest("EMAIL_REQUIRED")
+		}
+		email, phone, generated, err := identity(ctx, s.userRepo, user.ID, false, user.Phone, req.Email)
+		if err != nil {
+			return nil, err
+		}
+		if generated {
+			return nil, badRequest("INVALID_EMAIL")
+		}
+		user.Email, user.Username, user.Phone, user.EmailGenerated, user.Verified = email, email, phone, false, false
+		if err := s.userRepo.UpdateProfile(ctx, user); err != nil {
+			return nil, err
+		}
+	}
+	hash, err := utils.Encrypt(req.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+	// a second before now: the new tokens (issued in this second) stay valid, every older one ends
+	changed := time.Now().Add(-time.Second)
+	if err := s.userRepo.SetPassword(ctx, user.ID, hash, changed); err != nil {
+		return nil, err
+	}
+	user.PasswordHash, user.PasswordChangedAt, user.MustChangePassword = hash, &changed, false
+	return issueTokens(user)
 }
 
 func (s *AuthServiceImpl) Login(ctx context.Context, req iddto.LoginDTO) (*iddto.AuthResponseDTO, error) {
@@ -273,7 +327,9 @@ func (s *AuthServiceImpl) ForgotPassword(ctx context.Context, email string) erro
 		}
 		return err
 	}
-	if !user.Status || user.EmailGenerated { // no real address to send to: the page explains what to do
+	// no real address, or one never proven (a mistyped email would send the link to a stranger): nothing is sent,
+	// the answer is the same, and the page says to verify the email in My account or contact the branch
+	if !user.Status || user.EmailGenerated || !user.Verified {
 		return nil
 	}
 	raw, hash, err := newToken()

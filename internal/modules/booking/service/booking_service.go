@@ -410,6 +410,47 @@ func whoBooks(b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*book
 	}
 }
 
+// whoBooksChecked is whoBooks, and where customers can log in (accounts and guests both allowed), a guest whose phone
+// already belongs to an account is sent to log in (PHONE_HAS_ACCOUNT): their booking then shows in their account
+func (s *Service) whoBooksChecked(ctx context.Context, b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*booker, error) {
+	who, err := whoBooks(b, actor, guest)
+	if err != nil || who.Guest == nil || b.BookingMode != domain.BookingModeBoth {
+		return who, err
+	}
+	if has, err := s.phoneHasAccount(ctx, who.Guest.Phone); err != nil {
+		return nil, err
+	} else if has {
+		return nil, conflict("PHONE_HAS_ACCOUNT")
+	}
+	return who, nil
+}
+
+// phoneHasAccount says whether a live account signs in with this phone (20xxxxxxxx)
+func (s *Service) phoneHasAccount(ctx context.Context, phone string) (bool, error) {
+	u, err := s.users.FindByPhone(ctx, phone)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return u != nil && u.Status, nil
+}
+
+// PhoneHasAccount answers the guest form while the phone is typed: true when the branch lets customers log in and an
+// account already uses this phone (they are asked to log in instead). A phone that is not valid yet answers false.
+func (s *Service) PhoneHasAccount(ctx context.Context, slug, phone string) (bool, error) {
+	b, err := s.published(ctx, slug)
+	if err != nil {
+		return false, err
+	}
+	p, ok := domain.NormalizePhone(phone)
+	if !ok || b.BookingMode != domain.BookingModeBoth {
+		return false, nil
+	}
+	return s.phoneHasAccount(ctx, p)
+}
+
 // cleanGuest validates a guest's details; the phone keeps only digits and a leading +
 func cleanGuest(g dto.GuestInfo) (*dto.GuestInfo, error) {
 	g.Name = strings.TrimSpace(g.Name)
@@ -522,7 +563,7 @@ func (s *Service) Create(ctx context.Context, slug string, actor *domain.User, r
 	if len([]rune(req.Notes)) > maxNotesChars {
 		return nil, badRequest("NOTES_TOO_LONG")
 	}
-	who, err := whoBooks(b, actor, req.Guest)
+	who, err := s.whoBooksChecked(ctx, b, actor, req.Guest)
 	if err != nil {
 		return nil, err
 	}
@@ -560,23 +601,20 @@ func (s *Service) created(ctx context.Context, b *domain.Branch, bk *domain.Book
 	bk.Branch = *b
 	out := &dto.CreatedBookingDTO{BookingDTO: toBookingDTO(*bk)}
 	if rawToken != "" {
+		// the guest's private link is in the answer (shown on the confirmed page); customers get an email only when
+		// the team confirms or cancels their booking, not when they book
 		out.GuestToken = rawToken
 		out.GuestLink = s.frontendURL + "/b/" + b.Slug + "/booking/" + rawToken
-		if bk.GuestEmail != "" {
-			if err := s.mailer.SendBookingLink(bk.GuestEmail, b.Name, bk.Code, out.GuestLink); err != nil {
-				log.Printf("⚠️  booking link email for %s failed: %v", bk.Code, err) // the link is also in the response
-			}
-		}
 	}
 	// after the answer is ready: sending takes seconds and must not hold the customer up
-	go s.notifyNewBooking(context.WithoutCancel(ctx), b, out, actor, who.Staff != nil, rawToken != "")
+	go s.notifyNewBooking(context.WithoutCancel(ctx), b, out, actor, who.Staff != nil)
 	return out
 }
 
-// notifyNewBooking sends the emails of a new booking: a receipt to the customer (a guest already got
-// their private link) and, for a booking the customer made themselves, ONE email to the branch's
-// active managers and staff. A failed email is logged and never undoes the booking.
-func (s *Service) notifyNewBooking(ctx context.Context, b *domain.Branch, out *dto.CreatedBookingDTO, actor *domain.User, byStaff, guest bool) {
+// notifyNewBooking tells the team about a new booking: Telegram, and for a booking the customer made themselves, ONE
+// email to the branch's active managers and staff. The customer gets no email now (only when the team confirms or
+// cancels). A failed email is logged and never undoes the booking.
+func (s *Service) notifyNewBooking(ctx context.Context, b *domain.Branch, out *dto.CreatedBookingDTO, actor *domain.User, byStaff bool) {
 	if s.team != nil && !byStaff { // the team already knows about a booking one of them made
 		s.team.NewBooking(ctx, b.ID, out.ID)
 	}
@@ -633,21 +671,7 @@ func (s *Service) notifyNewBooking(ctx context.Context, b *domain.Branch, out *d
 	}
 	info.Customer = strings.TrimSpace(name + " " + phone)
 
-	if !guest { // a guest has their private link email; a customer or a walk-in gets a receipt
-		to, link := customerEmail, s.frontendURL+"/account"
-		if byStaff {
-			to, link = "", s.frontendURL+"/b/"+b.Slug
-			if out.CustomerEmail != "" {
-				to = out.CustomerEmail
-			}
-		}
-		if to != "" {
-			info.Link = link
-			if err := s.mailer.SendBookingReceived(to, info); err != nil {
-				log.Printf("⚠️  booking receipt for %s failed: %v", out.Code, err)
-			}
-		}
-	}
+	// no receipt to the customer when they book: they hear from us when the team confirms or cancels (notifyStatusChange)
 
 	if byStaff { // the team made it or knows about it
 		return

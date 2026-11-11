@@ -87,7 +87,12 @@ func (r *userRepository) SetStatus(ctx context.Context, id uint, status bool) er
 
 func (r *userRepository) SetPassword(ctx context.Context, id uint, hash []byte, changedAt time.Time) error {
 	return requireAffected(r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", id).
-		Updates(map[string]any{"password_hash": hash, "password_changed_at": changedAt}))
+		Updates(map[string]any{"password_hash": hash, "password_changed_at": changedAt, "must_change_password": false}))
+}
+
+func (r *userRepository) SetPasswordByTeam(ctx context.Context, id uint, hash []byte, changedAt time.Time) error {
+	return requireAffected(r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", id).
+		Updates(map[string]any{"password_hash": hash, "password_changed_at": changedAt, "must_change_password": true}))
 }
 
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
@@ -134,8 +139,12 @@ func (r *userRepository) EmailTaken(ctx context.Context, email string, exceptID 
 func (r *userRepository) UpdateProfile(ctx context.Context, u *domain.User) error {
 	return requireAffected(r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", u.ID).Updates(map[string]any{
 		"name": u.Name, "email": u.Email, "username": u.Username, "phone": u.Phone,
-		"nationality": u.Nationality, "email_generated": u.EmailGenerated,
+		"nationality": u.Nationality, "email_generated": u.EmailGenerated, "verified": u.Verified,
 	}))
+}
+
+func (r *userRepository) SetVerified(ctx context.Context, id uint, verified bool) error {
+	return requireAffected(r.db.WithContext(ctx).Model(&domain.User{}).Where("id = ?", id).Update("verified", verified))
 }
 
 func (r *userRepository) SetCompanyRole(ctx context.Context, id uint, role string) error {

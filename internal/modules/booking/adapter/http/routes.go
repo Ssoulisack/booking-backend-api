@@ -26,6 +26,8 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	// find a booking without its link (code + phone): POST keeps the phone out of addresses and logs;
 	// few tries, so codes cannot be guessed
 	pub.Post("/bookings/find", middleware.RateLimit(20, 15*time.Minute), h.FindBooking)
+	// the guest form asks whether a phone has an account: limited, so it cannot be used to list who has one
+	pub.Post("/phone-check", middleware.RateLimit(30, 15*time.Minute), h.PhoneCheck)
 	pub.Post("/bookings/find/cancel", middleware.RateLimit(20, 15*time.Minute), h.FindCancel)
 	pub.Get("/bookings/:token", h.GuestView)
 	pub.Post("/bookings/:token/cancel", middleware.RateLimit(10, 15*time.Minute), h.GuestCancel)

@@ -94,6 +94,64 @@ func (h *Handler) UpdateTeamMember(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+// FindTeamCandidate: ?q= a phone or member number
+func (h *Handler) FindTeamCandidate(c *fiber.Ctx) error {
+	res, err := h.company.FindTeamCandidate(c.UserContext(), c.Query("q"))
+	return httpx.OK(c, res, err)
+}
+
+// AddTeamMember puts a registered account on the team (role and branches), without an invitation
+func (h *Handler) AddTeamMember(c *fiber.Ctx) error {
+	var req dto.AddTeamMemberRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.company.AddTeamMember(c.UserContext(), middleware.CurrentUser(c), req)
+	return httpx.Created(c, res, err)
+}
+
+// BranchTeam: ?role=manager&q=2055551234
+func (h *Handler) BranchTeam(c *fiber.Ctx) error {
+	branchID, err := httpx.ID(c, "branchId")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.company.BranchTeam(c.UserContext(), branchID, c.Query("role"), c.Query("q"))
+	return httpx.OK(c, res, err)
+}
+
+// SetBranchAccess: {"active": false} switches the person's access to this branch off
+func (h *Handler) SetBranchAccess(c *fiber.Ctx) error {
+	branchID, err := httpx.ID(c, "branchId")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	userID, err := httpx.ID(c, "userId")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	var req struct {
+		Active bool `json:"active"`
+	}
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "UPDATED", h.company.SetBranchAccess(c.UserContext(), middleware.CurrentUser(c), branchID, userID, req.Active))
+}
+
+// RemoveFromBranch takes the person off this branch
+func (h *Handler) RemoveFromBranch(c *fiber.Ctx) error {
+	branchID, err := httpx.ID(c, "branchId")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	userID, err := httpx.ID(c, "userId")
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "REMOVED", h.company.RemoveFromBranch(c.UserContext(), middleware.CurrentUser(c), branchID, userID))
+}
+
 func (h *Handler) RemoveTeamMember(c *fiber.Ctx) error {
 	id, err := httpx.ID(c, "userId")
 	if err != nil {

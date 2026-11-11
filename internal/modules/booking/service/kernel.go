@@ -55,8 +55,8 @@ func (s *Service) BusyIntervals(ctx context.Context, branchID uint, ownerType st
 	return s.busyIntervals(ctx, branchID, ownerType, ownerID, from, to)
 }
 
-func (s *Service) WhoBooks(b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*port.Booker, error) {
-	return whoBooks(b, actor, guest)
+func (s *Service) WhoBooks(ctx context.Context, b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*port.Booker, error) {
+	return s.whoBooksChecked(ctx, b, actor, guest)
 }
 
 func (s *Service) CleanGuest(g dto.GuestInfo) (*dto.GuestInfo, error) { return cleanGuest(g) }

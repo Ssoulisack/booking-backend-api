@@ -105,3 +105,31 @@ func (r *socialRepository) Find(ctx context.Context, provider, uid string) (*idd
 func (r *socialRepository) Create(ctx context.Context, identity *iddomain.SocialIdentity) error {
 	return exception.HandleGormError(r.db.WithContext(ctx).Create(identity).Error)
 }
+
+// ---------- email codes ----------
+
+type emailCodeRepository struct{ db *gorm.DB }
+
+func NewEmailCodes(db *gorm.DB) port.EmailCodeRepository { return &emailCodeRepository{db: db} }
+
+func (r *emailCodeRepository) Replace(ctx context.Context, code *iddomain.EmailCode) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", code.UserID).Delete(&iddomain.EmailCode{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(code).Error
+	}))
+}
+
+func (r *emailCodeRepository) Find(ctx context.Context, userID uint) (*iddomain.EmailCode, error) {
+	return firstOrNil[iddomain.EmailCode](r.db.WithContext(ctx).Where("user_id = ?", userID))
+}
+
+func (r *emailCodeRepository) AddAttempt(ctx context.Context, id uint) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Model(&iddomain.EmailCode{}).Where("id = ?", id).
+		UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error)
+}
+
+func (r *emailCodeRepository) Delete(ctx context.Context, userID uint) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Where("user_id = ?", userID).Delete(&iddomain.EmailCode{}).Error)
+}

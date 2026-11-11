@@ -17,6 +17,11 @@ type AuthService interface {
 	MyBranches(ctx context.Context, userID uint) ([]dto.MyBranchDTO, error)
 	// UpdateProfile changes the person's own name, nationality, phone and email
 	UpdateProfile(ctx context.Context, userID uint, req iddto.ProfileRequest) (*dto.UserDTO, error)
+	// ChangePassword: the logged-in person chooses a new password; answers new tokens (older logins end)
+	ChangePassword(ctx context.Context, userID uint, req iddto.ChangePasswordRequest) (*iddto.AuthResponseDTO, error)
+	// SendEmailCode emails a 6-digit code proving the email is the person's; VerifyEmail checks it
+	SendEmailCode(ctx context.Context, userID uint) error
+	VerifyEmail(ctx context.Context, userID uint, code string) (*dto.UserDTO, error)
 	// SocialLogin signs a customer in with a Google or Facebook token, creating the account on the
 	// first visit. A verified provider email joins an existing customer account; team members
 	// (owner, admins, managers, staff) keep their password.

@@ -33,6 +33,15 @@ type CompanyService interface {
 
 	ListTeam(ctx context.Context) ([]dto.TeamMemberDTO, error)
 	UpdateTeamMember(ctx context.Context, actor *domain.User, userID uint, req dto.TeamMemberRequest) (*dto.TeamMemberDTO, error)
+	// FindTeamCandidate looks up a registered account by phone or member number; AddTeamMember puts it on the
+	// team without an invitation (people without email register first, then are added)
+	FindTeamCandidate(ctx context.Context, query string) (*dto.TeamCandidateDTO, error)
+	// BranchTeam: who works at a branch (role filter, search by phone / member number / name); SetBranchAccess and
+	// RemoveFromBranch change a manager's or staff member's place at that one branch
+	BranchTeam(ctx context.Context, branchID uint, role, q string) ([]dto.BranchTeamMemberDTO, error)
+	SetBranchAccess(ctx context.Context, actor *domain.User, branchID, userID uint, active bool) error
+	RemoveFromBranch(ctx context.Context, actor *domain.User, branchID, userID uint) error
+	AddTeamMember(ctx context.Context, actor *domain.User, req dto.AddTeamMemberRequest) (*dto.TeamMemberDTO, error)
 	// RemoveTeamMember takes away every company and branch role; the account stays a customer
 	RemoveTeamMember(ctx context.Context, actor *domain.User, userID uint) error
 	// TransferOwnership makes an admin the owner; the old owner becomes an admin

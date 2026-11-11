@@ -115,6 +115,7 @@ type CustomerRow struct {
 	MemberNo      *string
 	Name          string
 	Email         string
+	Verified      bool // the email was proven with a code
 	Phone         string
 	Bookings      int64
 	LastBookingAt time.Time

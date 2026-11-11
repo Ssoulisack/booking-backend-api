@@ -47,3 +47,15 @@ type Invitation struct {
 	AcceptedAt  *time.Time
 	InvitedByID uint `gorm:"not null"`
 }
+
+// EmailCode is the 6-digit code sent to someone's email to prove it is theirs: one live code per person, for the
+// email the account had when it was sent
+type EmailCode struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UserID    uint      `gorm:"not null;uniqueIndex"`
+	Email     string    `gorm:"type:varchar(255);not null"`
+	CodeHash  string    `gorm:"type:varchar(64);not null"`
+	ExpiresAt time.Time `gorm:"not null"`
+	Attempts  int       `gorm:"not null;default:0"`
+}

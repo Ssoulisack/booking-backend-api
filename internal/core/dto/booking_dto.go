@@ -266,6 +266,7 @@ type CustomerDTO struct {
 	MemberNo      string    `json:"member_no"`
 	Name          string    `json:"name"`
 	Email         string    `json:"email"`
+	EmailVerified bool      `json:"email_verified"` // the email was proven with a code (false when there is none)
 	Phone         string    `json:"phone"`
 	Bookings      int64     `json:"bookings"`
 	LastBookingAt time.Time `json:"last_booking_at"`

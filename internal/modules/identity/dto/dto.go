@@ -34,6 +34,15 @@ type ProfileRequest struct {
 	Nationality string `json:"nationality"`
 }
 
+// ChangePasswordRequest: the logged-in person sets a new password (the current one proves it is them)
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+	// Email: required when the team set the password and the account has no real email (so next time the person
+	// can reset it themselves)
+	Email string `json:"email"`
+}
+
 // SocialLoginRequest carries the token the browser got from Google (an ID token) or Facebook (an
 // access token)
 type SocialLoginRequest struct {

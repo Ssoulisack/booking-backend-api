@@ -30,6 +30,7 @@ var emailLayout = template.Must(template.New("email").Parse(`<!DOCTYPE html>
     <div lang="lo">
       <h2 style="color:#222;">{{.Lao.Title}}</h2>
       <p style="font-size:16px;color:#333;">{{.Lao.Message}}</p>
+      {{if $.Code}}<p style="text-align:center;font-size:34px;font-weight:bold;letter-spacing:10px;margin:24px 0;font-family:Arial,sans-serif;">{{$.Code}}</p>{{end}}
       <p style="text-align:center;margin:28px 0;">
         <a href="{{.URL}}" style="background:#0b6bcb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:5px;font-weight:bold;">{{.Lao.Button}}</a>
       </p>
@@ -39,6 +40,7 @@ var emailLayout = template.Must(template.New("email").Parse(`<!DOCTYPE html>
     <div lang="en" style="font-family:Arial,sans-serif;">
       <h2 style="color:#222;">{{.En.Title}}</h2>
       <p style="font-size:16px;color:#333;">{{.En.Message}}</p>
+      {{if $.Code}}<p style="text-align:center;font-size:34px;font-weight:bold;letter-spacing:10px;margin:24px 0;font-family:Arial,sans-serif;">{{$.Code}}</p>{{end}}
       <p style="text-align:center;margin:28px 0;">
         <a href="{{.URL}}" style="background:#0b6bcb;color:#fff;text-decoration:none;padding:12px 24px;border-radius:5px;font-weight:bold;">{{.En.Button}}</a>
       </p>
@@ -58,6 +60,8 @@ type emailData struct {
 	Lao, En emailText
 	URL     string
 	AppName string
+	// Code: a code shown large in both parts (email verification)
+	Code string
 }
 
 // subjectOf puts both languages in the subject, Lao first
@@ -162,6 +166,25 @@ func (m *systemMailer) SendPasswordReset(to, name, resetURL string) error {
 			Message: fmt.Sprintf("Hi %s, we received a request to reset your %s password.", name, m.appName),
 			Button:  "Set a new password",
 			Note:    "This link expires in 1 hour and works once. If you did not ask for it, ignore this email: your password stays the same.",
+		},
+	})
+}
+
+func (m *systemMailer) SendEmailCode(to, name, code, accountURL string) error {
+	return m.send(to, subjectOf("ລະຫັດຢືນຢັນອີເມວ "+code, "Your email code "+code), emailData{
+		URL:  accountURL,
+		Code: code,
+		Lao: emailText{
+			Title:   "ຢືນຢັນອີເມວຂອງທ່ານ",
+			Message: fmt.Sprintf("ສະບາຍດີ %s, ໃສ່ລະຫັດນີ້ໃນ %s ເພື່ອຢືນຢັນວ່າອີເມວນີ້ເປັນຂອງທ່ານ:", name, m.appName),
+			Button:  "ເປີດບັນຊີຂອງຂ້ອຍ",
+			Note:    "ລະຫັດໝົດອາຍຸໃນ 10 ນາທີ. ຖ້າທ່ານບໍ່ໄດ້ຂໍ ໃຫ້ບໍ່ສົນໃຈອີເມວນີ້.",
+		},
+		En: emailText{
+			Title:   "Verify your email",
+			Message: fmt.Sprintf("Hi %s, enter this code in %s to show this email is yours:", name, m.appName),
+			Button:  "Open my account",
+			Note:    "The code expires in 10 minutes. If you did not ask for it, ignore this email.",
 		},
 	})
 }

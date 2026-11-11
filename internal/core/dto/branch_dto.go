@@ -134,6 +134,35 @@ type TeamMemberRequest struct {
 	Active    *bool  `json:"active"`
 }
 
+// BranchTeamMemberDTO is one person who works at a branch: the company owner and admins (every branch, managed on
+// the company Team page) and the branch's managers and staff
+type BranchTeamMemberDTO struct {
+	UserID   uint   `json:"user_id"`
+	MemberNo string `json:"member_no"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`   // owner, admin, manager, staff
+	Active   bool   `json:"active"` // false: their access to this branch is switched off
+}
+
+// TeamCandidateDTO is a registered account found by phone or member number, to add to the team
+type TeamCandidateDTO struct {
+	UserID   uint   `json:"user_id"`
+	MemberNo string `json:"member_no"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"` // empty when there is no real email
+	InTeam   bool   `json:"in_team"`
+}
+
+// AddTeamMemberRequest puts a registered account on the team (no invitation)
+type AddTeamMemberRequest struct {
+	UserID    uint   `json:"user_id"`
+	Role      string `json:"role"`
+	BranchIDs []uint `json:"branch_ids"`
+}
+
 type TransferOwnershipRequest struct {
 	UserID uint `json:"user_id"`
 }

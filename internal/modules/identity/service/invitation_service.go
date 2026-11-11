@@ -274,6 +274,13 @@ func (s *InvitationServiceImpl) Accept(ctx context.Context, token string, actor 
 	if err := kit.SyncMemberNo(ctx, s.users, user); err != nil {
 		return nil, err
 	}
+	// the invitation link went to this email: it is proven
+	if !user.Verified {
+		if err := s.users.SetVerified(ctx, user.ID, true); err != nil {
+			return nil, err
+		}
+		user.Verified = true
+	}
 	now := s.now()
 	inv.AcceptedAt = &now
 	if err := s.invitations.Update(ctx, inv); err != nil {

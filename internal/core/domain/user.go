@@ -29,6 +29,9 @@ type User struct {
 	LastActive time.Time
 	// tokens issued before this moment are rejected (set on password reset)
 	PasswordChangedAt *time.Time
+	// MustChangePassword: the team set this password (the person had no way to reset it): they are asked to choose
+	// their own after logging in. Cleared when they change or reset it themselves.
+	MustChangePassword bool `gorm:"not null;default:false"`
 }
 
 // RunsCompany is true for the company owner and admins: every branch, the company settings, the team

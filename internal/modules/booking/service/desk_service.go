@@ -373,21 +373,21 @@ func (s *Service) Customers(ctx context.Context, branchID uint, q dto.ListQuery)
 	return pageOf(rows, total, page, limit, func(r output.CustomerRow) dto.CustomerDTO {
 		return dto.CustomerDTO{
 			UserID: r.UserID, MemberNo: domain.MemberNoOf(r.MemberNo), Name: r.Name, Phone: r.Phone,
-			Email:    contactEmail(r.Email),
+			Email: contactEmail(r.Email), EmailVerified: r.Verified && contactEmail(r.Email) != "",
 			Bookings: r.Bookings, LastBookingAt: r.LastBookingAt,
 		}
 	}), nil
 }
 
-// notifyStatusChange emails the customer (or a guest who gave an email) after staff confirm or cancel.
-// A failed email is logged and never undoes the change.
+// notifyStatusChange emails the customer (or a guest who gave an email) after staff confirm or cancel: the only
+// booking emails a customer gets. A failed email is logged and never undoes the change.
 func (s *Service) notifyStatusChange(bk *domain.Booking, status, reason string) {
 	to, name := bk.GuestEmail, bk.GuestName
 	if bk.Customer != nil {
 		to, name = bk.Customer.Email, bk.Customer.Name
 	}
-	if to == "" {
-		return // walk-ins without an email are told in person
+	if to == "" || domain.IsGeneratedEmail(to) {
+		return // walk-ins without an email, and accounts with only a phone, are told in person
 	}
 	link := s.frontendURL + "/b/" + bk.Branch.Slug
 	if err := s.mailer.SendBookingUpdate(to, name, bk.Branch.Name, bk.Code, status, reason, link); err != nil {

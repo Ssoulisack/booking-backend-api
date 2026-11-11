@@ -23,7 +23,7 @@ type Kernel interface {
 	Branch(ctx context.Context, branchID uint) (*domain.Branch, *time.Location, error)
 	OpenIntervals(ctx context.Context, branchID uint, ownerType string, ownerID uint, day time.Time) ([]domain.Interval, error)
 	BusyIntervals(ctx context.Context, branchID uint, ownerType string, ownerID uint, from, to time.Time) ([]domain.Interval, error)
-	WhoBooks(b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*Booker, error)
+	WhoBooks(ctx context.Context, b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*Booker, error)
 	CleanGuest(g dto.GuestInfo) (*dto.GuestInfo, error)
 	NewBooking(b *domain.Branch, who *Booker, sportID uint, start, end time.Time, rule *domain.EffectiveRule, notes string) (*domain.Booking, string, error)
 	CheckBookingLimit(ctx context.Context, branchID uint, who *Booker, rule *domain.EffectiveRule) error
