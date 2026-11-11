@@ -23,6 +23,7 @@ type Deps struct {
 	Sports     output.SportRepository
 	Resources  output.ResourceRepository
 	Timetables output.ClassTimetableRepository
+	Coaches    output.CoachRepository
 	Users      output.UserRepository
 }
 
@@ -35,7 +36,7 @@ type Module struct {
 
 // New builds the module
 func New(d Deps) *Module {
-	svc := service.New(service.Deps{Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources, Timetables: d.Timetables, Users: d.Users})
+	svc := service.New(service.Deps{Repo: postgres.New(d.DB), Branches: d.Branches, Sports: d.Sports, Resources: d.Resources, Timetables: d.Timetables, Coaches: d.Coaches, Users: d.Users})
 	return &Module{Service: svc, svc: svc, handler: http.New(svc)}
 }
 

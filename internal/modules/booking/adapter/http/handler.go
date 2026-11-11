@@ -41,6 +41,16 @@ func (h *Handler) Availability(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+// CoachAvailability: ?date&resource_id&sport_id — the coaches free with the space that day, with their times
+func (h *Handler) CoachAvailability(c *fiber.Ctx) error {
+	var q dto.AvailabilityQuery
+	if err := c.QueryParser(&q); err != nil {
+		return httpx.Fail(c, response.ErrorBadRequest("INVALID_QUERY"))
+	}
+	res, err := h.book.CoachAvailability(c.UserContext(), c.Params("slug"), q)
+	return httpx.OK(c, res, err)
+}
+
 // Create books as the logged-in customer, or as a guest when no token is sent
 func (h *Handler) Create(c *fiber.Ctx) error {
 	var req dto.CreateBookingRequest

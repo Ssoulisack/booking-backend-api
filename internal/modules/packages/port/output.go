@@ -50,10 +50,10 @@ type Repository interface {
 	Purchases(ctx context.Context, branchID, customerID uint, q string, limit int) ([]domain.CustomerPackage, error)
 	// PurchasesOf: everything one customer bought, at every branch, newest first
 	PurchasesOf(ctx context.Context, userID uint) ([]domain.CustomerPackage, error)
-	// TakeVisit takes one visit of an active times package that has some left (false: none left); ReturnVisit gives
-	// one back (only called for a visit that was taken)
-	TakeVisit(ctx context.Context, id uint) (bool, error)
-	ReturnVisit(ctx context.Context, id uint) error
+	// TakeVisits takes n visits of an active times package that has at least n left (false: not enough left);
+	// ReturnVisits gives n back (only called for visits that were taken)
+	TakeVisits(ctx context.Context, id uint, n int) (bool, error)
+	ReturnVisits(ctx context.Context, id uint, n int) error
 	// AddVisit writes a line of the log; Visits reads a package's log, newest first; VisitSum adds up what one
 	// booking did to a package (-1 = a visit taken and not given back)
 	AddVisit(ctx context.Context, v *domain.Visit) error
@@ -65,6 +65,9 @@ type Repository interface {
 	PaidBetween(ctx context.Context, branchID uint, from, to time.Time) ([]domain.CustomerPackage, error)
 	// PendingCount: the customer's packages at the branch still waiting for payment
 	PendingCount(ctx context.Context, branchID, customerID uint) (int64, error)
+	// MemberIDs: the customers with a paid, not cancelled package at the branch, the latest buyer first; keyword finds
+	// by name, phone, email or customer number ("" = all)
+	MemberIDs(ctx context.Context, branchID uint, keyword string, offset, limit int) (ids []uint, total int64, err error)
 	// CancelUnpaid cancels the package only if it is still waiting and unpaid, in one step (false: it was not)
 	CancelUnpaid(ctx context.Context, id uint) (bool, error)
 	// SetPayBy moves the pay-by time of a package still waiting for money and with no slip sent

@@ -21,6 +21,7 @@ type PublicServiceImpl struct {
 	classes   output.ClassSessionRepository
 	bookings  output.BookingRepository
 	prices    output.PriceRepository
+	hours     output.OpeningHourRepository
 	files     kit.MediaFiles
 	now       func() time.Time
 }
@@ -35,11 +36,12 @@ func NewPublicService(
 	classes output.ClassSessionRepository,
 	bookings output.BookingRepository,
 	prices output.PriceRepository,
+	hours output.OpeningHourRepository,
 	storage output.FileStorage,
 ) port.PublicService {
 	return &PublicServiceImpl{
 		company: company, branches: branches, directory: directory, sports: sports, resources: resources, coaches: coaches, classes: classes, bookings: bookings,
-		prices: prices, files: kit.MediaFiles{Storage: storage}, now: time.Now,
+		prices: prices, hours: hours, files: kit.MediaFiles{Storage: storage}, now: time.Now,
 	}
 }
 
@@ -166,9 +168,15 @@ func (s *PublicServiceImpl) Coaches(ctx context.Context, slug string, sportID ui
 		if err != nil {
 			return nil, err
 		}
+		// a coach closed every day (no opening hours) cannot be booked by the hour: still listed (their name shows on the
+		// classes they lead), but not offered as a coach to book
+		hours, err := s.hours.ListByOwner(ctx, b.ID, domain.OwnerCoach, c.ID)
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, dto.PublicCoachDTO{
 			ID: c.ID, Name: c.Name, Bio: c.Bio, ImageURL: s.files.URL(c.ImageKey), Sports: sportRefs(c.Sports),
-			PricePerHour: price, Currency: currency,
+			PricePerHour: price, Currency: currency, Bookable: len(hours) > 0,
 		})
 	}
 	return out, nil

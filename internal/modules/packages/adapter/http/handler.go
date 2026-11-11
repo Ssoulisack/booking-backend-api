@@ -5,6 +5,7 @@ import (
 	"backend/internal/modules/packages/port"
 	"backend/internal/platform/httpx"
 	"backend/internal/platform/middleware"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -111,6 +112,12 @@ func (h *Handler) CancelMine(c *fiber.Ctx) error {
 func (h *Handler) Sold(c *fiber.Ctx) error {
 	res, err := h.svc.Sold(c.UserContext(), middleware.BranchID(c), uint(c.QueryInt("customer_id", 0)), c.Query("status"), c.Query("q"))
 	return httpx.OK(c, res, err)
+}
+
+// Members: the customers who bought a package here (?keyword, ?page, ?limit)
+func (h *Handler) Members(c *fiber.Ctx) error {
+	res, err := h.svc.Members(c.UserContext(), middleware.BranchID(c), strings.TrimSpace(c.Query("keyword")), c.QueryInt("page", 1), c.QueryInt("limit", 20))
+	return httpx.Paged(c, res, err)
 }
 
 func (h *Handler) Sell(c *fiber.Ctx) error {

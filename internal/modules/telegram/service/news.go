@@ -24,10 +24,23 @@ func (s *Service) Announce(ctx context.Context, branchID uint, topic, title stri
 
 func (s *Service) announce(ctx context.Context, branchID uint, topic, title string, lines []string, name, phone string) error {
 	cur, err := s.Repo.Get(ctx, branchID)
-	if err != nil || cur == nil || !cur.Enabled || cur.TokenEnc == "" || cur.ChatIDEnc == "" {
+	if err != nil {
 		return err
 	}
+	// say why nothing is sent, so "no message arrived" can be answered from the log
+	switch {
+	case cur == nil || cur.TokenEnc == "":
+		log.Printf("ℹ️  telegram news for branch %d not sent: no bot connected", branchID)
+		return nil
+	case cur.ChatIDEnc == "":
+		log.Printf("ℹ️  telegram news for branch %d not sent: no group chosen", branchID)
+		return nil
+	case !cur.Enabled:
+		log.Printf("ℹ️  telegram news for branch %d not sent: messages are switched off", branchID)
+		return nil
+	}
 	if (topic == output.NewsPayment && !cur.OnPayment) || (topic == output.NewsCancel && !cur.OnCancel) || (topic == output.NewsStaffCancel && !cur.OnStaffCancel) {
+		log.Printf("ℹ️  telegram news for branch %d not sent: the %q switch is off", branchID, topic)
 		return nil
 	}
 	token, chat, err := s.open(cur)

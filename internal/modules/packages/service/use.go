@@ -42,8 +42,9 @@ func (s *Service) Take(ctx context.Context, f output.PackageFit) (int, output.Pa
 	case f.Class:
 		covers = cp.Covers == pkgdomain.CoversClass && cp.SportID == f.SportID && pkgdomain.CoversClassOf(cp.ClassIDs, f.TimetableID)
 	default:
+		// its space; with a coach only when the package includes that coach (then the coach costs nothing too)
 		covers = cp.Covers == pkgdomain.CoversSpace && cp.ResourceID != nil && f.ResourceID != nil &&
-			*cp.ResourceID == *f.ResourceID && !f.WithCoach
+			*cp.ResourceID == *f.ResourceID && (!f.WithCoach || (f.CoachID != nil && cp.IncludesCoach(*f.CoachID)))
 	}
 	if !covers {
 		return 0, output.PackageRef{}, conflict("PACKAGE_DOES_NOT_COVER")
@@ -51,14 +52,27 @@ func (s *Service) Take(ctx context.Context, f output.PackageFit) (int, output.Pa
 	if cp.Kind == pkgdomain.OptionMonths {
 		return 0, ref, nil
 	}
-	ok, err := s.Repo.TakeVisit(ctx, cp.ID)
+	// a seat in a group class is one visit; a space booking is one visit per "minutes per visit" (a length that is not
+	// a whole number of visits is not covered: it is paid)
+	visits := 1
+	if !f.Class {
+		n, ok := cp.VisitsFor(f.Minutes)
+		if !ok {
+			return 0, output.PackageRef{}, conflict("PACKAGE_WRONG_LENGTH")
+		}
+		visits = n
+	}
+	if cp.TimesLeft < visits {
+		return 0, output.PackageRef{}, conflict("PACKAGE_NOT_ENOUGH_VISITS")
+	}
+	ok, err := s.Repo.TakeVisits(ctx, cp.ID, visits)
 	if err != nil {
 		return 0, output.PackageRef{}, err
 	}
 	if !ok {
-		return 0, output.PackageRef{}, conflict("PACKAGE_USED_UP")
+		return 0, output.PackageRef{}, conflict("PACKAGE_NOT_ENOUGH_VISITS")
 	}
-	return -1, ref, nil
+	return -visits, ref, nil
 }
 
 // Record writes the booking into the package's log
@@ -69,22 +83,27 @@ func (s *Service) Record(ctx context.Context, packageID, bookingID uint, change 
 	}
 }
 
-// GiveBack puts a visit back: the booking was not saved (bookingID 0), or it was cancelled. A cancelled booking
-// gives its visit back once.
-func (s *Service) GiveBack(ctx context.Context, packageID, bookingID uint) {
+// GiveBack puts visits back: the booking was not saved (bookingID 0: the visits Take took), or it was cancelled (the
+// visits its log shows, once).
+func (s *Service) GiveBack(ctx context.Context, packageID, bookingID uint, taken int) {
+	n := taken
 	if bookingID != 0 {
 		sum, err := s.Repo.VisitSum(ctx, packageID, bookingID)
 		if err != nil || sum >= 0 {
 			return // no visit was taken for it, or it was given back already
 		}
+		n = -sum
 	}
-	if err := s.Repo.ReturnVisit(ctx, packageID); err != nil {
-		log.Printf("⚠️  package %d: visit not given back: %v", packageID, err)
+	if n <= 0 {
+		return
+	}
+	if err := s.Repo.ReturnVisits(ctx, packageID, n); err != nil {
+		log.Printf("⚠️  package %d: %d visit(s) not given back: %v", packageID, n, err)
 		return
 	}
 	if bookingID != 0 {
 		id := bookingID
-		_ = s.Repo.AddVisit(ctx, &pkgdomain.Visit{CustomerPackageID: packageID, BookingID: &id, Change: 1, Note: "cancelled", CreatedAt: s.now()})
+		_ = s.Repo.AddVisit(ctx, &pkgdomain.Visit{CustomerPackageID: packageID, BookingID: &id, Change: n, Note: "cancelled", CreatedAt: s.now()})
 	}
 }
 

@@ -2,6 +2,7 @@ package port
 
 import (
 	"backend/internal/core/domain"
+	coredto "backend/internal/core/dto"
 	"backend/internal/core/port/output"
 	"backend/internal/modules/packages/dto"
 	"context"
@@ -35,6 +36,8 @@ type Service interface {
 	// staff: packages sold at a branch; sell at the desk; mark paid (cash, transfer, QR); cancel
 	Sold(ctx context.Context, branchID, customerID uint, status, q string) ([]dto.CustomerPackageDTO, error)
 	Sell(ctx context.Context, branchID uint, by *domain.User, req dto.SellRequest) (*dto.CustomerPackageDTO, error)
+	// Members: the customers who bought a package here (the Membership tab), a page at a time
+	Members(ctx context.Context, branchID uint, keyword string, page, limit int) (*coredto.PagedResult[dto.MemberDTO], error)
 	MarkPaid(ctx context.Context, branchID, id uint, by *domain.User, req dto.MarkPaidRequest) (*dto.CustomerPackageDTO, error)
 	Cancel(ctx context.Context, branchID, id uint, by *domain.User) (*dto.CustomerPackageDTO, error)
 

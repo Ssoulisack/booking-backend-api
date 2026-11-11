@@ -37,7 +37,9 @@ type Deps struct {
 	Resources output.ResourceRepository
 	// Timetables: the weekly classes a group-class package can be limited to
 	Timetables output.ClassTimetableRepository
-	Users      output.UserRepository
+	// Coaches: the coaches a space package can include
+	Coaches output.CoachRepository
+	Users   output.UserRepository
 	// Now: the clock (nil: the real one)
 	Now func() time.Time
 }
@@ -176,12 +178,30 @@ func (s *Service) save(ctx context.Context, b *domain.Branch, p *pkgdomain.Packa
 		}
 		resourceID = req.ResourceID
 	}
+	// the coaches a space package includes: coaches of this branch who teach the sport
+	coachIDs := ""
+	if req.Covers == pkgdomain.CoversSpace && len(req.CoachIDs) > 0 && s.Coaches != nil {
+		for _, id := range req.CoachIDs {
+			c, err := s.Coaches.GetByID(ctx, b.ID, id)
+			if err != nil {
+				return nil, mapNotFound(err, "COACH_NOT_FOUND")
+			}
+			teaches := false
+			for _, sp := range c.Sports {
+				teaches = teaches || sp.ID == req.SportID
+			}
+			if !teaches {
+				return nil, badRequest("COACH_NOT_IN_SPORT")
+			}
+		}
+		coachIDs = pkgdomain.ClassText(req.CoachIDs)
+	}
 	options, err := s.options(req.Options)
 	if err != nil {
 		return nil, err
 	}
 	p.SportID, p.Name, p.Description = req.SportID, name, strings.TrimSpace(req.Description)
-	p.Covers, p.ResourceID, p.ClassIDs = req.Covers, resourceID, classIDs
+	p.Covers, p.ResourceID, p.ClassIDs, p.CoachIDs = req.Covers, resourceID, classIDs, coachIDs
 	if req.Active != nil {
 		p.Active = *req.Active
 	}
@@ -219,6 +239,10 @@ func (s *Service) options(in []dto.OptionRequest) ([]pkgdomain.Option, error) {
 		if o.ValidDays < 0 || o.ValidDays > maxDays {
 			return nil, badRequest("INVALID_VALID_DAYS")
 		}
+		// minutes per visit: times only, 0 (any length) or 5 minutes to a day, in 5-minute steps
+		if o.MinutesPerVisit != 0 && (o.Kind != pkgdomain.OptionTimes || o.MinutesPerVisit < 5 || o.MinutesPerVisit > 24*60 || o.MinutesPerVisit%5 != 0) {
+			return nil, badRequest("INVALID_MINUTES_PER_VISIT")
+		}
 		key := [2]any{o.Kind, o.Amount}
 		if seen[key] {
 			return nil, badRequest("DUPLICATE_OPTION")
@@ -229,7 +253,7 @@ func (s *Service) options(in []dto.OptionRequest) ([]pkgdomain.Option, error) {
 			active = *o.Active
 		}
 		out = append(out, pkgdomain.Option{
-			Model: gorm.Model{ID: o.ID}, Kind: o.Kind, Amount: o.Amount, Price: o.Price, ValidDays: o.ValidDays, Active: active,
+			Model: gorm.Model{ID: o.ID}, Kind: o.Kind, Amount: o.Amount, Price: o.Price, ValidDays: o.ValidDays, MinutesPerVisit: o.MinutesPerVisit, Active: active,
 		})
 	}
 	return out, nil
@@ -306,10 +330,10 @@ func (s *Service) one(ctx context.Context, b *domain.Branch, p *pkgdomain.Packag
 }
 
 // nameBook gives the sport and space names of a branch, for answers
-type nameBook struct{ sports, spaces, classes map[uint]string }
+type nameBook struct{ sports, spaces, classes, coaches map[uint]string }
 
 func (s *Service) names(ctx context.Context, branchID uint) (nameBook, error) {
-	n := nameBook{sports: map[uint]string{}, spaces: map[uint]string{}, classes: map[uint]string{}}
+	n := nameBook{sports: map[uint]string{}, spaces: map[uint]string{}, classes: map[uint]string{}, coaches: map[uint]string{}}
 	sports, _, err := s.Sports.List(ctx, branchID, output.ListQuery{Limit: 500})
 	if err != nil {
 		return n, err
@@ -324,6 +348,15 @@ func (s *Service) names(ctx context.Context, branchID uint) (nameBook, error) {
 	for _, r := range res {
 		n.spaces[r.ID] = r.Name
 	}
+	if s.Coaches != nil {
+		cs, _, err := s.Coaches.List(ctx, branchID, output.ListQuery{Limit: 1000})
+		if err != nil {
+			return n, err
+		}
+		for _, c := range cs {
+			n.coaches[c.ID] = c.Name
+		}
+	}
 	if s.Timetables != nil {
 		tts, _, err := s.Timetables.List(ctx, branchID, output.ListQuery{Limit: 1000})
 		if err != nil {
@@ -337,7 +370,7 @@ func (s *Service) names(ctx context.Context, branchID uint) (nameBook, error) {
 }
 
 func optionDTO(o pkgdomain.Option) dto.OptionDTO {
-	return dto.OptionDTO{ID: o.ID, Kind: o.Kind, Amount: o.Amount, Price: o.Price, ValidDays: o.ValidDays, Active: o.Active}
+	return dto.OptionDTO{ID: o.ID, Kind: o.Kind, Amount: o.Amount, Price: o.Price, ValidDays: o.ValidDays, MinutesPerVisit: o.MinutesPerVisit, Active: o.Active}
 }
 
 func packageDTO(p pkgdomain.Package, currency string, n nameBook, opts []dto.OptionDTO) dto.PackageDTO {
@@ -352,7 +385,20 @@ func packageDTO(p pkgdomain.Package, currency string, n nameBook, opts []dto.Opt
 		d.ResourceName = n.spaces[*p.ResourceID]
 	}
 	d.ClassIDs, d.ClassNames = n.classList(p.ClassIDs)
+	d.CoachIDs, d.CoachNames = n.coachList(p.CoachIDs)
 	return d
+}
+
+// coachList gives the ids and the names of the coaches of a CoachIDs text (a deleted coach keeps no name)
+func (n nameBook) coachList(text string) ([]uint, []string) {
+	ids, names := []uint{}, []string{}
+	for _, id := range pkgdomain.ClassList(text) {
+		ids = append(ids, id)
+		if name := n.coaches[id]; name != "" {
+			names = append(names, name)
+		}
+	}
+	return ids, names
 }
 
 // classList gives the ids and the names of the classes of a ClassIDs text (a class that was deleted keeps no name)

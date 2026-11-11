@@ -16,6 +16,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 
 	pub := api.Group("/public/branches/:slug")
 	pub.Get("/availability", h.Availability)
+	pub.Get("/coach-availability", h.CoachAvailability)
 	perHour := h.perHour
 	if perHour <= 0 {
 		perHour = 10

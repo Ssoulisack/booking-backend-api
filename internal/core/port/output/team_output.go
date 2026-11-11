@@ -40,17 +40,21 @@ type PackageFit struct {
 	ResourceID  *uint // the space of a rental
 	Class       bool  // a seat in a group class (else a rental of a space)
 	TimetableID *uint // the weekly class the seat belongs to (nil: a one-off class)
-	WithCoach   bool  // a coach is part of the booking: packages do not cover coaches
+	WithCoach   bool  // a coach is part of the booking: only a package that includes that coach pays it
+	CoachID     *uint // the coach of the booking (with WithCoach)
+	Minutes     int   // the length of a space booking (a package with minutes per visit takes one visit per that many)
 }
 
 // PackageUse lets a booking be paid with a customer's package (the packages module). It works in three steps so a
 // booking that fails to save does not cost a visit: Take, then Record when the booking exists (or GiveBack when it
 // did not); a cancelled booking calls GiveBack too.
 type PackageUse interface {
-	// Take checks the package fits and takes one visit (a months pass takes none); change is -1 or 0; ref names it
+	// Take checks the package fits and takes its visits (one, or one per "minutes per visit" of a space booking; a
+	// months pass takes none); change is minus the visits taken, or 0; ref names it
 	Take(ctx context.Context, f PackageFit) (change int, ref PackageRef, err error)
 	// Record writes the booking into the package's log
 	Record(ctx context.Context, packageID, bookingID uint, change int)
-	// GiveBack gives the visit of a booking back, once (nothing when none was taken, or already given back)
-	GiveBack(ctx context.Context, packageID, bookingID uint)
+	// GiveBack gives a booking's visits back, once (nothing when none were taken, or already given back). bookingID 0:
+	// the booking was not saved, and taken (from Take's change) says how many visits to put back
+	GiveBack(ctx context.Context, packageID, bookingID uint, taken int)
 }

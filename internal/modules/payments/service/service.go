@@ -651,6 +651,31 @@ func (s *Service) Poll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.pollList(ctx, list, now)
+	return nil
+}
+
+// PollOpen asks the gateway about the QRs that are still open (the customer may have paid and the webhook not come):
+// a payment is then settled within seconds instead of at the next 5 minute check. Runs every 30 seconds; only open
+// payments, so the gateway is not asked about old ones, and refunds are left to Poll.
+func (s *Service) PollOpen(ctx context.Context) error {
+	now := s.now()
+	list, err := s.repo.Pending(ctx, now.Add(-15*time.Second), now)
+	if err != nil {
+		return err
+	}
+	open := list[:0]
+	for _, p := range list {
+		if p.Status == domain.StatusPending {
+			open = append(open, p)
+		}
+	}
+	s.pollList(ctx, open, now)
+	return nil
+}
+
+// pollList asks the gateway about each payment and applies the answer
+func (s *Service) pollList(ctx context.Context, list []domain.Payment, now time.Time) {
 	for i := range list {
 		p := list[i]
 		prov, ok := s.providers[p.Provider]
@@ -678,7 +703,6 @@ func (s *Service) Poll(ctx context.Context) error {
 			s.dropPurchase(ctx, &p, "ໝົດເວລາຊຳລະ")
 		}
 	}
-	return nil
 }
 
 // ---------- the team ----------

@@ -215,6 +215,8 @@ type PublicCoachDTO struct {
 	Sports       []SportRefDTO `json:"sports"`
 	PricePerHour *int64        `json:"price_per_hour"` // nil: no price set yet
 	Currency     string        `json:"currency,omitempty"`
+	// open at least one day a week: can be booked by the hour (a coach closed every day is turned off for booking)
+	Bookable bool `json:"bookable"`
 }
 
 // PublicResourceDTO is a bookable court / pitch / ring as customers see it, with its hourly price

@@ -37,6 +37,9 @@ type Package struct {
 	ResourceID *uint `gorm:"index"`
 	// ClassIDs: the weekly classes (timetables) a group-class package covers, "3,5"; empty = every class of the sport
 	ClassIDs string `gorm:"type:text;not null;default:''"`
+	// CoachIDs: a space package only: the coaches it includes ("2,7"), booked with the space at no extra cost; empty =
+	// no coach (a booking with a coach is paid normally)
+	CoachIDs string `gorm:"type:text;not null;default:''"`
 	Active   bool   `gorm:"not null"` // always set explicitly: gorm would write the default for false
 }
 
@@ -51,8 +54,12 @@ type Option struct {
 	Amount int   `gorm:"not null"`
 	Price  int64 `gorm:"not null"` // whole currency units
 	// ValidDays: a times option must be used within this many days of the purchase; 0 = no expiry (months: always 0)
-	ValidDays int  `gorm:"not null;default:0"`
-	Active    bool `gorm:"not null"`
+	ValidDays int `gorm:"not null;default:0"`
+	// MinutesPerVisit: how long one visit of a times option books a space (60: 1 h = 1 visit, 2 h = 2 visits; a
+	// length that is not a whole number of visits is not covered, it is paid). 0 = one visit per booking, any length.
+	// Group classes always take one visit; months: always 0.
+	MinutesPerVisit int  `gorm:"not null;default:0"`
+	Active          bool `gorm:"not null"`
 }
 
 func (Option) TableName() string { return "package_options" }
@@ -86,8 +93,13 @@ type CustomerPackage struct {
 	Kind      string `gorm:"type:varchar(6);not null"`
 	Amount    int    `gorm:"not null"`
 	ValidDays int    `gorm:"not null;default:0"` // copied from the option: a times package must be used within this many days
-	Price     int64  `gorm:"not null"`
-	Currency  string `gorm:"type:varchar(3);not null"`
+	// CoachIDs: the coaches the package includes, kept in step with the package (like MinutesPerVisit); "" = none
+	CoachIDs string `gorm:"type:text;not null;default:''"`
+	// MinutesPerVisit: always the option's current setting (see Option), kept in step when the package is saved and by
+	// the migration: unlike the price or the visits, it is not fixed at purchase. 0 = one visit per booking, any length
+	MinutesPerVisit int    `gorm:"not null;default:0"`
+	Price           int64  `gorm:"not null"`
+	Currency        string `gorm:"type:varchar(3);not null"`
 	// TimesLeft: visits left (times); unused for months
 	TimesLeft int `gorm:"not null;default:0"`
 	// StartsOn / EndsOn: the days a months pass works, YYYY-MM-DD in the branch time zone;
@@ -130,6 +142,28 @@ type Visit struct {
 }
 
 func (Visit) TableName() string { return "package_visits" }
+
+// IncludesCoach says whether the package pays this coach with its space
+func (c CustomerPackage) IncludesCoach(coachID uint) bool {
+	for _, id := range ClassList(c.CoachIDs) {
+		if id == coachID {
+			return true
+		}
+	}
+	return false
+}
+
+// VisitsFor is how many visits a space booking of this many minutes takes: 1 when the package has no minutes per
+// visit, else minutes / minutes per visit; ok is false when the length is not a whole number of visits (it is paid)
+func (c CustomerPackage) VisitsFor(minutes int) (visits int, ok bool) {
+	if c.MinutesPerVisit <= 0 {
+		return 1, true
+	}
+	if minutes <= 0 || minutes%c.MinutesPerVisit != 0 {
+		return 0, false
+	}
+	return minutes / c.MinutesPerVisit, true
+}
 
 // Code is how people refer to the package (P-0001, P-0002, ... at its branch)
 func (c CustomerPackage) Code() string { return CodeOf(c.Seq) }

@@ -37,7 +37,7 @@ func (r *postgresRepo) Save(ctx context.Context, p *domain.Package, options []do
 			} else {
 				// only an option of this package may be changed
 				res := tx.Model(&domain.Option{}).Where("id = ? AND package_id = ?", options[i].ID, p.ID).
-					Select("Kind", "Amount", "Price", "ValidDays", "Active").Updates(&options[i])
+					Select("Kind", "Amount", "Price", "ValidDays", "MinutesPerVisit", "Active").Updates(&options[i])
 				err = res.Error
 				if err == nil && res.RowsAffected != 1 {
 					err = gorm.ErrRecordNotFound
@@ -52,7 +52,15 @@ func (r *postgresRepo) Save(ctx context.Context, p *domain.Package, options []do
 		if len(keep) > 0 {
 			q = q.Where("id NOT IN ?", keep)
 		}
-		return exception.HandleGormError(q.Delete(&domain.Option{}).Error)
+		if err := q.Delete(&domain.Option{}).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		// minutes per visit and the included coaches are not fixed at purchase: packages already bought follow them
+		if err := tx.Model(&domain.CustomerPackage{}).Where("package_id = ?", p.ID).
+			UpdateColumn("coach_ids", p.CoachIDs).Error; err != nil {
+			return exception.HandleGormError(err)
+		}
+		return exception.HandleGormError(tx.Exec(syncMinutesSQL+" AND o.package_id = ?", p.ID).Error)
 	})
 }
 
@@ -231,6 +239,28 @@ func (r *postgresRepo) PendingCount(ctx context.Context, branchID, customerID ui
 	return n, exception.HandleGormError(err)
 }
 
+func (r *postgresRepo) MemberIDs(ctx context.Context, branchID uint, keyword string, offset, limit int) ([]uint, int64, error) {
+	base := r.db.WithContext(ctx).Table("customer_packages AS cp").
+		Joins("JOIN users u ON u.id = cp.customer_id").
+		Where("cp.branch_id = ? AND cp.deleted_at IS NULL AND cp.payment_status = ? AND cp.status <> ?", branchID, "paid", domain.StatusCancelled)
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + escapeLike(kw) + "%"
+		cond, args := "(u.name ILIKE ? OR u.email ILIKE ? OR u.member_no ILIKE ?", []any{like, like, like}
+		if d := phoneDigits(kw); len(d) >= 3 {
+			cond, args = cond+" OR u.phone LIKE ?", append(args, "%"+d+"%")
+		}
+		base = base.Where(cond+")", args...)
+	}
+	var total int64
+	if err := base.Session(&gorm.Session{}).Distinct("cp.customer_id").Count(&total).Error; err != nil {
+		return nil, 0, exception.HandleGormError(err)
+	}
+	var ids []uint
+	err := base.Select("cp.customer_id").Group("cp.customer_id").
+		Order("MAX(cp.paid_at) DESC NULLS LAST, cp.customer_id DESC").Offset(offset).Limit(limit).Scan(&ids).Error
+	return ids, total, exception.HandleGormError(err)
+}
+
 func (r *postgresRepo) CancelUnpaid(ctx context.Context, id uint) (bool, error) {
 	res := r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
 		Where("id = ? AND status = ? AND payment_status <> ?", id, domain.StatusPendingPayment, "paid").
@@ -253,17 +283,18 @@ func (r *postgresRepo) PayByExpired(ctx context.Context, before time.Time) ([]do
 	return out, exception.HandleGormError(err)
 }
 
-func (r *postgresRepo) TakeVisit(ctx context.Context, id uint) (bool, error) {
+func (r *postgresRepo) TakeVisits(ctx context.Context, id uint, n int) (bool, error) {
+	// one statement: two bookings at the same moment cannot both take the last visits
 	res := r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
-		Where("id = ? AND status = ? AND kind = ? AND times_left > 0", id, domain.StatusActive, domain.OptionTimes).
-		UpdateColumn("times_left", gorm.Expr("times_left - 1"))
+		Where("id = ? AND status = ? AND kind = ? AND times_left >= ?", id, domain.StatusActive, domain.OptionTimes, n).
+		UpdateColumn("times_left", gorm.Expr("times_left - ?", n))
 	return res.RowsAffected == 1, exception.HandleGormError(res.Error)
 }
 
-func (r *postgresRepo) ReturnVisit(ctx context.Context, id uint) error {
+func (r *postgresRepo) ReturnVisits(ctx context.Context, id uint, n int) error {
 	return exception.HandleGormError(r.db.WithContext(ctx).Model(&domain.CustomerPackage{}).
 		Where("id = ? AND kind = ?", id, domain.OptionTimes).
-		UpdateColumn("times_left", gorm.Expr("times_left + 1")).Error)
+		UpdateColumn("times_left", gorm.Expr("times_left + ?", n)).Error)
 }
 
 func (r *postgresRepo) AddVisit(ctx context.Context, v *domain.Visit) error {
@@ -329,3 +360,8 @@ func (r *postgresRepo) PurchasesByIDs(ctx context.Context, branchID uint, ids []
 	err := r.db.WithContext(ctx).Where("branch_id = ? AND id IN ?", branchID, ids).Find(&out).Error
 	return out, exception.HandleGormError(err)
 }
+
+// syncMinutesSQL gives every customer package the minutes per visit its option has now (the migration runs it for all,
+// a package save for its own options). The other facts of a purchase (name, price, visits) stay as bought.
+const syncMinutesSQL = `UPDATE customer_packages cp SET minutes_per_visit = o.minutes_per_visit
+	FROM package_options o WHERE o.id = cp.option_id AND cp.minutes_per_visit <> o.minutes_per_visit`

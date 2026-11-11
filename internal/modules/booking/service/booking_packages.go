@@ -22,7 +22,7 @@ type packageUse struct {
 
 // takePackage checks the request may use a package and takes the visit. nil when no package is asked for.
 // Only a logged-in customer (or staff booking for one) has packages; tables are never paid this way.
-func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker, req dto.CreateBookingRequest, start time.Time, sportID uint, resourceID *uint, withCoach bool, timetableID *uint) (*packageUse, error) {
+func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker, req dto.CreateBookingRequest, start time.Time, minutes int, sportID uint, resourceID *uint, coachID *uint, timetableID *uint) (*packageUse, error) {
 	if req.PackageID == nil {
 		return nil, nil
 	}
@@ -34,7 +34,8 @@ func (s *Service) takePackage(ctx context.Context, b *domain.Branch, who *booker
 	}
 	change, ref, err := s.packages.Take(ctx, output.PackageFit{
 		BranchID: b.ID, CustomerID: who.Customer.ID, PackageID: *req.PackageID, Day: start.Format("2006-01-02"),
-		SportID: sportID, ResourceID: resourceID, Class: req.ClassSessionID != nil, TimetableID: timetableID, WithCoach: withCoach,
+		SportID: sportID, ResourceID: resourceID, Class: req.ClassSessionID != nil, TimetableID: timetableID, WithCoach: coachID != nil, CoachID: coachID,
+		Minutes: minutes,
 	})
 	if err != nil {
 		return nil, err
@@ -66,13 +67,13 @@ func (s *Service) packageSaved(ctx context.Context, u *packageUse, bk *domain.Bo
 
 func (s *Service) packageFailed(ctx context.Context, u *packageUse) {
 	if u != nil && u.change < 0 {
-		s.packages.GiveBack(ctx, u.packageID, 0) // no booking: the visit is simply put back
+		s.packages.GiveBack(ctx, u.packageID, 0, -u.change) // no booking: the visits are simply put back
 	}
 }
 
-// packageCancelled gives a cancelled booking's visit back
+// packageCancelled gives a cancelled booking's visits back
 func (s *Service) packageCancelled(ctx context.Context, bk *domain.Booking) {
 	if s.packages != nil && bk.CustomerPackageID != nil {
-		s.packages.GiveBack(ctx, *bk.CustomerPackageID, bk.ID)
+		s.packages.GiveBack(ctx, *bk.CustomerPackageID, bk.ID, 0)
 	}
 }

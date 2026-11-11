@@ -59,7 +59,7 @@ func New(d Deps) *Module {
 		Company: service.NewCompanyService(d.Company, d.Branches, d.Memberships, d.Users, d.Storage, d.Media, d.Mailer, d.FrontendURL),
 		Branch:  service.NewBranchService(d.Branches, d.Sports, d.Resources, d.OpeningHours, d.Prices, d.Storage, d.Media),
 		Public: service.NewPublicService(d.Company, d.Branches, d.Directory, d.Sports, d.Resources, d.Coaches,
-			d.Classes, d.Bookings, d.Prices, d.Storage),
+			d.Classes, d.Bookings, d.Prices, d.OpeningHours, d.Storage),
 		install: service.NewInstallService(d.Company, d.Users, d.Rules, d.PasswordResets, d.Mailer, d.FrontendURL, d.Install),
 	}
 	m.handler = http.New(m.Company, m.Branch, m.Public, d.Customers)

@@ -260,6 +260,48 @@ func (s *Service) Availability(ctx context.Context, slug string, q dto.Availabil
 	return s.availability(ctx, b, q, false)
 }
 
+// CoachAvailability lists, for a space on a day, every active coach who teaches its sport with the times the space and
+// the coach are both free (a coach with none that day is left out), so customers who picked a time see the coaches
+// free then. The same rules as Availability: one call instead of one per coach.
+func (s *Service) CoachAvailability(ctx context.Context, slug string, q dto.AvailabilityQuery) ([]dto.CoachAvailabilityDTO, error) {
+	b, err := s.published(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if q.ResourceID == 0 {
+		return nil, badRequest("RESOURCE_REQUIRED")
+	}
+	space, err := s.resolveTarget(ctx, b.ID, q.ResourceID, 0, q.SportID)
+	if err != nil {
+		return nil, err
+	}
+	coaches, _, err := s.coaches.List(ctx, b.ID, output.ListQuery{Limit: 500})
+	if err != nil {
+		return nil, err
+	}
+	out := []dto.CoachAvailabilityDTO{}
+	for _, c := range coaches {
+		teaches := false
+		for _, sp := range c.Sports {
+			teaches = teaches || sp.ID == space.sportID
+		}
+		if !c.Active || !teaches {
+			continue
+		}
+		cq := q
+		cq.CoachID, cq.SportID = c.ID, space.sportID
+		a, err := s.availability(ctx, b, cq, false)
+		if err != nil {
+			return nil, err
+		}
+		if len(a.Slots) == 0 {
+			continue
+		}
+		out = append(out, dto.CoachAvailabilityDTO{CoachID: c.ID, Slots: a.Slots, Currency: a.Currency, Prices: a.Prices})
+	}
+	return out, nil
+}
+
 // DeskAvailability is what staff may book: no minimum notice or days-ahead limit, and the
 // branch need not be published yet (the same rules CreateForCustomer applies)
 func (s *Service) DeskAvailability(ctx context.Context, branchID uint, q dto.AvailabilityQuery) (*dto.AvailabilityDTO, error) {
@@ -722,7 +764,12 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 		return nil, "", err
 	}
 	bk.TotalPrice, bk.Currency, bk.Items = total, currency, items
-	use, err := s.takePackage(ctx, b, who, req, start, t.sportID, resourceRef(t), t.coach != nil, nil)
+	var withCoach *uint
+	if t.coach != nil {
+		id := t.coach.ID
+		withCoach = &id
+	}
+	use, err := s.takePackage(ctx, b, who, req, start, int(end.Sub(start)/time.Minute), t.sportID, resourceRef(t), withCoach, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -796,7 +843,7 @@ func (s *Service) createClassBooking(ctx context.Context, b *domain.Branch, who 
 	if req.PackageID != nil && seats != 1 {
 		return nil, "", badRequest("PACKAGE_ONE_SEAT")
 	}
-	use, err := s.takePackage(ctx, b, who, req, start, class.SportID, nil, false, class.TimetableID)
+	use, err := s.takePackage(ctx, b, who, req, start, 0, class.SportID, nil, nil, class.TimetableID)
 	if err != nil {
 		return nil, "", err
 	}

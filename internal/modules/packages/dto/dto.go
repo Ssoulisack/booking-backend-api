@@ -12,7 +12,9 @@ type OptionRequest struct {
 	Amount    int    `json:"amount"`     // visits, or months
 	Price     int64  `json:"price"`      // whole currency units
 	ValidDays int    `json:"valid_days"` // times only; 0 = no expiry
-	Active    *bool  `json:"active"`     // not sent: yes
+	// MinutesPerVisit: times only; how long one visit books a space (0 = one visit per booking, any length)
+	MinutesPerVisit int   `json:"minutes_per_visit"`
+	Active          *bool `json:"active"` // not sent: yes
 }
 
 // PackageRequest creates or changes a package with its options
@@ -23,18 +25,20 @@ type PackageRequest struct {
 	Covers      string          `json:"covers"`      // group_class | space
 	ResourceID  *uint           `json:"resource_id"` // the space, when covers = space
 	ClassIDs    []uint          `json:"class_ids"`   // the weekly classes (timetables) a group-class package covers; none = every class
+	CoachIDs    []uint          `json:"coach_ids"`   // a space package: the coaches it includes (no extra cost); none = no coach
 	Active      *bool           `json:"active"`      // not sent: yes on a new package, unchanged otherwise
 	Options     []OptionRequest `json:"options"`
 }
 
 // OptionDTO is an option in answers
 type OptionDTO struct {
-	ID        uint   `json:"id"`
-	Kind      string `json:"kind"`
-	Amount    int    `json:"amount"`
-	Price     int64  `json:"price"`
-	ValidDays int    `json:"valid_days"`
-	Active    bool   `json:"active"`
+	ID              uint   `json:"id"`
+	Kind            string `json:"kind"`
+	Amount          int    `json:"amount"`
+	Price           int64  `json:"price"`
+	ValidDays       int    `json:"valid_days"`
+	MinutesPerVisit int    `json:"minutes_per_visit"`
+	Active          bool   `json:"active"`
 }
 
 // PackageDTO is a package in answers
@@ -49,6 +53,8 @@ type PackageDTO struct {
 	ResourceName string      `json:"resource_name"`
 	ClassIDs     []uint      `json:"class_ids"`   // empty = every class of the sport
 	ClassNames   []string    `json:"class_names"` // the same classes by name
+	CoachIDs     []uint      `json:"coach_ids"`   // a space package: the coaches it includes
+	CoachNames   []string    `json:"coach_names"`
 	Active       bool        `json:"active"`
 	Currency     string      `json:"currency"`
 	Options      []OptionDTO `json:"options"`
@@ -76,40 +82,56 @@ type MarkPaidRequest struct {
 
 // CustomerPackageDTO is a package a customer owns
 type CustomerPackageDTO struct {
-	ID            uint       `json:"id"`
-	Code          string     `json:"code"` // "P-12": shown to people, the order number of an online payment
-	BranchID      uint       `json:"branch_id"`
-	BranchName    string     `json:"branch_name,omitempty"`
-	BranchSlug    string     `json:"branch_slug,omitempty"`
-	CustomerID    uint       `json:"customer_id"`
-	CustomerName  string     `json:"customer_name,omitempty"`
-	CustomerPhone string     `json:"customer_phone,omitempty"`
-	PackageID     uint       `json:"package_id"`
-	SportID       uint       `json:"sport_id"`
-	Name          string     `json:"name"`
-	Covers        string     `json:"covers"`
-	ResourceID    *uint      `json:"resource_id"`
-	ResourceName  string     `json:"resource_name"`
-	ClassIDs      []uint     `json:"class_ids"`
-	ClassNames    []string   `json:"class_names"`
-	Kind          string     `json:"kind"`
-	Amount        int        `json:"amount"`
-	Price         int64      `json:"price"`
-	Currency      string     `json:"currency"`
-	TimesLeft     int        `json:"times_left"`
-	StartsOn      string     `json:"starts_on"`
-	EndsOn        string     `json:"ends_on"`
-	ExpiresOn     string     `json:"expires_on"`
-	Status        string     `json:"status"` // pending_payment | active | used_up | expired | cancelled
-	PaymentStatus string     `json:"payment_status"`
-	PaymentMethod string     `json:"payment_method"`
-	PaidAt        *time.Time `json:"paid_at"`
-	SlipSentAt    *time.Time `json:"slip_sent_at"`
-	SlipVia       string     `json:"slip_via"`
-	PayBy         *time.Time `json:"pay_by,omitempty"` // until when an unpaid online purchase is kept
-	SoldBy        string     `json:"sold_by"`          // customer | staff
-	Notes         string     `json:"notes"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID            uint     `json:"id"`
+	Code          string   `json:"code"` // "P-12": shown to people, the order number of an online payment
+	BranchID      uint     `json:"branch_id"`
+	BranchName    string   `json:"branch_name,omitempty"`
+	BranchSlug    string   `json:"branch_slug,omitempty"`
+	CustomerID    uint     `json:"customer_id"`
+	CustomerName  string   `json:"customer_name,omitempty"`
+	CustomerPhone string   `json:"customer_phone,omitempty"`
+	PackageID     uint     `json:"package_id"`
+	OptionID      uint     `json:"option_id"` // the way it was bought: buying it again uses the same one
+	SportID       uint     `json:"sport_id"`
+	Name          string   `json:"name"`
+	Covers        string   `json:"covers"`
+	ResourceID    *uint    `json:"resource_id"`
+	ResourceName  string   `json:"resource_name"`
+	ClassIDs      []uint   `json:"class_ids"`
+	ClassNames    []string `json:"class_names"`
+	CoachIDs      []uint   `json:"coach_ids"` // the coaches it includes with its space
+	CoachNames    []string `json:"coach_names"`
+	Kind          string   `json:"kind"`
+	Amount        int      `json:"amount"`
+	Price         int64    `json:"price"`
+	Currency      string   `json:"currency"`
+	TimesLeft     int      `json:"times_left"`
+	// MinutesPerVisit: how long one visit books a space (0 = one visit per booking, any length)
+	MinutesPerVisit int        `json:"minutes_per_visit"`
+	StartsOn        string     `json:"starts_on"`
+	EndsOn          string     `json:"ends_on"`
+	ExpiresOn       string     `json:"expires_on"`
+	Status          string     `json:"status"` // pending_payment | active | used_up | expired | cancelled
+	PaymentStatus   string     `json:"payment_status"`
+	PaymentMethod   string     `json:"payment_method"`
+	PaidAt          *time.Time `json:"paid_at"`
+	SlipSentAt      *time.Time `json:"slip_sent_at"`
+	SlipVia         string     `json:"slip_via"`
+	PayBy           *time.Time `json:"pay_by,omitempty"` // until when an unpaid online purchase is kept
+	SoldBy          string     `json:"sold_by"`          // customer | staff
+	Notes           string     `json:"notes"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// MemberDTO is a customer who bought a package at the branch (paid, not cancelled), with those packages
+type MemberDTO struct {
+	UserID   uint                 `json:"user_id"`
+	MemberNo string               `json:"member_no"`
+	Name     string               `json:"name"`
+	Phone    string               `json:"phone"`
+	Email    string               `json:"email"`
+	Active   int                  `json:"active"` // packages that can be used today
+	Packages []CustomerPackageDTO `json:"packages"`
 }
 
 // Slip ways and the upload are shared with event bookings (core dto)

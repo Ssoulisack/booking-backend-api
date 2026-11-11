@@ -2,6 +2,7 @@ package service
 
 import (
 	"backend/internal/core/domain"
+	coredto "backend/internal/core/dto"
 	"backend/internal/core/port/output"
 	pkgdomain "backend/internal/modules/packages/domain"
 	"backend/internal/modules/packages/dto"
@@ -234,6 +235,55 @@ func (s *Service) Sold(ctx context.Context, branchID, customerID uint, status, q
 	return out, nil
 }
 
+// Members lists the customers who bought a package here (paid, not cancelled) with those packages: the Membership tab
+func (s *Service) Members(ctx context.Context, branchID uint, keyword string, page, limit int) (*coredto.PagedResult[dto.MemberDTO], error) {
+	b, err := s.branch(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	ids, total, err := s.Repo.MemberIDs(ctx, branchID, keyword, (page-1)*limit, limit)
+	if err != nil {
+		return nil, err
+	}
+	names, err := s.names(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	today := s.today(b)
+	out := make([]dto.MemberDTO, 0, len(ids))
+	for _, id := range ids {
+		list, err := s.Repo.Purchases(ctx, branchID, id, "", 100)
+		if err != nil {
+			return nil, err
+		}
+		m := dto.MemberDTO{UserID: id, Packages: []dto.CustomerPackageDTO{}}
+		if u, err := s.Users.FindByID(ctx, id); err == nil && u != nil {
+			m.Name, m.Phone, m.Email, m.MemberNo = u.Name, u.Phone, u.ContactEmail(), domain.MemberNoOf(u.MemberNo)
+		}
+		for i := range list {
+			cp := &list[i]
+			if cp.PaymentStatus != domain.PaymentPaid || cp.Status == pkgdomain.StatusCancelled {
+				continue // only what the customer really has
+			}
+			d := purchaseDTO(b, cp, names)
+			d.CustomerName, d.CustomerPhone = m.Name, m.Phone
+			if cp.StatusOn(today) == pkgdomain.StatusActive {
+				m.Active++
+			}
+			m.Packages = append(m.Packages, d)
+		}
+		out = append(out, m)
+	}
+	pages := int((total + int64(limit) - 1) / int64(limit))
+	return &coredto.PagedResult[dto.MemberDTO]{Items: out, Meta: coredto.Meta{Total: int(total), Page: page, Limit: limit, TotalPage: pages}}, nil
+}
+
 func (s *Service) person(ctx context.Context, cache map[uint]*domain.User, id uint) *domain.User {
 	if u, ok := cache[id]; ok {
 		return u
@@ -427,12 +477,13 @@ func (s *Service) newPurchase(ctx context.Context, b *domain.Branch, customerID,
 	if err != nil {
 		return nil, mapNotFound(err, "OPTION_NOT_FOUND")
 	}
+	// a customer can only buy what is on sale (also when buying the same one again): said plainly, not "not found"
 	if activeOnly && (!p.Active || !o.Active) {
-		return nil, notFound("PACKAGE_NOT_FOUND")
+		return nil, conflict("PACKAGE_NOT_ON_SALE")
 	}
 	return &pkgdomain.CustomerPackage{
 		BranchID: b.ID, CustomerID: customerID, PackageID: p.ID, OptionID: o.ID, SportID: p.SportID,
-		Name: p.Name, Covers: p.Covers, ResourceID: p.ResourceID, ClassIDs: p.ClassIDs, Kind: o.Kind, Amount: o.Amount, ValidDays: o.ValidDays,
+		Name: p.Name, Covers: p.Covers, ResourceID: p.ResourceID, ClassIDs: p.ClassIDs, CoachIDs: p.CoachIDs, Kind: o.Kind, Amount: o.Amount, ValidDays: o.ValidDays, MinutesPerVisit: o.MinutesPerVisit,
 		Price: o.Price, Currency: b.Currency, Status: pkgdomain.StatusPendingPayment, PaymentStatus: domain.PaymentUnpaid,
 	}, nil
 }
@@ -472,9 +523,9 @@ func (s *Service) purchaseDTO(ctx context.Context, b *domain.Branch, cp *pkgdoma
 func purchaseDTO(b *domain.Branch, cp *pkgdomain.CustomerPackage, n nameBook) dto.CustomerPackageDTO {
 	today := time.Now().In(locationOf(b)).Format("2006-01-02")
 	d := dto.CustomerPackageDTO{
-		ID: cp.ID, Code: cp.Code(), BranchID: cp.BranchID, CustomerID: cp.CustomerID, PackageID: cp.PackageID, SportID: cp.SportID,
+		ID: cp.ID, Code: cp.Code(), BranchID: cp.BranchID, CustomerID: cp.CustomerID, PackageID: cp.PackageID, OptionID: cp.OptionID, SportID: cp.SportID,
 		Name: cp.Name, Covers: cp.Covers, ResourceID: cp.ResourceID, Kind: cp.Kind, Amount: cp.Amount, Price: cp.Price,
-		Currency: cp.Currency, TimesLeft: cp.TimesLeft, StartsOn: cp.StartsOn, EndsOn: cp.EndsOn, ExpiresOn: cp.ExpiresOn,
+		Currency: cp.Currency, TimesLeft: cp.TimesLeft, MinutesPerVisit: cp.MinutesPerVisit, StartsOn: cp.StartsOn, EndsOn: cp.EndsOn, ExpiresOn: cp.ExpiresOn,
 		Status: cp.StatusOn(today), PaymentStatus: cp.PaymentStatus, PaymentMethod: cp.PaymentMethod, PaidAt: cp.PaidAt, SlipSentAt: cp.SlipSentAt, SlipVia: cp.SlipVia, PayBy: cp.PayBy,
 		SoldBy: cp.SoldByType, Notes: cp.Notes, CreatedAt: cp.CreatedAt,
 	}
@@ -482,5 +533,6 @@ func purchaseDTO(b *domain.Branch, cp *pkgdomain.CustomerPackage, n nameBook) dt
 		d.ResourceName = n.spaces[*cp.ResourceID]
 	}
 	d.ClassIDs, d.ClassNames = n.classList(cp.ClassIDs)
+	d.CoachIDs, d.CoachNames = n.coachList(cp.CoachIDs)
 	return d
 }

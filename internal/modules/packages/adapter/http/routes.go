@@ -24,6 +24,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	// packages customers own: the team sees them, sells at the desk, marks paid; managers cancel
 	b.Get("/customer-packages", staff, h.Sold)
 	b.Post("/customer-packages", staff, h.Sell)
+	b.Get("/members", staff, h.Members) // customers who bought a package (the Membership tab)
 	b.Post("/customer-packages/:id/paid", staff, h.MarkPaid)
 	b.Post("/customer-packages/:id/cancel", manager, h.Cancel)
 	b.Get("/customer-packages/:id/visits", staff, h.Visits)

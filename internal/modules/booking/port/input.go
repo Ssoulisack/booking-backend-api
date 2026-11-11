@@ -10,6 +10,8 @@ import (
 // BookingService is how customers and guests see free times and book on a branch's public page
 type BookingService interface {
 	Availability(ctx context.Context, slug string, q dto.AvailabilityQuery) (*dto.AvailabilityDTO, error)
+	// CoachAvailability: for a space on a day, every active coach of its sport with the times both are free
+	CoachAvailability(ctx context.Context, slug string, q dto.AvailabilityQuery) ([]dto.CoachAvailabilityDTO, error)
 	// Create books for actor (a logged-in customer, or nil) or for req.Guest, as the branch's booking mode allows
 	Create(ctx context.Context, slug string, actor *domain.User, req dto.CreateBookingRequest) (*dto.CreatedBookingDTO, error)
 

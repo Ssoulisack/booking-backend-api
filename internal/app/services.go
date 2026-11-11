@@ -81,7 +81,7 @@ func SetupServices(repos *AppRepositories) *AppServices {
 		Files: r.storage, Booker: restaurantModule.Service, Notifier: bookingImpl, Cache: r.cache,
 	})
 	restaurantModule.SetEventDays(eventsModule.Service)
-	packagesModule := packages.New(packages.Deps{DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports, Resources: r.resources, Timetables: r.timetables, Users: r.user})
+	packagesModule := packages.New(packages.Deps{DB: r.postgres.GetDB(), Branches: r.branches, Sports: r.sports, Resources: r.resources, Timetables: r.timetables, Coaches: r.coaches, Users: r.user})
 	// online payment: server.env picks the gateway (dev: the built-in mock, uat: PhaJay's test account,
 	// prod: PhaJay for real money); a PhaJay without its keys is off and the QR / transfer / WhatsApp way stays
 	gateways, devGateway := ChooseGateway(r.server, r.payments)
@@ -190,6 +190,7 @@ func KeepTablesSettled(svc *AppServices) {
 	go func() {
 		holds := time.NewTicker(time.Minute)
 		settle := time.NewTicker(5 * time.Minute)
+		open := time.NewTicker(30 * time.Second) // QRs still open: paid ones are settled even when the webhook never comes
 		for {
 			select {
 			case <-holds.C:
@@ -198,6 +199,10 @@ func KeepTablesSettled(svc *AppServices) {
 				}
 				if err := svc.packages.Service.ExpireUnpaid(context.Background()); err != nil {
 					log.Printf("⚠️  package holds: %v", err)
+				}
+			case <-open.C:
+				if err := svc.payments.Service.PollOpen(context.Background()); err != nil {
+					log.Printf("⚠️  open payments check: %v", err)
 				}
 			case <-settle.C:
 				if err := svc.restaurant.Service.SettleTables(context.Background()); err != nil {

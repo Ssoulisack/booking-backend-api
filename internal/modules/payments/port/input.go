@@ -28,6 +28,8 @@ type Service interface {
 	Notify(ctx context.Context, provider string, n *domain.Notice) error
 	// payments still waiting are asked about at the gateway (the fallback for a webhook that never came)
 	Poll(ctx context.Context) error
+	// PollOpen asks the gateway about QRs still open (every 30 seconds), so a paid one is settled at once
+	PollOpen(ctx context.Context) error
 	// the team
 	ForBooking(ctx context.Context, branchID, bookingID uint) ([]dto.StaffPaymentDTO, error)
 	Attention(ctx context.Context, branchID uint) ([]dto.StaffPaymentDTO, error)

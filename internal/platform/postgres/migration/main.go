@@ -49,6 +49,9 @@ func DatabaseMigrations(db *gorm.DB, modules ...any) error {
 	if err := labelPackageBookings(db); err != nil {
 		return err
 	}
+	if err := syncPackageMinutes(db); err != nil {
+		return err
+	}
 	if err := noDoubleBooking(db); err != nil {
 		return err
 	}
@@ -142,4 +145,14 @@ func labelPackageBookings(db *gorm.DB) error {
 	return db.Exec(`UPDATE bookings b SET package_label = cp.name || ' · ' || cp.amount || ' ' || cp.kind, package_code = 'P-' || LPAD(cp.seq::text, 4, '0')
 		FROM customer_packages cp
 		WHERE b.customer_package_id = cp.id AND b.package_label = '' AND cp.seq > 0`).Error
+}
+
+// syncPackageMinutes gives packages already bought their option's current minutes per visit (packages bought before
+// the setting existed, or before it was changed). Safe to run on every start; nothing to do without the tables.
+func syncPackageMinutes(db *gorm.DB) error {
+	if !db.Migrator().HasTable("customer_packages") || !db.Migrator().HasTable("package_options") {
+		return nil
+	}
+	return db.Exec(`UPDATE customer_packages cp SET minutes_per_visit = o.minutes_per_visit
+		FROM package_options o WHERE o.id = cp.option_id AND cp.minutes_per_visit <> o.minutes_per_visit`).Error
 }

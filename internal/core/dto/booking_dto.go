@@ -29,6 +29,15 @@ type AvailabilityDTO struct {
 	Prices   []LengthPriceDTO `json:"prices"`
 }
 
+// CoachAvailabilityDTO is one coach's free times together with a space on a day (the space and the coach both free),
+// with the price of each length (space + coach): the booking page offers the coaches free at the time picked
+type CoachAvailabilityDTO struct {
+	CoachID  uint             `json:"coach_id"`
+	Slots    []SlotDTO        `json:"slots"`
+	Currency string           `json:"currency,omitempty"`
+	Prices   []LengthPriceDTO `json:"prices"`
+}
+
 type LengthPriceDTO struct {
 	DurationMin int   `json:"duration_min"`
 	Price       int64 `json:"price"`
