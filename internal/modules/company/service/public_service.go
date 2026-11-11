@@ -7,6 +7,7 @@ import (
 	"backend/internal/modules/company/port"
 	"backend/internal/platform/kit"
 	"context"
+	"sort"
 	"strings"
 	"time"
 )
@@ -145,6 +146,7 @@ func (s *PublicServiceImpl) Resources(ctx context.Context, slug string, sportID 
 		}
 		out = append(out, dto.PublicResourceDTO{
 			ID: r.ID, SportID: r.SportID, Name: r.Name, Kind: r.Kind, PricePerHour: price, Currency: currency,
+			CoachIDs: idList(r.CoachIDs),
 		})
 	}
 	return out, nil
@@ -176,7 +178,7 @@ func (s *PublicServiceImpl) Coaches(ctx context.Context, slug string, sportID ui
 		}
 		out = append(out, dto.PublicCoachDTO{
 			ID: c.ID, Name: c.Name, Bio: c.Bio, ImageURL: s.files.URL(c.ImageKey), Sports: sportRefs(c.Sports),
-			PricePerHour: price, Currency: currency, Bookable: len(hours) > 0,
+			PricePerHour: price, Currency: currency, Bookable: len(hours) > 0, Hours: weekHours(hours),
 		})
 	}
 	return out, nil
@@ -278,4 +280,28 @@ func (s *PublicServiceImpl) Directory(ctx context.Context, q dto.DirectoryQuery)
 		}
 		return d
 	}), nil
+}
+
+// idList reads an id list kept as text, never nil
+func idList(text string) []uint {
+	ids := domain.IDList(text)
+	if ids == nil {
+		return []uint{}
+	}
+	return ids
+}
+
+// weekHours lists a coach's weekly hours for customers, by day then time
+func weekHours(rows []domain.OpeningHour) []dto.OpeningHourDTO {
+	out := make([]dto.OpeningHourDTO, 0, len(rows))
+	for _, h := range rows {
+		out = append(out, dto.OpeningHourDTO{Weekday: h.Weekday, Open: h.OpenTime, Close: h.CloseTime})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Weekday != out[j].Weekday {
+			return out[i].Weekday < out[j].Weekday
+		}
+		return out[i].Open < out[j].Open
+	})
+	return out
 }

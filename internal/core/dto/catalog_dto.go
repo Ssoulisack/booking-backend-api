@@ -59,6 +59,8 @@ type ResourceRequest struct {
 	Active  *bool  `json:"active"`
 	// WalkInOnly: restaurant tables kept for walk-ins; not sent = unchanged
 	WalkInOnly *bool `json:"walk_in_only"`
+	// CoachIDs: sport spaces: the coaches included free with this space; not sent = unchanged
+	CoachIDs *[]uint `json:"coach_ids"`
 	TableFields
 }
 
@@ -82,6 +84,8 @@ type ResourceDTO struct {
 	Active  bool   `json:"active"`
 	// WalkInOnly: kept for walk-ins (customers see it as taken, events do not sell it)
 	WalkInOnly bool `json:"walk_in_only"`
+	// CoachIDs: the coaches included free with this space
+	CoachIDs []uint `json:"coach_ids"`
 	TableFields
 }
 

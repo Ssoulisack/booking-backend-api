@@ -214,6 +214,7 @@ func (s *CatalogServiceImpl) DeleteSport(ctx context.Context, branchID, id uint)
 func toResourceDTO(m domain.Resource) dto.ResourceDTO {
 	return dto.ResourceDTO{
 		ID: m.ID, SportID: m.SportID, Name: m.Name, Kind: m.Kind, Active: m.Active, WalkInOnly: m.WalkInOnly,
+		CoachIDs: idsOrEmpty(m.CoachIDs),
 		TableFields: dto.TableFields{
 			Seats: m.Seats, ExtraChairs: m.ExtraChairs, Shape: m.Shape,
 			PlanX: m.PlanX, PlanY: m.PlanY, PlanW: m.PlanW, PlanH: m.PlanH, Rotation: m.Rotation,
@@ -383,6 +384,13 @@ func (s *CatalogServiceImpl) CreateResource(ctx context.Context, branchID uint, 
 	m := domain.Resource{BranchID: branchID, SportID: req.SportID, Name: req.Name, Kind: req.Kind, Active: isActive(req.Active)}
 	applyTable(&m, req.TableFields)
 	m.WalkInOnly = req.WalkInOnly != nil && *req.WalkInOnly
+	if req.CoachIDs != nil {
+		text, err := s.includedCoaches(ctx, branchID, req.SportID, *req.CoachIDs)
+		if err != nil {
+			return nil, err
+		}
+		m.CoachIDs = text
+	}
 	if err := s.resources.Create(ctx, &m); err != nil {
 		return nil, err
 	}
@@ -426,6 +434,13 @@ func (s *CatalogServiceImpl) UpdateResource(ctx context.Context, branchID, id ui
 	applyTable(m, req.TableFields)
 	if req.WalkInOnly != nil {
 		m.WalkInOnly = *req.WalkInOnly
+	}
+	if req.CoachIDs != nil {
+		text, err := s.includedCoaches(ctx, branchID, req.SportID, *req.CoachIDs)
+		if err != nil {
+			return nil, err
+		}
+		m.CoachIDs = text
 	}
 	if err := s.resources.Update(ctx, m); err != nil {
 		return nil, err
@@ -828,4 +843,32 @@ func (s *CatalogServiceImpl) refuseIfInUse(ctx context.Context, branchID uint, o
 		return conflict("HAS_UPCOMING_BOOKINGS")
 	}
 	return nil
+}
+
+// includedCoaches checks the coaches a space includes free (this branch's, teaching the space's sport) and writes them
+// as text
+func (s *CatalogServiceImpl) includedCoaches(ctx context.Context, branchID, sportID uint, ids []uint) (string, error) {
+	for _, id := range ids {
+		c, err := s.coaches.GetByID(ctx, branchID, id)
+		if err != nil {
+			return "", orBadRequest(err, "COACH_NOT_FOUND")
+		}
+		teaches := false
+		for _, sp := range c.Sports {
+			teaches = teaches || sp.ID == sportID
+		}
+		if !teaches {
+			return "", badRequest("COACH_NOT_IN_SPORT")
+		}
+	}
+	return domain.IDText(ids), nil
+}
+
+// idsOrEmpty reads an id list kept as text, never nil (an empty JSON list, not null)
+func idsOrEmpty(text string) []uint {
+	ids := domain.IDList(text)
+	if ids == nil {
+		return []uint{}
+	}
+	return ids
 }

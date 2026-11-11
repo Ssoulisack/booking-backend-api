@@ -1,6 +1,11 @@
 package domain
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+	"sort"
+	"strconv"
+	"strings"
+)
 
 // Resource kinds: what a bookable space is, shown to customers ("Choose a ring"). The team calls
 // them all "spaces".
@@ -56,6 +61,47 @@ type Resource struct {
 	// WalkInOnly: kept for walk-ins. Customers cannot book it online (it shows as taken) and events do not sell it; staff
 	// seat walk-ins and move groups there as usual. Stays until the team switches it off.
 	WalkInOnly bool `gorm:"not null;default:false"`
+	// CoachIDs: sport spaces only: the coaches included free with this space ("2,7"): booked together, the coach costs
+	// nothing (an internal class); other coaches are paid at their hourly price. "" = none
+	CoachIDs string `gorm:"type:text;not null;default:''"`
+}
+
+// IncludesCoach says whether the coach comes free with this space
+func (r Resource) IncludesCoach(coachID uint) bool {
+	for _, id := range IDList(r.CoachIDs) {
+		if id == coachID {
+			return true
+		}
+	}
+	return false
+}
+
+// IDList reads a list of ids kept as text ("2,7"); IDText writes one, sorted and without repeats
+func IDList(text string) []uint {
+	var out []uint
+	for _, part := range strings.Split(text, ",") {
+		if n, err := strconv.ParseUint(strings.TrimSpace(part), 10, 64); err == nil && n > 0 {
+			out = append(out, uint(n))
+		}
+	}
+	return out
+}
+
+func IDText(ids []uint) string {
+	seen := map[uint]bool{}
+	var list []uint
+	for _, id := range ids {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			list = append(list, id)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i] < list[j] })
+	parts := make([]string, len(list))
+	for i, id := range list {
+		parts[i] = strconv.FormatUint(uint64(id), 10)
+	}
+	return strings.Join(parts, ",")
 }
 
 // Coach is a trainer managed by the branch; coaches do not log in

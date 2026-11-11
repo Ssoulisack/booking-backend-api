@@ -217,6 +217,8 @@ type PublicCoachDTO struct {
 	Currency     string        `json:"currency,omitempty"`
 	// open at least one day a week: can be booked by the hour (a coach closed every day is turned off for booking)
 	Bookable bool `json:"bookable"`
+	// Hours: the coach's weekly working hours (0 = Sunday), for the schedule customers can open
+	Hours []OpeningHourDTO `json:"hours"`
 }
 
 // PublicResourceDTO is a bookable court / pitch / ring as customers see it, with its hourly price
@@ -227,6 +229,8 @@ type PublicResourceDTO struct {
 	Kind         string `json:"kind"`
 	PricePerHour *int64 `json:"price_per_hour"` // nil: no price set yet
 	Currency     string `json:"currency,omitempty"`
+	// CoachIDs: the coaches included free with this space (booked together, the coach costs nothing)
+	CoachIDs []uint `json:"coach_ids"`
 }
 
 // DirectoryBranchDTO is one branch on the public home

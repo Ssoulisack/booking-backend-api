@@ -354,7 +354,8 @@ func (s *Service) lengthPrices(ctx context.Context, branchID uint, t *target, ru
 	if t.resource != nil {
 		owners = append(owners, owner{domain.OwnerResource, t.resource.ID})
 	}
-	if t.coach != nil {
+	// a coach included free with the space adds nothing to the price
+	if t.coach != nil && (t.resource == nil || !t.resource.IncludesCoach(t.coach.ID)) {
 		owners = append(owners, owner{domain.OwnerCoach, t.coach.ID})
 	}
 	for _, o := range owners {
@@ -726,6 +727,12 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 	var total int64
 	currency := ""
 	add := func(ownerType string, ownerID uint) error {
+		// a coach included free with the space: the coach item costs nothing (no price needed)
+		if ownerType == domain.OwnerCoach && t.resource != nil && t.resource.IncludesCoach(ownerID) {
+			id := ownerID
+			items = append(items, domain.BookingItem{BranchID: b.ID, Kind: ownerType, StartsAt: start, EndsAt: end, Price: 0, Active: true, CoachID: &id})
+			return nil
+		}
 		price, err := s.prices.GetByOwner(ctx, b.ID, ownerType, ownerID)
 		if err != nil {
 			if isNotFound(err) {
