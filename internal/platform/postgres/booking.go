@@ -363,6 +363,14 @@ func (r *bookingRepository) filtered(ctx context.Context, branchID uint, f outpu
 	if f.EventID != 0 {
 		tx = tx.Where("bookings.event_id = ?", f.EventID)
 	}
+	// event tables waiting for the customer's money (no slip yet) / everything else that is pending
+	const waitsForPayment = "bookings.event_id IS NOT NULL AND bookings.payment_status = 'unpaid' AND bookings.slip_sent_at IS NULL"
+	switch f.Waiting {
+	case "payment":
+		tx = tx.Where("bookings.status = ? AND "+waitsForPayment, domain.BookingPending)
+	case "approval":
+		tx = tx.Where("bookings.status = ? AND NOT ("+waitsForPayment+")", domain.BookingPending)
+	}
 	if f.ResourceID != 0 {
 		tx = tx.Where("bookings.id IN (SELECT booking_id FROM booking_items WHERE resource_id = ?)", f.ResourceID)
 	}

@@ -178,6 +178,8 @@ type BookingQuery struct {
 	Status        string `query:"status"`
 	PaymentStatus string `query:"payment_status"`
 	EventID       uint   `query:"event_id"`
+	// Waiting: "approval" (pending, the team decides) or "payment" (event tables held, no payment and no slip yet)
+	Waiting string `query:"waiting"`
 }
 
 // StaffBookingRequest is a booking made by a member: for an existing customer (customer_email)

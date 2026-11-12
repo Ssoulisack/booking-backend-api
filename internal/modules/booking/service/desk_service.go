@@ -37,6 +37,10 @@ func (s *Service) ListBookings(ctx context.Context, branchID uint, q dto.Booking
 	f := output.BookingFilter{
 		SportID: q.SportID, ResourceID: q.ResourceID, CoachID: q.CoachID, CustomerID: q.CustomerID,
 		Status: q.Status, PaymentStatus: q.PaymentStatus, Keyword: strings.TrimSpace(q.Keyword), EventID: q.EventID,
+		Waiting: q.Waiting,
+	}
+	if f.Waiting != "" && f.Waiting != "approval" && f.Waiting != "payment" {
+		return nil, badRequest("INVALID_WAITING")
 	}
 	if f.Status != "" && !bookingStatuses[f.Status] {
 		return nil, badRequest("INVALID_STATUS")

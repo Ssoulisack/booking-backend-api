@@ -107,6 +107,9 @@ type BookingFilter struct {
 	PaymentStatus string
 	Keyword       string // code, guest name or phone, customer name or email
 	EventID       uint   // bookings of one event
+	// Waiting: "approval" = pending bookings the team decides on; "payment" = event tables held and not paid, no slip
+	// sent yet (the customer still has to pay). Every pending booking is one or the other.
+	Waiting string
 }
 
 // CustomerRow is one customer of a branch
