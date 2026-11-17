@@ -17,6 +17,9 @@ type RegisterDTO struct {
 	Password    string `json:"password"`
 	Phone       string `json:"phone"`
 	Nationality string `json:"nationality"`
+	// Foreigner: no Lao number: the account registers (and logs in) with its email, which is then required; the
+	// phone is not asked. Default (false): a Lao account with a Lao mobile number, email optional.
+	Foreigner bool `json:"foreigner"`
 }
 
 // LoginDTO: login is an email or a phone number; email is still accepted for older clients

@@ -127,6 +127,13 @@ func createUser(ctx context.Context, repo output.UserRepository, req iddto.Regis
 	if err := kit.ValidPassword(req.Password); err != nil {
 		return nil, err
 	}
+	if req.Foreigner {
+		// a foreigner has no Lao number: the email is how they log in and are reached
+		if strings.TrimSpace(req.Email) == "" {
+			return nil, badRequest("EMAIL_REQUIRED")
+		}
+		req.Phone, requirePhone = "", false
+	}
 	email, phone, generated, err := identity(ctx, repo, 0, requirePhone, req.Phone, req.Email)
 	if err != nil {
 		return nil, err
