@@ -47,6 +47,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	b.Put("/settings", admin, h.UpdateSettings)
 	b.Post("/publish", admin, h.Publish)
 	b.Post("/unpublish", admin, h.Unpublish)
+	b.Put("/setup-step", admin, h.SetSetupStep)
 	// restaurant branches: how tables are booked
 	b.Get("/table-settings", staff, h.GetTableSettings)
 	b.Put("/table-settings", manager, h.UpdateTableSettings)

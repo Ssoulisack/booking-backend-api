@@ -16,6 +16,8 @@ type BranchService interface {
 	UpdateSettings(ctx context.Context, branchID uint, req dto.SettingsRequest) (*dto.SettingsDTO, error)
 	Publish(ctx context.Context, branchID uint) (*dto.SettingsDTO, error)
 	Unpublish(ctx context.Context, branchID uint) (*dto.SettingsDTO, error)
+	// SetSetupStep: where the step-by-step setup of a new sport branch is (0 = done)
+	SetSetupStep(ctx context.Context, branchID uint, step int) (*dto.SettingsDTO, error)
 	// restaurant branches: how tables are booked
 	GetTableSettings(ctx context.Context, branchID uint) (*dto.TableSettingsDTO, error)
 	UpdateTableSettings(ctx context.Context, branchID uint, req dto.TableSettingsDTO) (*dto.TableSettingsDTO, error)

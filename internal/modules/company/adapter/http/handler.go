@@ -235,6 +235,15 @@ func (h *Handler) Publish(c *fiber.Ctx) error {
 	return httpx.OK(c, res, err)
 }
 
+func (h *Handler) SetSetupStep(c *fiber.Ctx) error {
+	var req dto.SetupStepRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	res, err := h.branch.SetSetupStep(c.UserContext(), middleware.BranchID(c), req.Step)
+	return httpx.OK(c, res, err)
+}
+
 func (h *Handler) Unpublish(c *fiber.Ctx) error {
 	res, err := h.branch.Unpublish(c.UserContext(), middleware.BranchID(c))
 	return httpx.OK(c, res, err)

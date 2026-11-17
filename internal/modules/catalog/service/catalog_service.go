@@ -214,7 +214,7 @@ func (s *CatalogServiceImpl) DeleteSport(ctx context.Context, branchID, id uint)
 func toResourceDTO(m domain.Resource) dto.ResourceDTO {
 	return dto.ResourceDTO{
 		ID: m.ID, SportID: m.SportID, Name: m.Name, Kind: m.Kind, Active: m.Active, WalkInOnly: m.WalkInOnly,
-		CoachIDs: idsOrEmpty(m.CoachIDs),
+		CoachIDs: idsOrEmpty(m.CoachIDs), LightPrice: m.LightPrice, LightFrom: m.LightStart(),
 		TableFields: dto.TableFields{
 			Seats: m.Seats, ExtraChairs: m.ExtraChairs, Shape: m.Shape,
 			PlanX: m.PlanX, PlanY: m.PlanY, PlanW: m.PlanW, PlanH: m.PlanH, Rotation: m.Rotation,
@@ -364,11 +364,33 @@ func (s *CatalogServiceImpl) validateResource(ctx context.Context, branchID, id 
 		return s.placeTable(ctx, branchID, id, req)
 	}
 	req.TableFields = dto.TableFields{} // courts have no seats or floor plan
+	if req.LightPrice != nil && *req.LightPrice < 0 {
+		return badRequest("INVALID_LIGHT_PRICE")
+	}
+	if req.LightFrom != nil {
+		if _, err := parseClock(*req.LightFrom, false); err != nil {
+			return badRequest("INVALID_LIGHT_FROM")
+		}
+	}
 	if !resourceKinds[req.Kind] {
 		return badRequest("INVALID_RESOURCE_KIND")
 	}
 	_, err = s.sports.GetByID(ctx, branchID, req.SportID)
 	return orBadRequest(err, "SPORT_NOT_FOUND")
+}
+
+// applyLight copies the sport light the request sends (tables never have one)
+func applyLight(m *domain.Resource, req dto.ResourceRequest) {
+	if m.Kind == domain.ResourceKindTable {
+		m.LightPrice, m.LightFrom = 0, ""
+		return
+	}
+	if req.LightPrice != nil {
+		m.LightPrice = *req.LightPrice
+	}
+	if req.LightFrom != nil {
+		m.LightFrom = *req.LightFrom
+	}
 }
 
 // applyTable copies a table's seats and place onto the stored resource
@@ -384,6 +406,7 @@ func (s *CatalogServiceImpl) CreateResource(ctx context.Context, branchID uint, 
 	m := domain.Resource{BranchID: branchID, SportID: req.SportID, Name: req.Name, Kind: req.Kind, Active: isActive(req.Active)}
 	applyTable(&m, req.TableFields)
 	m.WalkInOnly = req.WalkInOnly != nil && *req.WalkInOnly
+	applyLight(&m, req)
 	if req.CoachIDs != nil {
 		text, err := s.includedCoaches(ctx, branchID, req.SportID, *req.CoachIDs)
 		if err != nil {
@@ -435,6 +458,7 @@ func (s *CatalogServiceImpl) UpdateResource(ctx context.Context, branchID, id ui
 	if req.WalkInOnly != nil {
 		m.WalkInOnly = *req.WalkInOnly
 	}
+	applyLight(m, req)
 	if req.CoachIDs != nil {
 		text, err := s.includedCoaches(ctx, branchID, req.SportID, *req.CoachIDs)
 		if err != nil {

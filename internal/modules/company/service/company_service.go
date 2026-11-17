@@ -127,6 +127,7 @@ func toBranchDTO(b domain.Branch) dto.BranchDTO {
 	return dto.BranchDTO{
 		ID: b.ID, Type: b.Type, Name: b.Name, Slug: b.Slug, Status: b.Status(), Address: b.Address, Province: b.Province,
 		PublicPath: "/b/" + b.Slug, PublishedAt: b.PublishedAt, CreatedAt: b.CreatedAt,
+		SetupStep: b.SetupStep,
 	}
 }
 
@@ -183,8 +184,13 @@ func (s *CompanyServiceImpl) CreateBranch(ctx context.Context, req dto.CreateBra
 		if err := s.branches.Clone(ctx, src.ID, &b); err != nil {
 			return nil, err
 		}
-	} else if err := s.branches.Create(ctx, &b); err != nil {
-		return nil, err
+	} else {
+		if req.StepByStep && b.Type == domain.BranchTypeSport {
+			b.SetupStep = domain.SetupSports // a new sport branch is set up step by step
+		}
+		if err := s.branches.Create(ctx, &b); err != nil {
+			return nil, err
+		}
 	}
 	d := toBranchDTO(b)
 	return &d, nil

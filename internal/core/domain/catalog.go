@@ -64,6 +64,24 @@ type Resource struct {
 	// CoachIDs: sport spaces only: the coaches included free with this space ("2,7"): booked together, the coach costs
 	// nothing (an internal class); other coaches are paid at their hourly price. "" = none
 	CoachIDs string `gorm:"type:text;not null;default:''"`
+	// Sport light (sport spaces only): customers may add it when booking; it costs LightPrice per hour for the time
+	// booked from LightFrom (HH:MM, branch time zone) on. 0 = no light offered
+	LightPrice int64  `gorm:"not null;default:0"`
+	LightFrom  string `gorm:"type:varchar(5);not null;default:''"`
+}
+
+// DefaultLightFrom is when sport light starts when the team does not say
+const DefaultLightFrom = "17:00"
+
+// HasLight says whether customers can add sport light to this space
+func (r Resource) HasLight() bool { return r.LightPrice > 0 }
+
+// LightStart is the time of day the light starts (HH:MM)
+func (r Resource) LightStart() string {
+	if r.LightFrom == "" {
+		return DefaultLightFrom
+	}
+	return r.LightFrom
 }
 
 // IncludesCoach says whether the coach comes free with this space

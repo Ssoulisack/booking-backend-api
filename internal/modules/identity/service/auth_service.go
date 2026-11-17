@@ -302,6 +302,7 @@ func (s *AuthServiceImpl) MyBranches(ctx context.Context, userID uint) ([]dto.My
 		return mapSlice(branches, func(b domain.Branch) dto.MyBranchDTO {
 			return dto.MyBranchDTO{
 				BranchID: b.ID, Type: b.Type, Name: b.Name, Slug: b.Slug, Status: b.Status(), Role: user.CompanyRole, Active: true,
+				SetupStep: b.SetupStep,
 			}
 		}), nil
 	}
@@ -312,7 +313,7 @@ func (s *AuthServiceImpl) MyBranches(ctx context.Context, userID uint) ([]dto.My
 	return mapSlice(memberships, func(m domain.Membership) dto.MyBranchDTO {
 		return dto.MyBranchDTO{
 			BranchID: m.BranchID, Type: m.Branch.Type, Name: m.Branch.Name, Slug: m.Branch.Slug,
-			Status: m.Branch.Status(), Role: m.Role, Active: m.Active,
+			Status: m.Branch.Status(), Role: m.Role, Active: m.Active, SetupStep: m.Branch.SetupStep,
 		}
 	}), nil
 }

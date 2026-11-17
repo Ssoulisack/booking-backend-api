@@ -61,6 +61,9 @@ type ResourceRequest struct {
 	WalkInOnly *bool `json:"walk_in_only"`
 	// CoachIDs: sport spaces: the coaches included free with this space; not sent = unchanged
 	CoachIDs *[]uint `json:"coach_ids"`
+	// sport light: price per hour (0 = none) and the time it starts ("17:00"); not sent = unchanged
+	LightPrice *int64  `json:"light_price"`
+	LightFrom  *string `json:"light_from"`
 	TableFields
 }
 
@@ -86,6 +89,9 @@ type ResourceDTO struct {
 	WalkInOnly bool `json:"walk_in_only"`
 	// CoachIDs: the coaches included free with this space
 	CoachIDs []uint `json:"coach_ids"`
+	// sport light: price per hour (0 = none) and the time it starts
+	LightPrice int64  `json:"light_price"`
+	LightFrom  string `json:"light_from"`
 	TableFields
 }
 

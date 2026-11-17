@@ -729,6 +729,11 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 	if req.StartsAt.IsZero() {
 		return nil, "", badRequest("STARTS_AT_REQUIRED")
 	}
+	if req.WithLight { // refused at once: a space without light, or paying with a package
+		if _, err := lightPrice(t.resource, req.PackageID, req.StartsAt, req.StartsAt); err != nil {
+			return nil, "", err
+		}
+	}
 	loc := locationOf(b)
 	slots, rule, err := s.slotsFor(ctx, b, t, startOfDay(req.StartsAt, loc), who.Staff != nil)
 	if err != nil {
@@ -789,12 +794,19 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 			return nil, "", err
 		}
 	}
+	var light int64
+	if req.WithLight {
+		if light, err = lightPrice(t.resource, req.PackageID, start, end); err != nil {
+			return nil, "", err
+		}
+		total += light
+	}
 
 	bk, rawToken, err := s.newBooking(b, who, t.sportID, start, end, rule, req.Notes)
 	if err != nil {
 		return nil, "", err
 	}
-	bk.TotalPrice, bk.Currency, bk.Items = total, currency, items
+	bk.TotalPrice, bk.Currency, bk.Items, bk.LightPrice = total, currency, items, light
 	var withCoach *uint
 	if t.coach != nil {
 		id := t.coach.ID
@@ -812,6 +824,30 @@ func (s *Service) createRental(ctx context.Context, b *domain.Branch, who *booke
 	}
 	s.packageSaved(ctx, use, bk)
 	return bk, rawToken, nil
+}
+
+// lightPrice is what the sport light costs for a booking from start to end: its price per hour for the time from
+// the light's start on (0 when the booking ends before it). A space without light, or a booking paid with a
+// package, cannot have it.
+func lightPrice(r *domain.Resource, packageID *uint, start, end time.Time) (int64, error) {
+	if r == nil || !r.HasLight() {
+		return 0, badRequest("LIGHT_NOT_OFFERED")
+	}
+	if packageID != nil {
+		return 0, badRequest("LIGHT_NOT_WITH_PACKAGE")
+	}
+	from, err := parseClock(r.LightStart(), false)
+	if err != nil {
+		return 0, err
+	}
+	lightAt := startOfDay(start, start.Location()).Add(time.Duration(from) * time.Minute)
+	if lightAt.Before(start) {
+		lightAt = start
+	}
+	if !end.After(lightAt) {
+		return 0, nil
+	}
+	return domain.PriceFor(r.LightPrice, int(end.Sub(lightAt)/time.Minute)), nil
 }
 
 // resourceRef is the id of the rented space (nil when the booking is a coach alone)
@@ -894,7 +930,7 @@ func toBookingDTO(b domain.Booking) dto.BookingDTO {
 	d := dto.BookingDTO{
 		ID: b.ID, Code: b.Code, SportID: b.SportID, BranchName: b.Branch.Name, BranchSlug: b.Branch.Slug,
 		Status: b.Status, StartsAt: b.StartsAt, EndsAt: b.EndsAt, TotalPrice: b.TotalPrice, Currency: b.Currency,
-		PaymentStatus: b.PaymentStatus, CancellableUntil: b.CancellableUntil, GuestName: b.GuestName,
+		LightPrice: b.LightPrice, PaymentStatus: b.PaymentStatus, CancellableUntil: b.CancellableUntil, GuestName: b.GuestName,
 		GuestPhone: b.GuestPhone, CustomerID: b.CustomerID, PaymentMethod: b.PaymentMethod, PaidAt: b.PaidAt,
 		CreatedByType: b.CreatedByType,
 		Notes:         b.Notes, CancelledAt: b.CancelledAt, CancelReason: b.CancelReason, CreatedAt: b.CreatedAt,

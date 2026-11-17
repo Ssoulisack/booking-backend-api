@@ -83,6 +83,18 @@ func ValidBranchType(t string) bool { return t == BranchTypeSport || t == Branch
 // Branch is one place of the company with its own booking page. Settings the company sets for
 // everyone (time zone, booking mode, policy, approval) can be overridden per branch (nil = the
 // company's). Brand and currency always come from the company.
+// Setup steps of a new sport branch (step 1, the name and type, is the branch's creation)
+const (
+	SetupDone    = 0
+	SetupSports  = 2
+	SetupSpaces  = 3
+	SetupClasses = 4
+)
+
+func ValidSetupStep(step int) bool {
+	return step == SetupDone || (step >= SetupSports && step <= SetupClasses)
+}
+
 type Branch struct {
 	gorm.Model
 	// Type is what the branch takes bookings for: BranchTypeSport (courts) or BranchTypeRestaurant
@@ -92,6 +104,9 @@ type Branch struct {
 	Slug        string     `gorm:"type:varchar(60);not null;uniqueIndex:idx_branches_slug,where:deleted_at IS NULL"`
 	Published   bool       `gorm:"not null;default:false"`
 	PublishedAt *time.Time // first publish; the slug cannot change after it
+	// SetupStep: a new sport branch is set up step by step (sports, spaces, classes); the step the team is at,
+	// 0 = setup done. It cannot be published before it is done.
+	SetupStep int `gorm:"not null;default:0"`
 	// Closed hides the branch from customers and its team; the owner and admins can reopen it
 	Closed bool `gorm:"not null;default:false"`
 

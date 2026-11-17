@@ -38,6 +38,8 @@ type CreateBranchRequest struct {
 	Type      string `json:"type"` // sport (default) or restaurant; a copy keeps the source's type
 	Slug      string `json:"slug"`
 	CloneFrom *uint  `json:"clone_from"`
+	// StepByStep: a new sport branch is set up step by step (sports, spaces, classes) before it can be published
+	StepByStep bool `json:"step_by_step"`
 }
 
 // BranchDTO is a branch in the company's list
@@ -52,6 +54,12 @@ type BranchDTO struct {
 	PublicPath  string     `json:"public_path"`
 	PublishedAt *time.Time `json:"published_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+	SetupStep   int        `json:"setup_step"` // a new sport branch's setup step; 0 = done
+}
+
+// SetupStepRequest moves a branch's step-by-step setup on (0 = done)
+type SetupStepRequest struct {
+	Step int `json:"step"`
 }
 
 // ---------- branch settings ----------
@@ -95,9 +103,10 @@ type InForce struct {
 
 type SettingsDTO struct {
 	SettingsRequest
-	ID       uint   `json:"id"`
-	Status   string `json:"status"`
-	CoverURL string `json:"cover_url"`
+	ID        uint   `json:"id"`
+	Status    string `json:"status"`
+	SetupStep int    `json:"setup_step"` // a new sport branch's setup step; 0 = done
+	CoverURL  string `json:"cover_url"`
 	// InForce is the result of the branch's overrides on the company settings
 	InForce     InForce `json:"in_force"`
 	CompanyName string  `json:"company_name"`
@@ -176,6 +185,8 @@ type MyBranchDTO struct {
 	Status   string `json:"status"`
 	Role     string `json:"role"` // owner / admin (company) or manager / staff (this branch)
 	Active   bool   `json:"active"`
+	// SetupStep: a new sport branch still being set up step by step opens at that step (0 = done)
+	SetupStep int `json:"setup_step"`
 }
 
 // ---------- password reset ----------
@@ -260,6 +271,9 @@ type PublicResourceDTO struct {
 	Currency     string `json:"currency,omitempty"`
 	// CoachIDs: the coaches included free with this space (booked together, the coach costs nothing)
 	CoachIDs []uint `json:"coach_ids"`
+	// sport light the customer may add: price per hour from LightFrom (0 = none)
+	LightPrice int64  `json:"light_price"`
+	LightFrom  string `json:"light_from,omitempty"`
 }
 
 // DirectoryBranchDTO is one branch on the public home

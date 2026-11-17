@@ -148,6 +148,9 @@ func (s *PublicServiceImpl) Resources(ctx context.Context, slug string, sportID 
 			ID: r.ID, SportID: r.SportID, Name: r.Name, Kind: r.Kind, PricePerHour: price, Currency: currency,
 			CoachIDs: idList(r.CoachIDs),
 		})
+		if r.HasLight() {
+			out[len(out)-1].LightPrice, out[len(out)-1].LightFrom = r.LightPrice, r.LightStart()
+		}
 	}
 	return out, nil
 }

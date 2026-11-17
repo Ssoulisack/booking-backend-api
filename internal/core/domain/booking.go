@@ -114,6 +114,8 @@ type Booking struct {
 	// every screen can say it without a lookup
 	PackageLabel string `gorm:"type:varchar(160);not null;default:''"`
 	PackageCode  string `gorm:"type:varchar(12);not null;default:''"`
+	// LightPrice: what the sport light the customer added costs (part of TotalPrice); 0 = no light
+	LightPrice int64 `gorm:"not null;default:0"`
 
 	// the event the booking bought, for names and the time of day in answers and emails (read-only)
 	Event *EventBrief `gorm:"foreignKey:EventID;-:migration"`

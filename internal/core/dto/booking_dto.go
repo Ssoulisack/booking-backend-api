@@ -63,7 +63,9 @@ type CreateBookingRequest struct {
 	ClassSessionID *uint     `json:"class_session_id"`
 	Seats          int       `json:"seats"`
 	// PackageID: pay with this package (course pass) of the customer: a class or a space booking, price 0
-	PackageID *uint      `json:"package_id"`
+	PackageID *uint `json:"package_id"`
+	// WithLight: add the space's sport light for the time booked after its start (not with a package)
+	WithLight bool       `json:"with_light"`
 	Guest     *GuestInfo `json:"guest"`
 	Notes     string     `json:"notes"`
 }
@@ -112,6 +114,7 @@ type BookingDTO struct {
 	EndsAt           time.Time        `json:"ends_at"`
 	TotalPrice       int64            `json:"total_price"`
 	Currency         string           `json:"currency"`
+	LightPrice       int64            `json:"light_price"` // the sport light's part of the total; 0 = none
 	PaymentStatus    string           `json:"payment_status"`
 	CancellableUntil time.Time        `json:"cancellable_until"`
 	CustomerID       *uint            `json:"customer_id,omitempty"`

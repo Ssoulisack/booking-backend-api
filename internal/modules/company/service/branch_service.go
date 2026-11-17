@@ -63,7 +63,7 @@ func (s *BranchServiceImpl) toSettingsDTO(b *domain.Branch) *dto.SettingsDTO {
 			RequireApproval: b.OwnRequireApproval,
 			RingColors:      b.OwnRingColors, HeadingFont: b.OwnHeadingFont, BodyFont: b.OwnBodyFont,
 		},
-		ID: b.ID, Status: b.Status(), CoverURL: s.files.URL(b.ShownCoverKey), CompanyName: b.CompanyName,
+		ID: b.ID, Status: b.Status(), SetupStep: b.SetupStep, CoverURL: s.files.URL(b.ShownCoverKey), CompanyName: b.CompanyName,
 		InForce: dto.InForce{
 			Timezone: b.Timezone, Currency: b.Currency, Language: b.Language,
 			BookingMode: b.BookingMode, BookingPolicy: b.BookingPolicy, RequireApproval: b.RequireApproval,
@@ -321,6 +321,9 @@ func (s *BranchServiceImpl) Publish(ctx context.Context, branchID uint) (*dto.Se
 	if b.Closed {
 		return nil, conflict("BRANCH_CLOSED")
 	}
+	if b.SetupStep != domain.SetupDone {
+		return nil, badRequest("SETUP_NOT_FINISHED")
+	}
 	ok, err := s.bookable(ctx, b)
 	if err != nil {
 		return nil, err
@@ -336,6 +339,22 @@ func (s *BranchServiceImpl) Publish(ctx context.Context, branchID uint) (*dto.Se
 		now := s.now()
 		b.PublishedAt = &now
 	}
+	if err := s.branches.Update(ctx, b); err != nil {
+		return nil, err
+	}
+	return s.toSettingsDTO(b), nil
+}
+
+// SetSetupStep saves where the step-by-step setup of a new branch is (0 = done)
+func (s *BranchServiceImpl) SetSetupStep(ctx context.Context, branchID uint, step int) (*dto.SettingsDTO, error) {
+	if !domain.ValidSetupStep(step) {
+		return nil, badRequest("INVALID_SETUP_STEP")
+	}
+	b, err := s.branches.GetByID(ctx, branchID)
+	if err != nil {
+		return nil, err
+	}
+	b.SetupStep = step
 	if err := s.branches.Update(ctx, b); err != nil {
 		return nil, err
 	}
