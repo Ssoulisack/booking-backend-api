@@ -1043,7 +1043,8 @@ func samePhone(a, b string) bool {
 func (s *Service) foundBooking(ctx context.Context, slug string, req dto.FindBookingRequest) (*domain.Booking, error) {
 	gone := notFound("NO_BOOKING_WITH_CODE_AND_PHONE")
 	code := strings.ToUpper(strings.TrimSpace(req.Code))
-	if code == "" || strings.TrimSpace(req.Phone) == "" {
+	phoneIn, emailIn := strings.TrimSpace(req.Phone), strings.TrimSpace(req.Email)
+	if code == "" || (phoneIn == "" && emailIn == "") {
 		return nil, badRequest("CODE_AND_PHONE_REQUIRED")
 	}
 	b, err := s.branches.GetBySlug(ctx, slug)
@@ -1060,14 +1061,31 @@ func (s *Service) foundBooking(ctx context.Context, slug string, req dto.FindBoo
 	if bk == nil {
 		return nil, gone
 	}
-	phone := bk.GuestPhone
-	if bk.Customer != nil && bk.Customer.Phone != "" {
-		phone = bk.Customer.Phone
+	if phoneIn != "" {
+		phone := bk.GuestPhone
+		if bk.Customer != nil && bk.Customer.Phone != "" {
+			phone = bk.Customer.Phone
+		}
+		if !samePhone(phone, phoneIn) {
+			return nil, gone
+		}
+		return bk, nil
 	}
-	if !samePhone(phone, req.Phone) {
+	// by email (an account without a phone): the customer's email, else the email the guest gave
+	email := bk.GuestEmail
+	if bk.Customer != nil && bk.Customer.Email != "" {
+		email = bk.Customer.Email
+	}
+	if !sameEmail(email, emailIn) {
 		return nil, gone
 	}
 	return bk, nil
+}
+
+// sameEmail: the same address, ignoring case and spaces around it; an empty address never matches
+func sameEmail(a, b string) bool {
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	return a != "" && b != "" && strings.EqualFold(a, b)
 }
 
 // FindBooking shows a booking to whoever knows its code and phone

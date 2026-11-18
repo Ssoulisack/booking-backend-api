@@ -77,8 +77,10 @@ type ClaimBookingRequest struct {
 }
 
 type FindBookingRequest struct {
-	Code   string `json:"code"`
-	Phone  string `json:"phone"`
+	Code  string `json:"code"`
+	Phone string `json:"phone"`
+	// instead of the phone: a logged-in customer whose account has no phone sends the account's email
+	Email  string `json:"email"`
 	Reason string `json:"reason"` // cancel only
 }
 
