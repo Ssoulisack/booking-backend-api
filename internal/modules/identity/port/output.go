@@ -28,6 +28,16 @@ type EmailCodeRepository interface {
 	Delete(ctx context.Context, userID uint) error
 }
 
+// PhoneCodeRepository keeps the one live SMS code of each phone and purpose
+type PhoneCodeRepository interface {
+	// Replace stores a new code (the older one for the same phone and purpose goes)
+	Replace(ctx context.Context, code *domain.PhoneCode) error
+	// Find returns (nil, nil) when there is no code
+	Find(ctx context.Context, phone, purpose string) (*domain.PhoneCode, error)
+	AddAttempt(ctx context.Context, id uint) error
+	Delete(ctx context.Context, phone, purpose string) error
+}
+
 type SocialIdentityRepository interface {
 	// Find returns (nil, nil) when the provider account is not linked to anyone yet
 	Find(ctx context.Context, provider, uid string) (*domain.SocialIdentity, error)

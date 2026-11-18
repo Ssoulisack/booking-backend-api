@@ -47,6 +47,8 @@ type GuestInfo struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone"`
 	Email string `json:"email"`
+	// the SMS code sent to the phone (POST /auth/phone/code, purpose "booking"); needed while SMS codes are on
+	Code string `json:"code,omitempty"`
 }
 
 // CreateBookingRequest books a resource and/or coach (starts_at + duration_min), or seats in a

@@ -13,6 +13,7 @@ import (
 	"backend/internal/modules/identity/service"
 	"backend/internal/platform/middleware"
 	"backend/internal/platform/redis"
+	"backend/internal/platform/sms"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -30,11 +31,15 @@ type Deps struct {
 	DB             *gorm.DB
 	Mailer         output.Mailer
 	FrontendURL    string
+	// SMS sends the codes; nil switches SMS codes off
+	SMS sms.Sender
 }
 
 // Module is the identity module
 type Module struct {
-	Auth    port.AuthService
+	Auth port.AuthService
+	// Phones checks SMS codes for the other modules (guest bookings)
+	Phones  *service.PhoneCodeService
 	Access  port.AccessService
 	Invites port.InvitationService
 	handler *http.Handler
@@ -42,8 +47,10 @@ type Module struct {
 
 // New builds the module
 func New(d Deps) *Module {
+	phones := service.NewPhoneCodeService(idpostgres.NewPhoneCodes(d.DB), d.Users, d.SMS)
 	m := &Module{
-		Auth:    service.NewAuthService(d.Users, d.Cache, d.Memberships, d.Branches, d.PasswordResets, d.Social, idpostgres.NewSocialIdentities(d.DB), idpostgres.NewEmailCodes(d.DB), d.Mailer, d.FrontendURL),
+		Phones:  phones,
+		Auth:    service.NewAuthService(d.Users, d.Cache, d.Memberships, d.Branches, d.PasswordResets, d.Social, idpostgres.NewSocialIdentities(d.DB), idpostgres.NewEmailCodes(d.DB), phones, d.Mailer, d.FrontendURL),
 		Access:  service.NewAccessService(d.Users, d.Memberships, d.Branches),
 		Invites: service.NewInvitationService(idpostgres.NewInvitations(d.DB), d.Memberships, d.Branches, d.Company, d.Users, d.Mailer, d.FrontendURL),
 	}
@@ -59,5 +66,5 @@ func (m *Module) Routes(api fiber.Router, auth *middleware.Auth) { m.handler.Rou
 
 // Models are the tables of this module, for the migration
 func Models() []any {
-	return []any{&domain.Invitation{}, &domain.SocialIdentity{}, &domain.EmailCode{}}
+	return []any{&domain.Invitation{}, &domain.SocialIdentity{}, &domain.EmailCode{}, &domain.PhoneCode{}}
 }

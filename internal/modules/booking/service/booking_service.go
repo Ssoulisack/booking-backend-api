@@ -52,6 +52,7 @@ type Deps struct {
 // port.DeskService.
 type Service struct {
 	openWaitingPerPhone int
+	phoneCodes          output.PhoneCodes // nil or off: a guest phone is taken on trust
 	branches            output.BranchRepository
 	sports              output.SportRepository
 	resources           output.ResourceRepository
@@ -414,13 +415,22 @@ func whoBooks(b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*book
 // already belongs to an account is sent to log in (PHONE_HAS_ACCOUNT): their booking then shows in their account
 func (s *Service) whoBooksChecked(ctx context.Context, b *domain.Branch, actor *domain.User, guest *dto.GuestInfo) (*booker, error) {
 	who, err := whoBooks(b, actor, guest)
-	if err != nil || who.Guest == nil || b.BookingMode != domain.BookingModeBoth {
+	if err != nil || who.Guest == nil {
 		return who, err
 	}
-	if has, err := s.phoneHasAccount(ctx, who.Guest.Phone); err != nil {
-		return nil, err
-	} else if has {
-		return nil, conflict("PHONE_HAS_ACCOUNT")
+	if b.BookingMode == domain.BookingModeBoth {
+		if has, err := s.phoneHasAccount(ctx, who.Guest.Phone); err != nil {
+			return nil, err
+		} else if has {
+			return nil, conflict("PHONE_HAS_ACCOUNT")
+		}
+	}
+	// SMS codes on: a guest proves the phone with the code sent for "booking" (it stays good until it expires, so a
+	// booking that failed for another reason can be tried again with it)
+	if s.phoneCodes != nil && s.phoneCodes.On() {
+		if err := s.phoneCodes.Check(ctx, who.Guest.Phone, domain.PhonePurposeBooking, guest.Code); err != nil {
+			return nil, err
+		}
 	}
 	return who, nil
 }

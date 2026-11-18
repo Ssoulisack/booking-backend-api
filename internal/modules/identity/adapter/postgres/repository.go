@@ -133,3 +133,32 @@ func (r *emailCodeRepository) AddAttempt(ctx context.Context, id uint) error {
 func (r *emailCodeRepository) Delete(ctx context.Context, userID uint) error {
 	return exception.HandleGormError(r.db.WithContext(ctx).Where("user_id = ?", userID).Delete(&iddomain.EmailCode{}).Error)
 }
+
+// ---------- SMS codes ----------
+
+type phoneCodeRepository struct{ db *gorm.DB }
+
+func NewPhoneCodes(db *gorm.DB) port.PhoneCodeRepository { return &phoneCodeRepository{db: db} }
+
+func (r *phoneCodeRepository) Replace(ctx context.Context, code *iddomain.PhoneCode) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("phone = ? AND purpose = ?", code.Phone, code.Purpose).Delete(&iddomain.PhoneCode{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(code).Error
+	}))
+}
+
+func (r *phoneCodeRepository) Find(ctx context.Context, phone, purpose string) (*iddomain.PhoneCode, error) {
+	return firstOrNil[iddomain.PhoneCode](r.db.WithContext(ctx).Where("phone = ? AND purpose = ?", phone, purpose))
+}
+
+func (r *phoneCodeRepository) AddAttempt(ctx context.Context, id uint) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Model(&iddomain.PhoneCode{}).Where("id = ?", id).
+		UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error)
+}
+
+func (r *phoneCodeRepository) Delete(ctx context.Context, phone, purpose string) error {
+	return exception.HandleGormError(r.db.WithContext(ctx).Where("phone = ? AND purpose = ?", phone, purpose).
+		Delete(&iddomain.PhoneCode{}).Error)
+}

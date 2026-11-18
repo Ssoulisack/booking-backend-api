@@ -59,3 +59,15 @@ type EmailCode struct {
 	ExpiresAt time.Time `gorm:"not null"`
 	Attempts  int       `gorm:"not null;default:0"`
 }
+
+// PhoneCode is the 6-digit code sent by SMS to prove a phone is the person's, before there is an account (register),
+// to reset a password, or for a guest booking: one live code per phone and purpose
+type PhoneCode struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	Phone     string    `gorm:"type:varchar(20);not null;uniqueIndex:idx_phone_code,priority:1"`
+	Purpose   string    `gorm:"type:varchar(20);not null;uniqueIndex:idx_phone_code,priority:2"`
+	CodeHash  string    `gorm:"type:varchar(64);not null"`
+	ExpiresAt time.Time `gorm:"not null"`
+	Attempts  int       `gorm:"not null;default:0"`
+}

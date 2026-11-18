@@ -1,8 +1,10 @@
 package http
 
 import (
+	"backend/internal/core/domain"
 	"backend/internal/platform/middleware"
 	"backend/pkg/jwt"
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -27,6 +29,13 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	a.Post("/social/:provider", middleware.RateLimit(30, 15*time.Minute), h.SocialLogin)
 	a.Post("/forgot-password", middleware.RateLimit(5, 15*time.Minute), h.ForgotPassword)
 	a.Post("/reset-password", middleware.RateLimit(10, 15*time.Minute), h.ResetPassword)
+
+	// SMS codes: each one costs money, so a phone gets 3 per 15 minutes (and one a minute, see the service) and an IP 20;
+	// the reset by phone is limited like the reset by email
+	a.Get("/phone/config", h.PhoneConfig)
+	a.Post("/phone/code", middleware.RateLimit(20, codeWindow), middleware.RateLimitBy(3, codeWindow, phoneKey), h.SendPhoneCode)
+	a.Post("/reset-password/phone/check", middleware.RateLimit(20, 15*time.Minute), h.CheckResetCode)
+	a.Post("/reset-password/phone", middleware.RateLimit(10, 15*time.Minute), h.ResetPasswordByPhone)
 
 	// Private - routes that require authentication
 	a.Post("/refresh", jwt.AccessRefreshToken, h.Refresh)
@@ -54,4 +63,16 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	team.Post("/", h.Invite)
 	team.Delete("/:id", h.CancelInvitation)
 	team.Post("/:id/resend", h.ResendInvitation)
+}
+
+// phoneKey counts SMS codes per phone number (the digits of the body's "phone")
+func phoneKey(c *fiber.Ctx) string {
+	var body struct {
+		Phone string `json:"phone"`
+	}
+	_ = json.Unmarshal(c.Body(), &body)
+	if p, ok := domain.NormalizePhone(body.Phone); ok {
+		return "sms:" + p
+	}
+	return "sms:ip:" + c.IP()
 }

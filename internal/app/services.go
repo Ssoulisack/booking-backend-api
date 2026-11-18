@@ -16,6 +16,7 @@ import (
 	"backend/internal/modules/restaurant"
 	"backend/internal/modules/telegram"
 	"backend/internal/platform/config"
+	"backend/internal/platform/sms"
 	"context"
 	"log"
 	"strings"
@@ -117,8 +118,10 @@ func SetupServices(repos *AppRepositories) *AppServices {
 	identityModule := identity.New(identity.Deps{
 		Users: r.user, Cache: r.redis, Memberships: r.memberships, Branches: r.branches, Company: r.company,
 		PasswordResets: r.passwordResets, Social: r.social, DB: r.postgres.GetDB(),
-		Mailer: r.mailer, FrontendURL: r.app.FrontendURL,
+		Mailer: r.mailer, FrontendURL: r.app.FrontendURL, SMS: smsSender(r.sms, r.server.Env),
 	})
+	// guests prove their phone with an SMS code while SMS codes are on
+	bookingImpl.SetPhoneCodes(identityModule.Phones)
 	companyModule := company.New(company.Deps{
 		Company: r.company, Branches: r.branches, Directory: r.directory, Memberships: r.memberships,
 		Users: r.user, Sports: r.sports, Resources: r.resources, Coaches: r.coaches, Classes: r.classSessions, Bookings: r.bookings,
@@ -264,4 +267,29 @@ func ChooseGateway(srv config.ServerConfig, pay config.PaymentsConfig) ([]paymen
 		log.Printf("⚠️  PhaJay TEST AMOUNTS: the gateway is asked for the amount divided by %d (test account, before KYC). Never use this with real money.", n)
 	}
 	return []paymentsport.Provider{p}, nil
+}
+
+// smsSender: nil (SMS codes off) unless sms.enabled. Switched on without its settings, dev prints each message in the
+// log instead (to try the code screens locally); other environments stay off and say why.
+func smsSender(cfg sms.Config, env string) sms.Sender {
+	if !cfg.Enabled {
+		return nil
+	}
+	if err := cfg.Ready(); err != nil {
+		if env == "" || env == "dev" {
+			log.Printf("📱 SMS codes are on but not set up (%v): dev prints them in this log", err)
+			return logSender{}
+		}
+		log.Printf("⚠️  SMS codes are off: %v", err)
+		return nil
+	}
+	return sms.New(cfg)
+}
+
+// logSender prints the message instead of sending it (dev only)
+type logSender struct{}
+
+func (logSender) Send(_ context.Context, phone, message string) error {
+	log.Printf("📱 SMS to %s: %s", phone, message)
+	return nil
 }

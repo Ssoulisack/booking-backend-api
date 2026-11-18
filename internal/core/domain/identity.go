@@ -84,3 +84,15 @@ func MemberNoOf(no *string) string {
 	}
 	return *no
 }
+
+// What an SMS code is for: a code sent for one purpose does not work for another
+const (
+	PhonePurposeRegister = "register" // a new account proves its phone
+	PhonePurposeReset    = "reset"    // forgot password, by phone
+	PhonePurposeBooking  = "booking"  // a guest (no login) proves the phone of the booking
+)
+
+// ValidPhonePurpose reports one of the purposes above
+func ValidPhonePurpose(p string) bool {
+	return p == PhonePurposeRegister || p == PhonePurposeReset || p == PhonePurposeBooking
+}

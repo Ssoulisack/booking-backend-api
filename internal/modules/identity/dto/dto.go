@@ -17,6 +17,32 @@ type RegisterDTO struct {
 	Password    string `json:"password"`
 	Phone       string `json:"phone"`
 	Nationality string `json:"nationality"`
+	// the SMS code sent to the phone (POST /auth/phone/code, purpose "register"); needed while SMS codes are on
+	PhoneCode string `json:"phone_code"`
+}
+
+// SendPhoneCodeRequest asks for an SMS code: purpose is "register", "reset" or "booking"
+type SendPhoneCodeRequest struct {
+	Phone   string `json:"phone"`
+	Purpose string `json:"purpose"`
+}
+
+// PhoneCodeCheckRequest checks an SMS code before the next step (forgot password: the code, then the new password)
+type PhoneCodeCheckRequest struct {
+	Phone string `json:"phone"`
+	Code  string `json:"code"`
+}
+
+// PhoneResetRequest: forgot password by phone, with the SMS code (purpose "reset")
+type PhoneResetRequest struct {
+	Phone    string `json:"phone"`
+	Code     string `json:"code"`
+	Password string `json:"password"`
+}
+
+// PhoneConfigDTO tells the website whether SMS codes are on (the code fields show only then)
+type PhoneConfigDTO struct {
+	Enabled bool `json:"enabled"`
 }
 
 // LoginDTO: login is an email or a phone number; email is still accepted for older clients

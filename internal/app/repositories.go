@@ -8,6 +8,7 @@ import (
 	"backend/internal/platform/mailer"
 	"backend/internal/platform/postgres"
 	"backend/internal/platform/redis"
+	"backend/internal/platform/sms"
 	"backend/internal/platform/social"
 	"backend/internal/platform/storage"
 	"log"
@@ -28,6 +29,7 @@ type AppRepositories struct {
 	payments  config.PaymentsConfig
 	server    config.ServerConfig
 	telegram  config.TelegramConfig
+	sms       sms.Config
 	cache     *cache.Cache // Redis cache of rarely-changing reads; off unless redis.enabled
 	jwtSecret string
 	// Domain repositories
@@ -92,6 +94,7 @@ func SetupRepositories(cfg *config.Config) *AppRepositories {
 		payments:       cfg.Payments,
 		server:         cfg.Server,
 		telegram:       cfg.Telegram,
+		sms:            cfg.SMS,
 		cache:          reads,
 		jwtSecret:      cfg.JWT.Secret,
 		user:           postgres.NewUserRepository(db),

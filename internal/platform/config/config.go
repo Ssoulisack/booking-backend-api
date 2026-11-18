@@ -4,6 +4,7 @@ import (
 	"backend/internal/platform/mailer"
 	"backend/internal/platform/postgres"
 	"backend/internal/platform/redis"
+	"backend/internal/platform/sms"
 	"backend/internal/platform/social"
 	"backend/internal/platform/storage"
 	"fmt"
@@ -29,6 +30,7 @@ type Config struct {
 	Mailer   mailer.Config
 	Company  CompanyConfig
 	Telegram TelegramConfig
+	SMS      sms.Config
 }
 
 // TelegramConfig: how the server reaches Telegram and seals what branches store. A branch's own bot token and group
@@ -272,6 +274,14 @@ func setDefaults() {
 	viper.SetDefault("payments.phajay.secretKey", "")
 	viper.SetDefault("payments.phajay.testAmountDivisor", 0)
 	viper.SetDefault("payments.mock.dailyLimit", 0)
+
+	// SMS codes (Wenova): off until the keys are in; usePackage true pays from the SMS package, false from the wallet
+	viper.SetDefault("sms.enabled", false)
+	viper.SetDefault("sms.baseUrl", "")
+	viper.SetDefault("sms.header", "")
+	viper.SetDefault("sms.token", "")
+	viper.SetDefault("sms.scriptId", 0)
+	viper.SetDefault("sms.usePackage", true)
 
 	// Telegram: the address, and the key stored bot tokens are sealed with (empty: the jwt secret)
 	viper.SetDefault("telegram.apiBase", "https://api.telegram.org")

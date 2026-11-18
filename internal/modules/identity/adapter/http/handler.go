@@ -180,3 +180,36 @@ func (h *Handler) ResendInvitation(c *fiber.Ctx) error {
 	res, err := h.invites.ResendInvitation(c.UserContext(), middleware.CurrentUser(c), id)
 	return httpx.OK(c, res, err)
 }
+
+// SendPhoneCode texts a 6-digit code (purpose: register, reset or booking). For reset the answer is the same whether
+// or not the phone has an account.
+func (h *Handler) SendPhoneCode(c *fiber.Ctx) error {
+	var req iddto.SendPhoneCodeRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "CODE_SENT", h.auth.SendPhoneCode(c.UserContext(), req))
+}
+
+// PhoneConfig: whether SMS codes are on (the website shows the code fields only then)
+func (h *Handler) PhoneConfig(c *fiber.Ctx) error {
+	return httpx.OK(c, h.auth.PhoneConfig(), nil)
+}
+
+// CheckResetCode: is the SMS code for the reset right (it is not used up)
+func (h *Handler) CheckResetCode(c *fiber.Ctx) error {
+	var req iddto.PhoneCodeCheckRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "CODE_OK", h.auth.CheckResetCode(c.UserContext(), req))
+}
+
+// ResetPasswordByPhone: a new password with the SMS code sent for "reset"
+func (h *Handler) ResetPasswordByPhone(c *fiber.Ctx) error {
+	var req iddto.PhoneResetRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "PASSWORD_UPDATED", h.auth.ResetPasswordByPhone(c.UserContext(), req))
+}

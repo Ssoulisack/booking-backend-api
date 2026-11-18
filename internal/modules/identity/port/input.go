@@ -31,6 +31,12 @@ type AuthService interface {
 	// ForgotPassword always succeeds from the caller's view, so it cannot reveal which emails exist
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, req iddto.ResetPasswordRequest) error
+	// SMS codes: send one (register / reset / booking), whether they are on, and reset a password by phone
+	SendPhoneCode(ctx context.Context, req iddto.SendPhoneCodeRequest) error
+	PhoneConfig() iddto.PhoneConfigDTO
+	ResetPasswordByPhone(ctx context.Context, req iddto.PhoneResetRequest) error
+	// CheckResetCode says whether the reset code is right, without using it up (the password step sends it again)
+	CheckResetCode(ctx context.Context, req iddto.PhoneCodeCheckRequest) error
 }
 
 // InvitationService serves the invite link: look at an invite, then accept it

@@ -32,6 +32,7 @@ type AuthServiceImpl struct {
 	social      output.SocialVerifier
 	socialIDs   port.SocialIdentityRepository
 	emailCodes  port.EmailCodeRepository
+	phones      *PhoneCodeService
 	mailer      output.Mailer
 	frontendURL string
 	now         func() time.Time
@@ -46,6 +47,7 @@ func NewAuthService(
 	social output.SocialVerifier,
 	socialIDs port.SocialIdentityRepository,
 	emailCodes port.EmailCodeRepository,
+	phones *PhoneCodeService,
 	mailer output.Mailer,
 	frontendURL string,
 ) port.AuthService {
@@ -58,6 +60,7 @@ func NewAuthService(
 		social:      social,
 		socialIDs:   socialIDs,
 		emailCodes:  emailCodes,
+		phones:      phones,
 		mailer:      mailer,
 		frontendURL: strings.TrimRight(frontendURL, "/"),
 		now:         time.Now,
@@ -66,14 +69,70 @@ func NewAuthService(
 
 // Register creates a customer account. Branch members join through invitations.
 func (s *AuthServiceImpl) Register(ctx context.Context, req iddto.RegisterDTO) (*iddto.AuthResponseDTO, error) {
+	// SMS codes on: the phone is proved with the code first (a phone that is not valid is refused by createUser)
+	if _, ok := domain.NormalizePhone(req.Phone); ok && s.phones.On() {
+		if err := s.phones.Check(ctx, req.Phone, domain.PhonePurposeRegister, req.PhoneCode); err != nil {
+			return nil, err
+		}
+	}
 	user, err := createUser(ctx, s.userRepo, req, true)
 	if err != nil {
 		return nil, err
 	}
+	s.phones.Use(ctx, req.Phone, domain.PhonePurposeRegister)
 	if err := kit.SyncMemberNo(ctx, s.userRepo, user); err != nil {
 		return nil, err
 	}
 	return issueTokens(user)
+}
+
+// SendPhoneCode texts a 6-digit code for register, reset or a guest booking
+func (s *AuthServiceImpl) SendPhoneCode(ctx context.Context, req iddto.SendPhoneCodeRequest) error {
+	return s.phones.Send(ctx, req.Phone, strings.TrimSpace(req.Purpose))
+}
+
+// PhoneConfig: are SMS codes on
+func (s *AuthServiceImpl) PhoneConfig() iddto.PhoneConfigDTO {
+	return iddto.PhoneConfigDTO{Enabled: s.phones.On()}
+}
+
+// CheckResetCode: step 3 of forgot password by phone, the code is right (wrong tries count towards the limit)
+func (s *AuthServiceImpl) CheckResetCode(ctx context.Context, req iddto.PhoneCodeCheckRequest) error {
+	if !s.phones.On() {
+		return badRequest("SMS_OFF")
+	}
+	return s.phones.Check(ctx, req.Phone, domain.PhonePurposeReset, req.Code)
+}
+
+// ResetPasswordByPhone sets a new password with the SMS code sent for "reset"; older logins and email reset links end
+func (s *AuthServiceImpl) ResetPasswordByPhone(ctx context.Context, req iddto.PhoneResetRequest) error {
+	if !s.phones.On() {
+		return badRequest("SMS_OFF")
+	}
+	if err := kit.ValidPassword(req.Password); err != nil {
+		return err
+	}
+	if err := s.phones.Check(ctx, req.Phone, domain.PhonePurposeReset, req.Code); err != nil {
+		return err
+	}
+	phone, _ := domain.NormalizePhone(req.Phone)
+	user, err := s.userRepo.FindByPhone(ctx, phone)
+	if err != nil && !isNotFound(err) {
+		return err
+	}
+	if user == nil || !user.Status {
+		return badRequest("CODE_WRONG")
+	}
+	hash, err := utils.Encrypt(req.Password)
+	if err != nil {
+		return err
+	}
+	now := s.now()
+	if err := s.userRepo.SetPassword(ctx, user.ID, hash, now); err != nil {
+		return err
+	}
+	s.phones.Use(ctx, phone, domain.PhonePurposeReset)
+	return s.resets.UseAll(ctx, user.ID, now)
 }
 
 // identity checks the contact details of an account (new, or exceptID when changing one) and returns them
