@@ -37,6 +37,8 @@ type AuthService interface {
 	ResetPasswordByPhone(ctx context.Context, req iddto.PhoneResetRequest) error
 	// CheckResetCode says whether the reset code is right, without using it up (the password step sends it again)
 	CheckResetCode(ctx context.Context, req iddto.PhoneCodeCheckRequest) error
+	// CheckPhoneCode says whether a code for register or reset is right, without using it up
+	CheckPhoneCode(ctx context.Context, req iddto.PhoneCodeCheckRequest) error
 }
 
 // InvitationService serves the invite link: look at an invite, then accept it

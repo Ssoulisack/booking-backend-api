@@ -34,6 +34,7 @@ func (h *Handler) Routes(api fiber.Router, auth *middleware.Auth) {
 	// the reset by phone is limited like the reset by email
 	a.Get("/phone/config", h.PhoneConfig)
 	a.Post("/phone/code", middleware.RateLimit(20, codeWindow), middleware.RateLimitBy(3, codeWindow, phoneKey), h.SendPhoneCode)
+	a.Post("/phone/check", middleware.RateLimit(20, 15*time.Minute), h.CheckPhoneCode)
 	a.Post("/reset-password/phone/check", middleware.RateLimit(20, 15*time.Minute), h.CheckResetCode)
 	a.Post("/reset-password/phone", middleware.RateLimit(10, 15*time.Minute), h.ResetPasswordByPhone)
 

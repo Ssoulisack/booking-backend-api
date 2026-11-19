@@ -27,10 +27,12 @@ type SendPhoneCodeRequest struct {
 	Purpose string `json:"purpose"`
 }
 
-// PhoneCodeCheckRequest checks an SMS code before the next step (forgot password: the code, then the new password)
+// PhoneCodeCheckRequest checks an SMS code before the next step (register: the code, then the details; forgot
+// password: the code, then the new password). Purpose is empty on the older reset-only route.
 type PhoneCodeCheckRequest struct {
-	Phone string `json:"phone"`
-	Code  string `json:"code"`
+	Phone   string `json:"phone"`
+	Purpose string `json:"purpose"`
+	Code    string `json:"code"`
 }
 
 // PhoneResetRequest: forgot password by phone, with the SMS code (purpose "reset")

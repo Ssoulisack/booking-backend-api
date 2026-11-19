@@ -205,6 +205,15 @@ func (h *Handler) CheckResetCode(c *fiber.Ctx) error {
 	return httpx.Done(c, "CODE_OK", h.auth.CheckResetCode(c.UserContext(), req))
 }
 
+// CheckPhoneCode: is the SMS code for register or reset right (it is not used up)
+func (h *Handler) CheckPhoneCode(c *fiber.Ctx) error {
+	var req iddto.PhoneCodeCheckRequest
+	if err := httpx.Bind(c, &req); err != nil {
+		return httpx.Fail(c, err)
+	}
+	return httpx.Done(c, "CODE_OK", h.auth.CheckPhoneCode(c.UserContext(), req))
+}
+
 // ResetPasswordByPhone: a new password with the SMS code sent for "reset"
 func (h *Handler) ResetPasswordByPhone(c *fiber.Ctx) error {
 	var req iddto.PhoneResetRequest

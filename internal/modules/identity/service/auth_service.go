@@ -104,6 +104,18 @@ func (s *AuthServiceImpl) CheckResetCode(ctx context.Context, req iddto.PhoneCod
 	return s.phones.Check(ctx, req.Phone, domain.PhonePurposeReset, req.Code)
 }
 
+// CheckPhoneCode: the code step of register or forgot password (a booking code is checked with the booking itself)
+func (s *AuthServiceImpl) CheckPhoneCode(ctx context.Context, req iddto.PhoneCodeCheckRequest) error {
+	if !s.phones.On() {
+		return badRequest("SMS_OFF")
+	}
+	purpose := strings.TrimSpace(req.Purpose)
+	if purpose != domain.PhonePurposeRegister && purpose != domain.PhonePurposeReset {
+		return badRequest("INVALID_PURPOSE")
+	}
+	return s.phones.Check(ctx, req.Phone, purpose, req.Code)
+}
+
 // ResetPasswordByPhone sets a new password with the SMS code sent for "reset"; older logins and email reset links end
 func (s *AuthServiceImpl) ResetPasswordByPhone(ctx context.Context, req iddto.PhoneResetRequest) error {
 	if !s.phones.On() {
