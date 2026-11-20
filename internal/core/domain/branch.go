@@ -62,7 +62,7 @@ type Company struct {
 	Phone         string            `gorm:"type:varchar(30)"`
 	Email         string            `gorm:"type:varchar(255)"`
 	SocialLinks   map[string]string `gorm:"type:jsonb;serializer:json"`
-	Language      string            `gorm:"type:varchar(5);not null;default:en"`
+	Language      string            `gorm:"type:varchar(5);not null;default:lo"`
 	Currency      string            `gorm:"type:varchar(3);not null;default:LAK"`
 	Timezone      string            `gorm:"type:varchar(64);not null;default:Asia/Vientiane"`
 	BookingMode   string            `gorm:"type:varchar(10);not null;default:account"`

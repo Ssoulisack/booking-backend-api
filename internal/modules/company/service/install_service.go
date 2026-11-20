@@ -76,7 +76,7 @@ func (s *InstallServiceImpl) ensureCompany(ctx context.Context) (*domain.Company
 		return nil, response.NewError(http.StatusInternalServerError, "company.name is missing in config.yaml")
 	}
 	c = &domain.Company{
-		Name: name, Language: "en", Currency: "LAK", Timezone: "Asia/Vientiane",
+		Name: name, Language: "lo", Currency: "LAK", Timezone: "Asia/Vientiane",
 		BookingMode: domain.BookingModeAccount,
 	}
 	if err := s.company.Create(ctx, c); err != nil {
