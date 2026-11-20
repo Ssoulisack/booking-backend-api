@@ -113,10 +113,13 @@ type InvitationInfoDTO struct {
 	AccountExists bool     `json:"account_exists"` // true: log in first; false: choose a name and password
 }
 
+// AcceptInvitationRequest: a new account (name, password and a Lao mobile phone, required). While SMS codes are on the
+// phone is proved with a code first (POST /auth/phone/code, purpose "register"). An existing account sends nothing.
 type AcceptInvitationRequest struct {
-	Name     string `json:"name"`
-	Password string `json:"password"`
-	Phone    string `json:"phone"`
+	Name      string `json:"name"`
+	Password  string `json:"password"`
+	Phone     string `json:"phone"`
+	PhoneCode string `json:"phone_code"`
 }
 
 type ForgotPasswordRequest struct {

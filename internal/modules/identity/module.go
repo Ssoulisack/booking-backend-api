@@ -52,7 +52,7 @@ func New(d Deps) *Module {
 		Phones:  phones,
 		Auth:    service.NewAuthService(d.Users, d.Cache, d.Memberships, d.Branches, d.PasswordResets, d.Social, idpostgres.NewSocialIdentities(d.DB), idpostgres.NewEmailCodes(d.DB), phones, d.Mailer, d.FrontendURL),
 		Access:  service.NewAccessService(d.Users, d.Memberships, d.Branches),
-		Invites: service.NewInvitationService(idpostgres.NewInvitations(d.DB), d.Memberships, d.Branches, d.Company, d.Users, d.Mailer, d.FrontendURL),
+		Invites: service.NewInvitationService(idpostgres.NewInvitations(d.DB), d.Memberships, d.Branches, d.Company, d.Users, phones, d.Mailer, d.FrontendURL),
 	}
 	m.handler = http.New(m.Auth, m.Invites)
 	return m

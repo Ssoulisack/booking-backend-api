@@ -150,6 +150,7 @@ type InvitationServiceImpl struct {
 	branches    output.BranchRepository
 	company     output.CompanyRepository
 	users       output.UserRepository
+	phones      *PhoneCodeService
 	iv          invites
 	now         func() time.Time
 }
@@ -160,11 +161,13 @@ func NewInvitationService(
 	branches output.BranchRepository,
 	company output.CompanyRepository,
 	users output.UserRepository,
+	phones *PhoneCodeService,
 	mailer output.Mailer,
 	frontendURL string,
 ) port.InvitationService {
 	return &InvitationServiceImpl{
-		invitations: invitations, memberships: memberships, branches: branches, company: company, users: users, now: time.Now,
+		invitations: invitations, memberships: memberships, branches: branches, company: company, users: users,
+		phones: phones, now: time.Now,
 		iv: invites{
 			invitations: invitations, memberships: memberships, branches: branches, company: company, users: users,
 			mailer: mailer, frontendURL: strings.TrimRight(frontendURL, "/"), now: time.Now,
@@ -251,10 +254,18 @@ func (s *InvitationServiceImpl) Accept(ctx context.Context, token string, actor 
 			return nil, conflict("ALREADY_IN_THE_TEAM")
 		}
 	case isNotFound(err):
-		user, err = createUser(ctx, s.users, iddto.RegisterDTO{Name: req.Name, Email: inv.Email, Password: req.Password, Phone: req.Phone}, false)
+		// a new team member always has a Lao mobile phone; while SMS codes are on it is proved with a code first
+		// (a missing or wrong phone is refused by createUser)
+		if _, ok := domain.NormalizePhone(req.Phone); ok && s.phones.On() {
+			if err := s.phones.Check(ctx, req.Phone, domain.PhonePurposeRegister, req.PhoneCode); err != nil {
+				return nil, err
+			}
+		}
+		user, err = createUser(ctx, s.users, iddto.RegisterDTO{Name: req.Name, Email: inv.Email, Password: req.Password, Phone: req.Phone}, true)
 		if err != nil {
 			return nil, err
 		}
+		s.phones.Use(ctx, req.Phone, domain.PhonePurposeRegister)
 	default:
 		return nil, err
 	}
